@@ -87,10 +87,10 @@ export class GameFlowManager {
       playerOrder
     
     // Generate board
-    const boardLayout = settings.boardLayout === 'standard' ? 
-      BOARD_LAYOUTS.standard : 
-      BOARD_LAYOUTS.standard // Default to standard if not found
-    const board = generateBoard(boardLayout, settings.randomizeBoard)
+    const board = generateBoard({
+      layout: 'classic',
+      id: `board-${Date.now()}`
+    })
     
     // Create development deck
     const developmentDeck = createDevelopmentDeck()
@@ -324,7 +324,7 @@ export class GameFlowManager {
       currentPlayerIndex: 0,
       players: new Map(),
       playerOrder: [],
-      board: generateBoard(BOARD_LAYOUTS.standard, false),
+      board: generateBoard({ layout: 'classic' }),
       developmentDeck: [],
       dice: null,
       trades: [],
@@ -341,7 +341,7 @@ export class GameFlowManager {
       players: Array.from(state.players.entries()),
       board: {
         ...state.board,
-        hexes: Array.from(state.board.hexes.entries()),
+        hexes: state.board.hexes, // Already an array
         vertices: Array.from(state.board.vertices.entries()),
         edges: Array.from(state.board.edges.entries())
       }
@@ -354,7 +354,7 @@ export class GameFlowManager {
       players: new Map(data.players),
       board: {
         ...data.board,
-        hexes: new Map(data.board.hexes),
+        hexes: data.board.hexes, // Already an array
         vertices: new Map(data.board.vertices),
         edges: new Map(data.board.edges)
       }

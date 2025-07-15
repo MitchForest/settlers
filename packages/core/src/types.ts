@@ -3,9 +3,29 @@
 
 import type { HexCoordinates, CubeCoordinates } from 'honeycomb-grid'
 
-// ============= Board Types =============
+// ============= Base Grid Types =============
 
-// Terrain types for hex tiles
+// Re-export Honeycomb coordinate types
+export type HexCoordinate = CubeCoordinates
+export type { HexCoordinates }
+
+// Base hexagonal grid - just coordinates, no content
+export interface BaseGrid {
+  hexes: HexCoordinate[]
+  ports: PortPlacement[]
+}
+
+// Port placement on the base grid
+export interface PortPlacement {
+  position: HexCoordinate
+  direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'
+  type: 'generic' | 'resource' // generic = 3:1, resource = 2:1
+  resourceType?: string // only for resource ports
+}
+
+// ============= Terrain Assignment Types =============
+
+// Terrain types for hex tiles (theme-agnostic)
 export type TerrainType = 
   | 'terrain1'  // Forest (Lumber)
   | 'terrain2'  // Pasture (Wool) 
@@ -14,6 +34,69 @@ export type TerrainType =
   | 'terrain5'  // Mountains (Ore)
   | 'desert'    // No resources
 
+// Terrain assignment for the grid
+export interface TerrainAssignment {
+  [hexCoordKey: string]: TerrainType // key is "q,r,s"
+}
+
+// ============= Number Token Assignment Types =============
+
+// Number token assignment for the grid
+export interface NumberAssignment {
+  [hexCoordKey: string]: number | null // key is "q,r,s", null for desert/water
+}
+
+// ============= Complete Board Types =============
+
+// A hex tile with all information
+export interface Hex {
+  id: string
+  position: HexCoordinate
+  terrain: TerrainType
+  numberToken: number | null
+  hasBlocker: boolean
+}
+
+// Complete board state combining all layers
+export interface Board {
+  id: string
+  baseGrid: BaseGrid
+  terrainAssignment: TerrainAssignment
+  numberAssignment: NumberAssignment
+  // Computed for convenience
+  hexes: Hex[]
+  ports: Port[]
+  // Essential for game mechanics
+  vertices: Map<string, Vertex>
+  edges: Map<string, Edge>
+  blockerPosition: HexCoordinate // Robber position
+}
+
+// ============= Game Board Layouts =============
+
+// Predefined board layouts (base grids)
+export interface BoardLayout {
+  id: string
+  name: string
+  description: string
+  baseGrid: BaseGrid
+}
+
+// Standard board layouts
+export const STANDARD_LAYOUTS: BoardLayout[] = [
+  {
+    id: 'classic',
+    name: 'Classic Settlers',
+    description: 'Standard 19-hex board',
+    baseGrid: {
+      hexes: [], // Will be populated by board generator
+      ports: []  // Will be populated by board generator
+    }
+  }
+]
+
+// ============= Existing Types (updated) =============
+
 // Resource types for cards
 export type ResourceType = 
   | 'resource1'  // Lumber
@@ -21,10 +104,6 @@ export type ResourceType =
   | 'resource3'  // Grain
   | 'resource4'  // Brick
   | 'resource5'  // Ore
-
-// Re-export Honeycomb coordinate types
-export type HexCoordinate = CubeCoordinates
-export type { HexCoordinates }
 
 // Vertex position (intersection of hexes)
 export interface VertexPosition {
@@ -35,13 +114,12 @@ export interface VertexPosition {
 // Edge position (between two vertices)
 export type EdgePosition = [VertexPosition, VertexPosition]
 
-// Hex tile
-export interface Hex {
+// Port for trading
+export interface Port {
   id: string
   position: HexCoordinate
-  terrain: TerrainType
-  numberToken: number | null
-  hasBlocker: boolean
+  type: 'generic' | 'resource1' | 'resource2' | 'resource3' | 'resource4' | 'resource5'
+  ratio: number // 2:1 or 3:1
 }
 
 // Vertex (intersection where buildings can be placed)
@@ -57,22 +135,6 @@ export interface Edge {
   id: string
   position: EdgePosition
   connection: Connection | null
-}
-
-// Port for trading
-export interface Port {
-  position: HexCoordinate
-  type: 'generic' | 'resource1' | 'resource2' | 'resource3' | 'resource4' | 'resource5'
-  ratio: number // 2:1 or 3:1
-}
-
-// Complete board state
-export interface Board {
-  hexes: Map<string, Hex>
-  vertices: Map<string, Vertex>
-  edges: Map<string, Edge>
-  ports: Port[]
-  blockerPosition: HexCoordinate
 }
 
 // ============= Player Types =============

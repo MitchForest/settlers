@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { testConnection, healthCheck } from '@/lib/api'
 import { toast } from 'sonner'
-import { ThemeToggle } from '@/components/theme-toggle'
 import Link from 'next/link'
 
 export default function Home() {
@@ -61,7 +60,6 @@ export default function Home() {
                 Test Game Board
               </Button>
             </Link>
-            <ThemeToggle />
           </div>
         </div>
 

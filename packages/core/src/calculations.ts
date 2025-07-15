@@ -1,8 +1,17 @@
 // Core calculation utilities for Settlers
 // Uses Honeycomb library for hex grid calculations
 
-import { defineHex, distance, neighborOf, Direction } from 'honeycomb-grid'
-import type { HexCoordinate, VertexPosition, EdgePosition, ResourceCards, DiceRoll } from './types'
+import { defineHex, Direction, neighborOf, distance } from 'honeycomb-grid'
+import { 
+  HexCoordinate, 
+  ResourceCards, 
+  DiceRoll, 
+  PlayerId,
+  Vertex,
+  Edge,
+  VertexPosition,
+  EdgePosition
+} from './types'
 
 // Define our hex class with default settings
 export const GameHex = defineHex()
@@ -114,15 +123,94 @@ export function hexDistance(a: HexCoordinate, b: HexCoordinate): number {
 // TODO: Implement based on vertex ID scheme
 export function getVerticesForHex(hex: HexCoordinate): VertexPosition[] {
   // Returns the 6 vertices around a hex
-  const vertices: VertexPosition[] = []
-  // Implementation will depend on how we define vertex positions
-  return vertices
+  // Each vertex is defined by its direction from the hex center
+  const directions: ('N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW')[] = ['N', 'NE', 'SE', 'S', 'SW', 'NW']
+  
+  return directions.map(direction => ({
+    hexes: [hex], // This vertex belongs to this hex (and potentially others)
+    direction
+  }))
 }
 
 // TODO: Implement based on edge ID scheme  
 export function getEdgesForHex(hex: HexCoordinate): EdgePosition[] {
   // Returns the 6 edges around a hex
+  // Each edge connects two adjacent vertices
+  const vertices = getVerticesForHex(hex)
   const edges: EdgePosition[] = []
-  // Implementation will depend on how we define edge positions
+  
+  for (let i = 0; i < vertices.length; i++) {
+    const currentVertex = vertices[i]
+    const nextVertex = vertices[(i + 1) % vertices.length]
+    edges.push([currentVertex, nextVertex])
+  }
+  
   return edges
+}
+
+// Generate vertex ID from position
+export function vertexToString(position: VertexPosition): string {
+  const hexStrings = position.hexes.map(hex => hexToString(hex)).sort()
+  return `${hexStrings.join('|')}:${position.direction}`
+}
+
+// Generate edge ID from position
+export function edgeToString(position: EdgePosition): string {
+  const [vertex1, vertex2] = position
+  const v1String = vertexToString(vertex1)
+  const v2String = vertexToString(vertex2)
+  // Sort to ensure consistent edge IDs regardless of direction
+  return [v1String, v2String].sort().join('<->')
+}
+
+// Generate all vertices for a board
+export function generateVerticesFromHexes(hexes: HexCoordinate[]): Map<string, Vertex> {
+  const vertexMap = new Map<string, Vertex>()
+  
+  hexes.forEach(hex => {
+    const hexVertices = getVerticesForHex(hex)
+    hexVertices.forEach(vertexPos => {
+      const vertexId = vertexToString(vertexPos)
+      
+      if (!vertexMap.has(vertexId)) {
+        // Create new vertex
+        vertexMap.set(vertexId, {
+          id: vertexId,
+          position: vertexPos,
+          building: null,
+          port: null
+        })
+      } else {
+        // Add this hex to existing vertex
+        const existingVertex = vertexMap.get(vertexId)!
+        if (!existingVertex.position.hexes.some((h: HexCoordinate) => hexToString(h) === hexToString(hex))) {
+          existingVertex.position.hexes.push(hex)
+        }
+      }
+    })
+  })
+  
+  return vertexMap
+}
+
+// Generate all edges for a board
+export function generateEdgesFromHexes(hexes: HexCoordinate[]): Map<string, Edge> {
+  const edgeMap = new Map<string, Edge>()
+  
+  hexes.forEach(hex => {
+    const hexEdges = getEdgesForHex(hex)
+    hexEdges.forEach(edgePos => {
+      const edgeId = edgeToString(edgePos)
+      
+      if (!edgeMap.has(edgeId)) {
+        edgeMap.set(edgeId, {
+          id: edgeId,
+          position: edgePos,
+          connection: null
+        })
+      }
+    })
+  })
+  
+  return edgeMap
 } 

@@ -1,232 +1,232 @@
 // Board generator - creates the hexagonal game board using Honeycomb
-// Handles hex placement, number tokens, and port locations
+// Implements decoupled system: base grid + terrain assignment + number assignment
 
 import { defineHex, Grid, fromCoordinates } from 'honeycomb-grid'
 import { 
   Board, 
   Hex, 
-  Vertex, 
-  Edge, 
+  BaseGrid,
+  PortPlacement,
+  TerrainAssignment,
+  NumberAssignment,
   HexCoordinate, 
-  VertexPosition, 
-  EdgePosition,
   TerrainType,
-  Port
+  Port,
+  BoardLayout
 } from '../types'
 import { 
   NUMBER_TOKENS,
   BOARD_LAYOUTS
 } from '../constants'
-import { shuffleArray, hexToString } from '../calculations'
+import { 
+  shuffleArray, 
+  hexToString, 
+  generateVerticesFromHexes,
+  generateEdgesFromHexes
+} from '../calculations'
 
 // Define our hex class
 const GameHex = defineHex()
 
-// Board layout definition
-export interface BoardLayout {
-  name: string
-  hexes: Array<{
-    q: number
-    r: number
-    terrain: string
-    number: number | null
-  }>
-  ports: Array<{
-    position: HexCoordinate
-    type: string
-    ratio: number
-  }>
-}
+// ============= Base Grid Generation =============
 
-// Generate a complete board from layout
-export function generateBoard(layout: BoardLayout, randomize: boolean = true): Board {
-  const board: Board = {
-    hexes: new Map(),
-    vertices: new Map(),
-    edges: new Map(),
-    ports: [],
-    blockerPosition: { q: 0, r: 0, s: 0 } // Will be set to desert hex
+// Generate the classic 19-hex Catan board layout
+export function generateClassicBaseGrid(): BaseGrid {
+  const hexes: HexCoordinate[] = []
+  
+  // Generate hex coordinates in classic Catan pattern
+  // Center hex
+  hexes.push({ q: 0, r: 0, s: 0 })
+  
+  // Ring 1 (6 hexes around center)
+  for (let i = 0; i < 6; i++) {
+    const angle = i * 60
+    const q = Math.round(Math.cos(angle * Math.PI / 180))
+    const r = Math.round(Math.sin(angle * Math.PI / 180) * -1)
+    const s = -q - r
+    hexes.push({ q, r, s })
   }
-
-  // Process hexes using Honeycomb
-  const hexData = randomize ? randomizeHexes(layout.hexes) : layout.hexes
   
-  // Create Honeycomb grid from our layout coordinates
-  const coordinates = hexData.map(data => ({ q: data.q, r: data.r, s: -data.q - data.r }))
-  const grid = new Grid(GameHex, fromCoordinates(...coordinates))
+  // Ring 2 (12 hexes around ring 1)
+  for (let i = 0; i < 6; i++) {
+    const angle = i * 60
+    const q1 = Math.round(Math.cos(angle * Math.PI / 180) * 2)
+    const r1 = Math.round(Math.sin(angle * Math.PI / 180) * -2)
+    const s1 = -q1 - r1
+    hexes.push({ q: q1, r: r1, s: s1 })
+    
+    // Add the intermediate hex
+    const nextAngle = ((i + 1) % 6) * 60
+    const q2 = Math.round(Math.cos(nextAngle * Math.PI / 180))
+    const r2 = Math.round(Math.sin(nextAngle * Math.PI / 180) * -1)
+    const s2 = -q2 - r2
+    const qMid = q1 + q2
+    const rMid = r1 + r2
+    const sMid = s1 + s2
+    hexes.push({ q: qMid, r: rMid, s: sMid })
+  }
   
-  // Convert grid hexes to our board format
-  hexData.forEach((data, index) => {
-    const coordinate = coordinates[index]
-    const hex: Hex = {
-      id: hexToString(coordinate),
-      position: coordinate,
-      terrain: data.terrain as TerrainType,
-      numberToken: data.number,
-      hasBlocker: data.terrain === 'desert'
-    }
-    
-    board.hexes.set(hex.id, hex)
-    
-    // Set blocker position on desert
-    if (hex.terrain === 'desert') {
-      board.blockerPosition = hex.position
-    }
-  })
-
-  // Generate vertices for all hexes
-  board.hexes.forEach(hex => {
-    const vertices = getVerticesForHex(hex.position)
-    vertices.forEach(pos => {
-      const id = vertexToString(pos)
-      if (!board.vertices.has(id)) {
-        board.vertices.set(id, {
-          id,
-          position: pos,
-          building: null,
-          port: null
-        })
-      }
-    })
-  })
-
-  // Generate edges between vertices
-  board.vertices.forEach(vertex => {
-    const neighbors = getNeighborVertices(vertex.position)
-    neighbors.forEach(neighborPos => {
-      const neighborId = vertexToString(neighborPos)
-      if (board.vertices.has(neighborId)) {
-        const edgeId = edgeToString(vertex.position, neighborPos)
-        const reverseEdgeId = edgeToString(neighborPos, vertex.position)
-        
-        // Only add edge once (check both directions)
-        if (!board.edges.has(edgeId) && !board.edges.has(reverseEdgeId)) {
-          board.edges.set(edgeId, {
-            id: edgeId,
-            position: [vertex.position, neighborPos],
-            connection: null
-          })
-        }
-      }
-    })
-  })
-
-  // Add ports
-  layout.ports.forEach(portData => {
-    board.ports.push({
-      position: portData.position,
-      type: portData.type as Port['type'],
-      ratio: portData.ratio
-    })
-  })
-
-  return board
+  // Generate port placements around the edge
+  const ports: PortPlacement[] = [
+    // Add specific port locations for classic board
+    { position: { q: -2, r: 0, s: 2 }, direction: 'NW', type: 'generic' },
+    { position: { q: -2, r: 1, s: 1 }, direction: 'SW', type: 'resource', resourceType: 'resource1' },
+    { position: { q: -1, r: 2, s: -1 }, direction: 'SW', type: 'generic' },
+    { position: { q: 1, r: 1, s: -2 }, direction: 'SE', type: 'resource', resourceType: 'resource2' },
+    { position: { q: 2, r: -1, s: -1 }, direction: 'SE', type: 'generic' },
+    { position: { q: 2, r: -2, s: 0 }, direction: 'NE', type: 'resource', resourceType: 'resource3' },
+    { position: { q: 1, r: -2, s: 1 }, direction: 'NE', type: 'generic' },
+    { position: { q: -1, r: -1, s: 2 }, direction: 'NW', type: 'resource', resourceType: 'resource4' },
+    { position: { q: 0, r: -2, s: 2 }, direction: 'N', type: 'resource', resourceType: 'resource5' }
+  ]
+  
+  return {
+    hexes,
+    ports
+  }
 }
 
-// Randomize hex terrains and numbers while maintaining game balance
-function randomizeHexes(hexes: BoardLayout['hexes']): BoardLayout['hexes'] {
-  // Separate terrain and numbers
-  const terrains = hexes.filter(h => h.terrain !== 'desert').map(h => h.terrain)
-  const numbers = hexes.filter(h => h.number !== null).map(h => h.number!)
+// ============= Terrain Assignment =============
+
+// Generate random terrain assignment for the board
+export function generateTerrainAssignment(baseGrid: BaseGrid, options: {
+  useBalancedDistribution?: boolean
+} = {}): TerrainAssignment {
+  const { useBalancedDistribution = true } = options
   
-  // Shuffle both
-  const shuffledTerrains = shuffleArray([...terrains])
-  const shuffledNumbers = shuffleArray([...numbers])
+  // Classic Catan terrain distribution
+  const terrainPool: TerrainType[] = [
+    'terrain1', 'terrain1', 'terrain1', 'terrain1', // 4 forests
+    'terrain2', 'terrain2', 'terrain2', 'terrain2', // 4 pastures  
+    'terrain3', 'terrain3', 'terrain3', 'terrain3', // 4 fields
+    'terrain4', 'terrain4', 'terrain4',             // 3 hills
+    'terrain5', 'terrain5', 'terrain5',             // 3 mountains
+    'desert'                                        // 1 desert
+  ]
   
-  // Reconstruct hexes
-  let terrainIndex = 0
+  const shuffledTerrain = shuffleArray(terrainPool)
+  const assignment: TerrainAssignment = {}
+  
+  baseGrid.hexes.forEach((hex, index) => {
+    const key = hexToString(hex)
+    assignment[key] = shuffledTerrain[index] || 'desert'
+  })
+  
+  return assignment
+}
+
+// ============= Number Assignment =============
+
+// Generate random number token assignment for the board
+export function generateNumberAssignment(
+  baseGrid: BaseGrid, 
+  terrainAssignment: TerrainAssignment,
+  options: {
+    avoidAdjacentRedNumbers?: boolean
+  } = {}
+): NumberAssignment {
+  const { avoidAdjacentRedNumbers = true } = options
+  
+  // Classic Catan number distribution (no 7s, one of each except 6 and 8)
+  const numberPool: number[] = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
+  const shuffledNumbers = shuffleArray(numberPool)
+  
+  const assignment: NumberAssignment = {}
   let numberIndex = 0
   
-  return hexes.map(hex => {
-    if (hex.terrain === 'desert') {
-      return hex // Desert stays in place
-    }
+  baseGrid.hexes.forEach(hex => {
+    const key = hexToString(hex)
+    const terrain = terrainAssignment[key]
     
+    // Desert gets no number token
+    if (terrain === 'desert') {
+      assignment[key] = null
+    } else {
+      assignment[key] = shuffledNumbers[numberIndex++] || null
+    }
+  })
+  
+  return assignment
+}
+
+// ============= Board Assembly =============
+
+// Combine all layers into a complete board
+export function assembleBoard(
+  id: string,
+  baseGrid: BaseGrid,
+  terrainAssignment: TerrainAssignment,
+  numberAssignment: NumberAssignment
+): Board {
+  // Create hex objects
+  const hexes: Hex[] = baseGrid.hexes.map(position => {
+    const key = hexToString(position)
     return {
-      q: hex.q,
-      r: hex.r,
-      terrain: shuffledTerrains[terrainIndex++],
-      number: shuffledNumbers[numberIndex++]
-    }
-  })
-}
-
-// Get all 6 vertices around a hex
-function getVerticesForHex(hex: HexCoordinate): VertexPosition[] {
-  return [
-    { hexes: [hex], direction: 'N' },
-    { hexes: [hex], direction: 'NE' },
-    { hexes: [hex], direction: 'SE' },
-    { hexes: [hex], direction: 'S' },
-    { hexes: [hex], direction: 'SW' },
-    { hexes: [hex], direction: 'NW' }
-  ]
-}
-
-// Get neighboring vertices (connected by an edge)
-function getNeighborVertices(vertex: VertexPosition): VertexPosition[] {
-  // This is simplified - real implementation would calculate
-  // based on hex grid geometry
-  const neighbors: VertexPosition[] = []
-  
-  // Each vertex connects to 2-3 other vertices
-  const directions = ['N', 'NE', 'SE', 'S', 'SW', 'NW'] as const
-  const currentIndex = directions.indexOf(vertex.direction)
-  
-  // Add adjacent directions
-  const prevIndex = (currentIndex - 1 + 6) % 6
-  const nextIndex = (currentIndex + 1) % 6
-  
-  neighbors.push({
-    hexes: vertex.hexes,
-    direction: directions[prevIndex]
-  })
-  
-  neighbors.push({
-    hexes: vertex.hexes,
-    direction: directions[nextIndex]
-  })
-  
-  return neighbors
-}
-
-// Convert vertex position to string ID
-function vertexToString(vertex: VertexPosition): string {
-  const hexIds = vertex.hexes.map(h => hexToString(h)).sort().join(',')
-  return `${hexIds}:${vertex.direction}`
-}
-
-// Convert edge to string ID
-function edgeToString(v1: VertexPosition, v2: VertexPosition): string {
-  const ids = [vertexToString(v1), vertexToString(v2)].sort()
-  return ids.join('-')
-}
-
-// Validate board integrity
-export function validateBoard(board: Board): boolean {
-  // Check hex count
-  if (board.hexes.size !== 19) return false
-  
-  // Check for exactly one desert
-  let desertCount = 0
-  board.hexes.forEach(hex => {
-    if (hex.terrain === 'desert') desertCount++
-  })
-  if (desertCount !== 1) return false
-  
-  // Check number token distribution
-  const numberCounts = new Map<number, number>()
-  board.hexes.forEach(hex => {
-    if (hex.numberToken) {
-      numberCounts.set(hex.numberToken, (numberCounts.get(hex.numberToken) || 0) + 1)
+      id: key,
+      position,
+      terrain: terrainAssignment[key] || 'desert',
+      numberToken: numberAssignment[key] || null,
+      hasBlocker: terrainAssignment[key] === 'desert' // Robber starts on desert
     }
   })
   
-  // Verify correct number distribution (2 of each except 2 and 12)
-  for (const [num, count] of numberCounts) {
-    if ((num === 2 || num === 12) && count !== 1) return false
-    if (num !== 2 && num !== 12 && count !== 2) return false
+  // Generate vertices and edges
+  const hexPositions = hexes.map(hex => hex.position)
+  const vertices = generateVerticesFromHexes(hexPositions)
+  const edges = generateEdgesFromHexes(hexPositions)
+  
+  // Find initial blocker position (on desert)
+  const desertHex = hexes.find(hex => hex.terrain === 'desert')
+  const blockerPosition = desertHex ? desertHex.position : hexes[0].position
+  
+  // Create port objects
+  const ports: Port[] = baseGrid.ports.map((placement, index) => ({
+    id: `port-${index}`,
+    position: placement.position,
+    type: placement.type === 'generic' ? 'generic' : (placement.resourceType as any) || 'generic',
+    ratio: placement.type === 'generic' ? 3 : 2
+  }))
+  
+  return {
+    id,
+    baseGrid,
+    terrainAssignment,
+    numberAssignment,
+    hexes,
+    vertices,
+    edges,
+    ports,
+    blockerPosition
   }
+}
+
+// ============= Main Generation Function =============
+
+// Generate a complete board using the specified layout
+export function generateBoard(options: {
+  layout?: 'classic'
+  id?: string
+  terrainSeed?: string
+  numberSeed?: string
+} = {}): Board {
+  const { 
+    layout = 'classic',
+    id = `board-${Date.now()}`,
+    terrainSeed,
+    numberSeed
+  } = options
   
-  return true
+  // Generate base grid
+  const baseGrid = layout === 'classic' 
+    ? generateClassicBaseGrid()
+    : generateClassicBaseGrid() // Add more layouts later
+  
+  // Generate terrain assignment
+  const terrainAssignment = generateTerrainAssignment(baseGrid)
+  
+  // Generate number assignment
+  const numberAssignment = generateNumberAssignment(baseGrid, terrainAssignment)
+  
+  // Assemble complete board
+  return assembleBoard(id, baseGrid, terrainAssignment, numberAssignment)
 } 

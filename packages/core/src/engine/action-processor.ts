@@ -493,8 +493,8 @@ function processMoveBlocker(state: GameState, action: GameAction): ProcessResult
   let newState = deepCloneState(state)
   
   // Update blocker position
-  const newPosition = newState.board.hexes.get(hexId)!.position
-  newState.board.blockerPosition = newPosition
+  const targetHex = newState.board.hexes.find(hex => hex.id === hexId)!
+  newState.board.blockerPosition = targetHex.position
   
   // Update hex states
   newState.board.hexes.forEach(hex => {
@@ -503,7 +503,7 @@ function processMoveBlocker(state: GameState, action: GameAction): ProcessResult
   
   events.push(createEvent(state, 'blockerMoved', action.playerId, {
     from: state.board.blockerPosition,
-    to: newPosition
+    to: targetHex.position
   }))
   
   // Move to steal phase
@@ -649,7 +649,7 @@ function deepCloneState(state: GameState): GameState {
     ...state,
     board: {
       ...state.board,
-      hexes: new Map(state.board.hexes),
+      hexes: [...state.board.hexes], // Clone array
       vertices: new Map(state.board.vertices),
       edges: new Map(state.board.edges)
     },

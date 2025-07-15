@@ -1,11 +1,12 @@
-// Theme loader system - loads JSON themes and applies CSS custom properties
+// Theme loader - loads game themes with assets
+// Structure: themes/[themeId]/config.json + themes/[themeId]/assets/
 
-import { GameTheme, PartialGameTheme } from './theme-types'
+import { GameTheme, ResourceTheme, StructureTheme, ThemeMeta, DevelopmentCardTheme } from './theme-types'
 
 export class ThemeLoader {
   private static instance: ThemeLoader
-  private currentTheme: GameTheme | null = null
   private themeCache = new Map<string, GameTheme>()
+  private assetCache = new Map<string, string>()
 
   static getInstance(): ThemeLoader {
     if (!ThemeLoader.instance) {
@@ -14,224 +15,146 @@ export class ThemeLoader {
     return ThemeLoader.instance
   }
 
-  /**
-   * Load a theme by ID from the themes directory
-   */
-  async loadTheme(themeId: string = 'default'): Promise<GameTheme> {
-    // Check cache first
+  async loadTheme(themeId: string): Promise<GameTheme> {
     if (this.themeCache.has(themeId)) {
-      const theme = this.themeCache.get(themeId)!
-      this.currentTheme = theme
-      this.applyCSSProperties(theme)
-      return theme
+      return this.themeCache.get(themeId)!
     }
 
     try {
-      // Load theme JSON
-      const response = await fetch(`/themes/${themeId}.json`)
+      const configUrl = `/themes/${themeId}/config.json`
+      const response = await fetch(configUrl)
+      
       if (!response.ok) {
-        throw new Error(`Failed to load theme: ${themeId}`)
+        throw new Error(`Failed to load theme '${themeId}': ${response.statusText}`)
       }
+
+      const themeConfig = await response.json()
+      const enhancedTheme = await this.enhanceThemeWithAssets(themeId, themeConfig)
       
-      const themeData: PartialGameTheme = await response.json()
-      
-      // Merge with default theme if needed
-      const theme = await this.mergeWithDefault(themeData)
-      
-      // Cache the theme
-      this.themeCache.set(themeId, theme)
-      
-      // Apply CSS properties
-      this.applyCSSProperties(theme)
-      
-      this.currentTheme = theme
-      return theme
+      this.themeCache.set(themeId, enhancedTheme)
+      return enhancedTheme
     } catch (error) {
-      console.warn(`Failed to load theme ${themeId}, falling back to default:`, error)
-      
-      // Fallback to default if not already trying default
-      if (themeId !== 'default') {
-        return this.loadTheme('default')
-      }
-      
-      // If default also fails, create minimal theme
-      return this.createFallbackTheme()
+      console.error(`Failed to load theme '${themeId}':`, error)
+      throw error
     }
   }
 
-  /**
-   * Get the currently loaded theme
-   */
-  getCurrentTheme(): GameTheme | null {
-    return this.currentTheme
-  }
-
-  /**
-   * Apply theme colors to CSS custom properties
-   */
-  private applyCSSProperties(theme: GameTheme): void {
-    const root = document.documentElement
-    const colors = theme.ui.colors
-
-    // Apply all theme colors as CSS custom properties
-    Object.entries(colors).forEach(([key, value]) => {
-      const cssVar = `--color-${key.replace(/_/g, '-')}`
-      root.style.setProperty(cssVar, value)
-    })
-
-    // Apply terrain colors specifically
-    theme.terrain.forEach((terrain) => {
-      const terrainKey = terrain.base
-      const cssVar = `--color-${terrainKey}`
-      root.style.setProperty(cssVar, terrain.color)
-    })
-
-    // Apply fonts
-    root.style.setProperty('--font-heading', theme.ui.fonts.heading)
-    root.style.setProperty('--font-body', theme.ui.fonts.body)
-    root.style.setProperty('--font-mono', theme.ui.fonts.mono)
-  }
-
-  /**
-   * Merge partial theme with default theme
-   */
-  private async mergeWithDefault(partialTheme: PartialGameTheme): Promise<GameTheme> {
-    // If this is already the default theme, just validate and return
-    if (partialTheme.meta.id === 'default') {
-      return this.validateTheme(partialTheme as GameTheme)
-    }
-
-    // Load default theme for merging
-    const defaultTheme = await this.loadDefaultTheme()
+  private async enhanceThemeWithAssets(themeId: string, config: Record<string, unknown>): Promise<GameTheme> {
+    const basePath = `/themes/${themeId}/assets`
     
-    // Deep merge the themes
-    const mergedTheme: GameTheme = {
-      meta: partialTheme.meta,
-      resources: partialTheme.resources || defaultTheme.resources,
-      structures: partialTheme.structures || defaultTheme.structures,
-      terrain: partialTheme.terrain || defaultTheme.terrain,
-      cards: partialTheme.cards || defaultTheme.cards,
-      ui: {
-        colors: { ...defaultTheme.ui.colors, ...partialTheme.ui?.colors },
-        fonts: { ...defaultTheme.ui.fonts, ...partialTheme.ui?.fonts },
-        styles: { ...defaultTheme.ui.styles, ...partialTheme.ui?.styles }
-      },
-      text: { 
-        ...defaultTheme.text, 
-        ...partialTheme.text,
-        turn_actions: { ...defaultTheme.text.turn_actions, ...partialTheme.text?.turn_actions },
-        phases: { ...defaultTheme.text.phases, ...partialTheme.text?.phases },
-        messages: { ...defaultTheme.text.messages, ...partialTheme.text?.messages }
-      },
-      assets: { ...defaultTheme.assets, ...partialTheme.assets }
-    }
+    // Enhance resources with asset paths
+    const enhancedResources = (config.resources as ResourceTheme[]).map((resource: ResourceTheme) => ({
+      ...resource,
+      terrainAsset: `${basePath}/terrain/${resource.id}.png`,
+      iconAsset: (config.meta as ThemeMeta)?.useCustomIcons ? `${basePath}/icons/${resource.id}.svg` : undefined
+    }))
 
-    return this.validateTheme(mergedTheme)
-  }
+    // Enhance structures with asset paths
+    const structures = config.structures as Record<string, { icon?: string; [key: string]: unknown }>
+    const enhancedStructures = Object.entries(structures).reduce((acc, [key, structure]) => {
+      acc[key] = {
+        ...structure,
+        iconAsset: structure.icon ? `${basePath}/pieces/${structure.icon}` : undefined
+      }
+      return acc
+    }, {} as Record<string, unknown>)
 
-  /**
-   * Load the default theme
-   */
-  private async loadDefaultTheme(): Promise<GameTheme> {
-    // Fetch default theme from public directory
-    const response = await fetch('/themes/default.json')
-    if (!response.ok) {
-      throw new Error('Failed to load default theme')
-    }
-    const themeData = await response.json()
-    return themeData as GameTheme
-  }
+    // Enhance development cards with asset paths
+    const developmentCards = config.developmentCards as Record<string, DevelopmentCardTheme & { art?: string }>
+    const enhancedDevelopmentCards = Object.entries(developmentCards).reduce((acc, [key, card]) => {
+      acc[key] = {
+        ...card,
+        iconAsset: card.icon ? `${basePath}/development-cards/${card.icon}` : undefined,
+        artAsset: card.art ? `${basePath}/development-cards/${card.art}` : undefined
+      }
+      return acc
+    }, {} as Record<string, DevelopmentCardTheme>)
 
-  /**
-   * Validate theme structure
-   */
-  private validateTheme(theme: GameTheme): GameTheme {
-    // Basic validation - ensure required fields exist
-    if (!theme.meta || !theme.ui || !theme.resources) {
-      throw new Error('Invalid theme structure')
-    }
-
-    // Ensure we have exactly 5 resources
-    if (theme.resources.length !== 5) {
-      console.warn('Theme should have exactly 5 resources')
-    }
-
-    return theme
-  }
-
-  /**
-   * Create minimal fallback theme if all loading fails
-   */
-  private createFallbackTheme(): GameTheme {
     return {
-      meta: {
-        id: 'fallback',
-        name: 'Fallback Theme',
-        description: 'Emergency fallback theme',
-        version: '1.0.0'
-      },
-      resources: [
-        { id: 'resource1', name: 'Resource 1', color: '#8B5CF6', icon: '🟪' },
-        { id: 'resource2', name: 'Resource 2', color: '#84CC16', icon: '🟢' },
-        { id: 'resource3', name: 'Resource 3', color: '#16A34A', icon: '🟩' },
-        { id: 'resource4', name: 'Resource 4', color: '#EAB308', icon: '🟨' },
-        { id: 'resource5', name: 'Resource 5', color: '#DC2626', icon: '🟥' }
-      ],
-      structures: {
-        settlement: { name: 'Settlement', plural: 'Settlements', description: '', icon: '', color: '#primary' },
-        city: { name: 'City', plural: 'Cities', description: '', icon: '', color: '#gold' },
-        road: { name: 'Road', plural: 'Roads', description: '', icon: '' }
-      },
-      terrain: [
-        { base: 'terrain1', produces: 'Resource 1', color: '#8B5CF6' },
-        { base: 'terrain2', produces: 'Resource 2', color: '#84CC16' },
-        { base: 'terrain3', produces: 'Resource 3', color: '#16A34A' },
-        { base: 'terrain4', produces: 'Resource 4', color: '#EAB308' },
-        { base: 'terrain5', produces: 'Resource 5', color: '#DC2626' },
-        { base: 'desert', produces: 'Nothing', color: '#D2B48C' }
-      ],
-      cards: {
-        knight: { name: 'Knight', description: '', action: '', icon: '' },
-        monopoly: { name: 'Monopoly', description: '', action: '', icon: '' },
-        year_of_plenty: { name: 'Year of Plenty', description: '', action: '', icon: '' },
-        road_building: { name: 'Road Building', description: '', action: '', icon: '' },
-        victory_point: { name: 'Victory Point', description: '', value_text: '1 VP', icon: '' }
-      },
-      ui: {
-        colors: {
-          primary: '#2563EB',
-          secondary: '#3B82F6',
-          accent: '#10B981',
-          background: '#F5F4ED',
-          surface: '#FFFFFF',
-          text: '#1A1A1A',
-          game_bg_primary: '#1e3a8a',
-          game_bg_secondary: '#3730a3',
-          game_bg_accent: '#065f46',
-          terrain_1: '#8B5CF6',
-          terrain_2: '#84CC16',
-          terrain_3: '#16A34A',
-          terrain_4: '#EAB308',
-          terrain_5: '#DC2626',
-          terrain_desert: '#D2B48C'
-        },
-        fonts: { heading: 'Inter', body: 'Inter', mono: 'monospace' },
-        styles: { theme: 'minimal', animations: false, particles: false }
-      },
-      text: {
-        game_name: 'Game',
-        currency: 'resources',
-        turn_actions: { roll: 'Roll', build: 'Build', trade: 'Trade' },
-        phases: { setup: 'Setup', main: 'Main', end: 'End' },
-        messages: {
-          seven_rolled: '{player} rolled a 7!',
-          resource_stolen: '{player} stole {resource}',
-          trade_offer: '{player} offers a trade',
-          building_placed: '{player} built a {structure}',
-          victory: '{player} wins!'
-        }
-      },
-      assets: { icons: {}, tiles: {}, cards: {}, ui: {} }
+      meta: config.meta,
+      resources: enhancedResources,
+      structures: enhancedStructures as unknown as StructureTheme,
+      developmentCards: enhancedDevelopmentCards,
+      ui: config.ui,
+      _assetBasePath: basePath
+    } as GameTheme
+  }
+
+  async preloadAssets(themeId: string): Promise<void> {
+    const theme = await this.loadTheme(themeId)
+    const preloadPromises: Promise<void>[] = []
+
+    // Preload terrain assets
+    theme.resources.forEach(resource => {
+      if (resource.terrainAsset) {
+        preloadPromises.push(this.preloadImage(resource.terrainAsset))
+      }
+      if (resource.iconAsset) {
+        preloadPromises.push(this.preloadImage(resource.iconAsset))
+      }
+    })
+
+    // Preload structure assets
+    Object.values(theme.structures).forEach(structure => {
+      if (structure.iconAsset) {
+        preloadPromises.push(this.preloadImage(structure.iconAsset))
+      }
+    })
+
+    // Preload development card assets
+    Object.values(theme.developmentCards).forEach(card => {
+      if (card.iconAsset) {
+        preloadPromises.push(this.preloadImage(card.iconAsset))
+      }
+      if (card.artAsset) {
+        preloadPromises.push(this.preloadImage(card.artAsset))
+      }
+    })
+
+    await Promise.allSettled(preloadPromises)
+  }
+
+  private async preloadImage(url: string): Promise<void> {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        this.assetCache.set(url, url)
+        resolve()
+      }
+      img.onerror = () => {
+        console.warn(`Failed to preload image: ${url}`)
+        resolve()
+      }
+      img.src = url
+    })
+  }
+
+  async getAssetUrl(themeId: string, assetPath: string): Promise<string> {
+    const fullUrl = `/themes/${themeId}/assets/${assetPath}`
+    
+    try {
+      const response = await fetch(fullUrl, { method: 'HEAD' })
+      if (response.ok) {
+        return fullUrl
+      }
+    } catch {
+      console.warn(`Asset not found: ${fullUrl}`)
+    }
+    
+    return ''
+  }
+
+  clearCache(): void {
+    this.themeCache.clear()
+    this.assetCache.clear()
+  }
+
+  async assetExists(url: string): Promise<boolean> {
+    try {
+      const response = await fetch(url, { method: 'HEAD' })
+      return response.ok
+    } catch {
+      return false
     }
   }
 } 

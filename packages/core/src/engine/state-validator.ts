@@ -297,7 +297,7 @@ export function canMoveBlocker(
     return { isValid: false, reason: 'Not in blocker movement phase' }
   }
   
-  const hex = state.board.hexes.get(hexId)
+  const hex = state.board.hexes.find(h => h.id === hexId)
   if (!hex) {
     return { isValid: false, reason: 'Invalid hex' }
   }
@@ -335,7 +335,8 @@ export function canStealFrom(
   }
   
   // Target must have building adjacent to robber
-  const blockerHex = state.board.hexes.get(hexToString(state.board.blockerPosition))
+  const blockerPosString = hexToString(state.board.blockerPosition)
+  const blockerHex = state.board.hexes.find(h => h.id === blockerPosString)
   if (!blockerHex) {
     return { isValid: false, reason: 'Blocker position invalid' }
   }

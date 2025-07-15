@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "id": "default",
+    "name": "Default Settlers",
+    "description": "Classic settlers theme",
+    "version": "1.0.0",
+    "author": "Settlers Team",
+    "useCustomIcons": false
+  },
+  "resources": [
+    {
+      "id": "resource1",
+      "name": "Wood",
+      "color": "#8B5CF6",
+      "icon": "🌲"
+    },
+    {
+      "id": "resource2", 
+      "name": "Sheep",
+      "color": "#84CC16",
+      "icon": "🐑"
+    },
+    {
+      "id": "resource3",
+      "name": "Wheat",
+      "color": "#16A34A", 
+      "icon": "🌾"
+    },
+    {
+      "id": "resource4",
+      "name": "Brick",
+      "color": "#EAB308",
+      "icon": "🧱"
+    },
+    {
+      "id": "resource5",
+      "name": "Ore",
+      "color": "#DC2626",
+      "icon": "⛰️"
+    }
+  ],
+  "structures": {
+    "settlement": {
+      "name": "Settlement",
+      "plural": "Settlements",
+      "description": "Basic settlement for resource production",
+      "icon": "🏘️",
+      "color": "#primary"
+    },
+    "city": {
+      "name": "City", 
+      "plural": "Cities",
+      "description": "Advanced settlement with double production",
+      "icon": "🏙️",
+      "color": "#gold"
+    },
+    "road": {
+      "name": "Road",
+      "plural": "Roads", 
+      "description": "Connects settlements and enables expansion",
+      "icon": "🛣️"
+    }
+  },
+  "developmentCards": {
+    "knight": {
+      "name": "Knight",
+      "description": "Move the robber and steal a resource",
+      "action": "Move robber",
+      "icon": "⚔️"
+    },
+    "monopoly": {
+      "name": "Monopoly",
+      "description": "All players give you all of one resource type",
+      "action": "Collect all",
+      "icon": "💰"
+    },
+    "year_of_plenty": {
+      "name": "Year of Plenty",
+      "description": "Take any 2 resources from the bank",
+      "action": "Take 2 resources",
+      "icon": "🌾"
+    },
+    "road_building": {
+      "name": "Road Building",
+      "description": "Build 2 roads for free",
+      "action": "Build 2 roads",
+      "icon": "🛤️"
+    },
+    "victory_point": {
+      "name": "Victory Point",
+      "description": "Hidden victory point",
+      "value_text": "1 VP",
+      "icon": "🏆"
+    }
+  },
+  "ui": {
+    "colors": {
+      "primary": "#2563EB",
+      "secondary": "#3B82F6",
+      "accent": "#10B981",
+      "background": "#F5F4ED",
+      "surface": "#FFFFFF",
+      "text": "#1A1A1A"
+    }
+  }
+} 
