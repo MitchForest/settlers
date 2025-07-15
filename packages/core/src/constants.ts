@@ -245,30 +245,30 @@ export const BOARD_LAYOUTS = {
   standard: {
     name: 'Standard',
     hexes: [
-      // Row 1
-      { q: -2, r: 0, terrain: 'terrain1', number: 11 },
-      { q: -1, r: 0, terrain: 'terrain2', number: 12 },
-      { q: 0, r: 0, terrain: 'terrain3', number: 9 },
-      // Row 2  
-      { q: -2, r: 1, terrain: 'terrain4', number: 4 },
-      { q: -1, r: 1, terrain: 'terrain5', number: 6 },
-      { q: 0, r: 1, terrain: 'terrain4', number: 5 },
-      { q: 1, r: 1, terrain: 'terrain2', number: 10 },
-      // Row 3
-      { q: -2, r: 2, terrain: 'desert', number: null },
-      { q: -1, r: 2, terrain: 'terrain1', number: 3 },
-      { q: 0, r: 2, terrain: 'terrain3', number: 11 },
-      { q: 1, r: 2, terrain: 'terrain1', number: 4 },
-      { q: 2, r: 2, terrain: 'terrain3', number: 8 },
-      // Row 4
-      { q: -1, r: 3, terrain: 'terrain4', number: 8 },
-      { q: 0, r: 3, terrain: 'terrain5', number: 10 },
-      { q: 1, r: 3, terrain: 'terrain2', number: 9 },
-      { q: 2, r: 3, terrain: 'terrain5', number: 3 },
-      // Row 5
-      { q: 0, r: 4, terrain: 'terrain5', number: 5 },
-      { q: 1, r: 4, terrain: 'terrain3', number: 2 },
-      { q: 2, r: 4, terrain: 'terrain2', number: 6 }
+      // Center hex (1)
+      { q: 0, r: 0, terrain: 'desert', number: null },
+      
+      // Inner ring (6 hexes)
+      { q: 1, r: -1, terrain: 'terrain1', number: 11 },
+      { q: 1, r: 0, terrain: 'terrain2', number: 12 },
+      { q: 0, r: 1, terrain: 'terrain3', number: 9 },
+      { q: -1, r: 1, terrain: 'terrain4', number: 4 },
+      { q: -1, r: 0, terrain: 'terrain5', number: 6 },
+      { q: 0, r: -1, terrain: 'terrain1', number: 5 },
+      
+      // Outer ring (12 hexes)
+      { q: 2, r: -2, terrain: 'terrain2', number: 10 },
+      { q: 2, r: -1, terrain: 'terrain3', number: 8 },
+      { q: 2, r: 0, terrain: 'terrain4', number: 3 },
+      { q: 1, r: 1, terrain: 'terrain5', number: 11 },
+      { q: 0, r: 2, terrain: 'terrain1', number: 4 },
+      { q: -1, r: 2, terrain: 'terrain2', number: 8 },
+      { q: -2, r: 2, terrain: 'terrain3', number: 10 },
+      { q: -2, r: 1, terrain: 'terrain4', number: 9 },
+      { q: -2, r: 0, terrain: 'terrain5', number: 3 },
+      { q: -1, r: -1, terrain: 'terrain1', number: 5 },
+      { q: 0, r: -2, terrain: 'terrain2', number: 2 },
+      { q: 1, r: -2, terrain: 'terrain3', number: 6 }
     ],
     ports: [
       { position: { q: -3, r: 1, s: 2 }, type: 'generic', ratio: 3 },

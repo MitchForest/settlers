@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { testConnection, healthCheck } from '@/lib/api'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/theme-toggle'
+import Link from 'next/link'
 
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<'testing' | 'connected' | 'failed'>('testing')
@@ -54,7 +55,14 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-white">
             Settlers
           </h1>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <Link href="/game/test-game">
+              <Button variant="outline">
+                Test Game Board
+              </Button>
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

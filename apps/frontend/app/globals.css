@@ -60,6 +60,19 @@
   --game-neutral: #64748B;
   --game-highlight: #2563EB;
 
+  /* === TERRAIN COLORS (Set dynamically by theme loader) === */
+  --terrain-1: #8B5CF6;
+  --terrain-2: #84CC16;
+  --terrain-3: #16A34A;
+  --terrain-4: #EAB308;
+  --terrain-5: #DC2626;
+  --terrain-desert: #D2B48C;
+
+  /* === GAME BACKGROUND COLORS (Set dynamically by theme loader) === */
+  --game-bg-primary: #1e3a8a;
+  --game-bg-secondary: #3730a3;
+  --game-bg-accent: #065f46;
+
   /* === TAILWIND V4 COLORS === */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -93,6 +106,15 @@
   --color-game-loss: var(--game-loss);
   --color-game-neutral: var(--game-neutral);
   --color-game-highlight: var(--game-highlight);
+  --color-terrain-1: var(--terrain-1);
+  --color-terrain-2: var(--terrain-2);
+  --color-terrain-3: var(--terrain-3);
+  --color-terrain-4: var(--terrain-4);
+  --color-terrain-5: var(--terrain-5);
+  --color-terrain-desert: var(--terrain-desert);
+  --color-game-bg-primary: var(--game-bg-primary);
+  --color-game-bg-secondary: var(--game-bg-secondary);
+  --color-game-bg-accent: var(--game-bg-accent);
   --radius: var(--radius-md);
 }
 
@@ -136,16 +158,35 @@
   --game-loss: #EF4444;
   --game-neutral: #9CA3AF;
   --game-highlight: #3B82F6;
+
+  /* === TERRAIN COLORS DARK === */
+  --terrain-1: #A855F7; /* Brighter purple for dark mode */
+  --terrain-2: #A3E635; /* Brighter light green for dark mode */
+  --terrain-3: #22C55E; /* Brighter dark green for dark mode */
+  --terrain-4: #FDE047; /* Brighter yellow for dark mode */
+  --terrain-5: #F87171; /* Softer red for dark mode */
+  --terrain-desert: #E4C1A0; /* Lighter sand for dark mode */
+
+  /* === GAME BACKGROUND COLORS DARK === */
+  --game-bg-primary: #1e40af; /* Slightly brighter blue for dark mode */
+  --game-bg-secondary: #4338ca; /* Slightly brighter purple for dark mode */
+  --game-bg-accent: #047857; /* Slightly brighter emerald for dark mode */
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
   }
 
   body {
-    @apply bg-background text-foreground transition-colors duration-300;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
   }
 
   /* === SCROLLBAR STYLING === */
@@ -278,7 +319,7 @@
 
   /* === GRADIENT BACKGROUNDS === */
   .gradient-game {
-    @apply bg-gradient-to-br from-background via-content-background to-surface-2;
+    background: linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent));
   }
 
   .gradient-card {
@@ -361,6 +402,31 @@
   .bg-game-highlight {
     @apply bg-game-highlight;
   }
+
+  /* === TERRAIN UTILITIES === */
+  .terrain-1 {
+    background-color: var(--color-terrain-1);
+  }
+
+  .terrain-2 {
+    background-color: var(--color-terrain-2);
+  }
+
+  .terrain-3 {
+    background-color: var(--color-terrain-3);
+  }
+
+  .terrain-4 {
+    background-color: var(--color-terrain-4);
+  }
+
+  .terrain-5 {
+    background-color: var(--color-terrain-5);
+  }
+
+  .terrain-desert {
+    background-color: var(--color-terrain-desert);
+  }
 }
 
 /* === CUSTOM ANIMATIONS === */
@@ -408,4 +474,110 @@
 
 .animate-status-pulse {
   animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* React Hexgrid Styles */
+@import 'react-hexgrid/lib/react-hexgrid.css';
+
+/* Hex Board Styles - removed problematic fixed positioning */
+.hex-board {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* Override react-hexgrid defaults - removed problematic fixed positioning */
+.react-hexgrid {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.react-hexgrid g {
+  @apply transition-all duration-200;
+}
+
+.react-hexgrid polygon {
+  @apply cursor-pointer;
+  stroke-width: 2;
+  stroke-opacity: 0.7;
+}
+
+.react-hexgrid polygon:hover {
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+
+/* Terrain-specific styles */
+.hex-forest {
+  fill: #2d5016;
+  fill-opacity: 0.9;
+}
+
+.hex-pasture {
+  fill: #8fbc8f;
+  fill-opacity: 0.9;
+}
+
+.hex-fields {
+  fill: #daa520;
+  fill-opacity: 0.9;
+}
+
+.hex-hills {
+  fill: #cd853f;
+  fill-opacity: 0.9;
+}
+
+.hex-mountains {
+  fill: #696969;
+  fill-opacity: 0.9;
+}
+
+.hex-desert {
+  fill: #f4a460;
+  fill-opacity: 0.9;
+}
+
+/* Number token styles */
+.number-token circle {
+  @apply drop-shadow-md;
+}
+
+.number-token text {
+  @apply font-bold;
+  font-size: 20px;
+  fill: #1a1a1a;
+}
+
+.number-token text.high-probability {
+  @apply text-red-600;
+  fill: #dc2626;
+}
+
+/* Glass morphism for hexes */
+.hex-glass {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Hover effects */
+.hex-hover {
+  filter: brightness(1.2) drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+}
+
+/* Production animation */
+@keyframes hex-pulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.hex-producing {
+  animation: hex-pulse 2s ease-in-out infinite;
 }

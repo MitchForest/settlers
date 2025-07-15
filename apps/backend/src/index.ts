@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { sql } from 'drizzle-orm'
+
+// Import db first to avoid circular dependencies
 import { db } from './db'
+
+// Import modules that depend on db after db is imported
 import { websocketHandlers, upgradeWebSocket } from './websocket/server'
 import gameRoutes from './routes/games'
 
@@ -86,7 +90,8 @@ const server = Bun.serve({
   port: PORT,
   fetch(req, server) {
     // Handle WebSocket upgrade
-    if (req.url.includes('/ws')) {
+    const url = new URL(req.url)
+    if (url.pathname === '/ws') {
       return upgradeWebSocket(req, server) || new Response('Upgrade failed', { status: 400 })
     }
     
