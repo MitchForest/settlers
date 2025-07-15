@@ -1,0 +1,411 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* === SPACING & SIZING === */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* === ANIMATIONS === */
+  --animation-fast: 150ms;
+  --animation-base: 250ms;
+  --animation-slow: 350ms;
+
+  /* === Z-INDEX SCALE === */
+  --z-sidebar: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+
+  /* === LIGHT MODE COLORS === */
+  --background: #F5F4ED;
+  --foreground: #1A1A1A;
+  --content-background: #FAF9F5;
+  --card: #FFFFFF;
+  --card-foreground: #1A1A1A;
+  --primary: #2563EB;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #1A1A1A;
+  --muted: #F8FAFC;
+  --muted-foreground: #64748B;
+  --accent: #F1F5F9;
+  --accent-foreground: #1A1A1A;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --input: #FFFFFF;
+  --ring: #2563EB;
+
+  /* === GAME SPECIFIC COLORS === */
+  --success: #059669;
+  --success-foreground: #FFFFFF;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --info: #0284C7;
+  --info-foreground: #FFFFFF;
+
+  /* === SURFACE VARIATIONS === */
+  --surface-1: #FFFFFF;
+  --surface-2: #F8FAFC;
+  --surface-3: #F1F5F9;
+  --surface-hover: #E2E8F0;
+
+  /* === GAME UI COLORS === */
+  --game-profit: #059669;
+  --game-loss: #DC2626;
+  --game-neutral: #64748B;
+  --game-highlight: #2563EB;
+
+  /* === TAILWIND V4 COLORS === */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-content-background: var(--content-background);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-hover: var(--surface-hover);
+  --color-game-profit: var(--game-profit);
+  --color-game-loss: var(--game-loss);
+  --color-game-neutral: var(--game-neutral);
+  --color-game-highlight: var(--game-highlight);
+  --radius: var(--radius-md);
+}
+
+.dark {
+  /* === DARK MODE COLORS === */
+  --background: #212020;
+  --foreground: #FAFAFA;
+  --content-background: #191817;
+  --card: #2A2A2A;
+  --card-foreground: #FAFAFA;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #374151;
+  --secondary-foreground: #F9FAFB;
+  --muted: #374151;
+  --muted-foreground: #9CA3AF;
+  --accent: #374151;
+  --accent-foreground: #F9FAFB;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #374151;
+  --input: #374151;
+  --ring: #3B82F6;
+
+  /* === GAME SPECIFIC COLORS DARK === */
+  --success: #10B981;
+  --success-foreground: #FFFFFF;
+  --warning: #F59E0B;
+  --warning-foreground: #000000;
+  --info: #06B6D4;
+  --info-foreground: #FFFFFF;
+
+  /* === SURFACE VARIATIONS DARK === */
+  --surface-1: #2A2A2A;
+  --surface-2: #374151;
+  --surface-3: #4B5563;
+  --surface-hover: #4B5563;
+
+  /* === GAME UI COLORS DARK === */
+  --game-profit: #10B981;
+  --game-loss: #EF4444;
+  --game-neutral: #9CA3AF;
+  --game-highlight: #3B82F6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-300;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* === SCROLLBAR STYLING === */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-foreground/20 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-foreground/30;
+  }
+
+  /* === SELECTION === */
+  ::selection {
+    @apply bg-primary/20;
+  }
+
+  /* === FOCUS STYLES === */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* === SMOOTH THEME TRANSITIONS === */
+  html {
+    @apply transition-colors duration-300;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  /* === BUTTON DEFAULTS === */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-sm hover:shadow-md;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .btn-outline {
+    @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground shadow-sm;
+  }
+
+  .btn-success {
+    @apply bg-success text-success-foreground hover:bg-success/90 shadow-sm hover:shadow-md;
+  }
+
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm hover:shadow-md;
+  }
+
+  /* === CARD DEFAULTS === */
+  .card {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  .card-header {
+    @apply flex flex-col space-y-1.5 p-6;
+  }
+
+  .card-content {
+    @apply p-6 pt-0;
+  }
+
+  .card-title {
+    @apply text-2xl font-semibold leading-none tracking-tight;
+  }
+
+  .card-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* === SURFACE VARIATIONS === */
+  .surface-1 {
+    @apply bg-surface-1 border border-border;
+  }
+
+  .surface-2 {
+    @apply bg-surface-2 border border-border;
+  }
+
+  .surface-3 {
+    @apply bg-surface-3 border border-border;
+  }
+
+  /* === GAME SPECIFIC COMPONENTS === */
+  .status-connected {
+    @apply bg-success/10 text-success border-success/20;
+  }
+
+  .status-disconnected {
+    @apply bg-destructive/10 text-destructive border-destructive/20;
+  }
+
+  .status-testing {
+    @apply bg-warning/10 text-warning border-warning/20;
+  }
+
+  .status-unknown {
+    @apply bg-muted text-muted-foreground border-border;
+  }
+
+  /* === GLASS EFFECT === */
+  .glass {
+    @apply backdrop-blur-sm bg-background/80 border border-border/50;
+  }
+
+  /* === GRADIENT BACKGROUNDS === */
+  .gradient-game {
+    @apply bg-gradient-to-br from-background via-content-background to-surface-2;
+  }
+
+  .gradient-card {
+    @apply bg-gradient-to-b from-card to-surface-1;
+  }
+
+  /* === THEME TOGGLE BUTTON === */
+  .theme-toggle {
+    @apply relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transition-all duration-200;
+  }
+
+  .theme-toggle:hover {
+    @apply shadow-md;
+  }
+}
+
+@layer utilities {
+  /* === ANIMATION UTILITIES === */
+  .animate-in {
+    animation-duration: var(--animation-base);
+    animation-fill-mode: both;
+  }
+
+  .animate-fast {
+    animation-duration: var(--animation-fast);
+  }
+
+  .animate-slow {
+    animation-duration: var(--animation-slow);
+  }
+
+  /* === FOCUS RING === */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background;
+  }
+
+  /* === HOVER STATES === */
+  .hover-lift {
+    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  .hover-scale {
+    @apply transition-transform duration-200 hover:scale-105;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-200 hover:shadow-lg hover:shadow-primary/25;
+  }
+
+  /* === TEXT UTILITIES === */
+  .text-game-profit {
+    @apply text-game-profit;
+  }
+
+  .text-game-loss {
+    @apply text-game-loss;
+  }
+
+  .text-game-neutral {
+    @apply text-game-neutral;
+  }
+
+  .text-game-highlight {
+    @apply text-game-highlight;
+  }
+
+  /* === BACKGROUND UTILITIES === */
+  .bg-game-profit {
+    @apply bg-game-profit;
+  }
+
+  .bg-game-loss {
+    @apply bg-game-loss;
+  }
+
+  .bg-game-neutral {
+    @apply bg-game-neutral;
+  }
+
+  .bg-game-highlight {
+    @apply bg-game-highlight;
+  }
+}
+
+/* === CUSTOM ANIMATIONS === */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+/* === THEME TRANSITION === */
+.theme-transition {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* === GAME SPECIFIC ANIMATIONS === */
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
