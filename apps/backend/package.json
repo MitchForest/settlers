@@ -6,12 +6,13 @@
     "dev": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun dist/index.js",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "bun src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "test": "bun test"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.7.1",
     "@settlers/core": "workspace:*",
     "@types/uuid": "^10.0.0",
     "drizzle-orm": "^0.29.0",

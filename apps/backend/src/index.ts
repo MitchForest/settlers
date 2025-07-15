@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { sql } from 'drizzle-orm'
 import { db } from './db'
+import { websocketHandlers, upgradeWebSocket } from './websocket/server'
+import gameRoutes from './routes/games'
 
 /**
  * CORS configuration
@@ -62,6 +64,11 @@ app.get('/api/test', (c) => {
 })
 
 /**
+ * Game routes
+ */
+app.route('/api/games', gameRoutes)
+
+/**
  * Error handling middleware
  */
 app.onError((err, c) => {
@@ -70,14 +77,28 @@ app.onError((err, c) => {
 })
 
 /**
- * Start server
+ * Start server with WebSocket support
  */
 const PORT = Number(process.env.PORT) || 4000
 
+// Create Bun server with WebSocket support
+const server = Bun.serve({
+  port: PORT,
+  fetch(req, server) {
+    // Handle WebSocket upgrade
+    if (req.url.includes('/ws')) {
+      return upgradeWebSocket(req, server) || new Response('Upgrade failed', { status: 400 })
+    }
+    
+    // Handle regular HTTP requests with Hono
+    return app.fetch(req, server)
+  },
+  websocket: websocketHandlers
+})
+
 console.log(`🚀 Starting Settlers backend server on port ${PORT}`)
 console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`)
+console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
+console.log(`📡 API endpoints: http://localhost:${PORT}/api/*`)
 
-export default {
-  port: PORT,
-  fetch: app.fetch
-}
+export default server

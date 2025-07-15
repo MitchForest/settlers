@@ -1,5 +1,5 @@
 {
-  "id": "65554ab8-d864-4b9b-913e-8a48793fd1ce",
+  "id": "96d14cbb-e942-4fb4-9dc9-3948014c5c00",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
@@ -21,18 +21,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "round": {
-          "name": "round",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "phase": {
-          "name": "phase",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "event_type": {
           "name": "event_type",
           "type": "text",
@@ -49,10 +37,23 @@
           "name": "event_data",
           "type": "jsonb",
           "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "turn": {
+          "name": "turn",
+          "type": "integer",
+          "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timestamp": {
+          "name": "timestamp",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -64,6 +65,13 @@
           "name": "idx_game_events_game_id",
           "columns": [
             "game_id"
+          ],
+          "isUnique": false
+        },
+        "idx_game_events_timestamp": {
+          "name": "idx_game_events_timestamp",
+          "columns": [
+            "timestamp"
           ],
           "isUnique": false
         }
@@ -110,6 +118,48 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "state": {
+          "name": "state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'setup1'"
+        },
+        "turn": {
+          "name": "turn",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "current_player_index": {
+          "name": "current_player_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_players": {
+          "name": "max_players",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "victory_points": {
+          "name": "victory_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -117,33 +167,11 @@
           "notNull": true,
           "default": "'waiting'"
         },
-        "round": {
-          "name": "round",
-          "type": "integer",
+        "winner": {
+          "name": "winner",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "phase_type": {
-          "name": "phase_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'planning'"
-        },
-        "phase_start_time": {
-          "name": "phase_start_time",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "market_data": {
-          "name": "market_data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -163,9 +191,31 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "last_activity_at": {
+          "name": "last_activity_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_games_status": {
+          "name": "idx_games_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "idx_games_phase": {
+          "name": "idx_games_phase",
+          "columns": [
+            "phase"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
@@ -187,11 +237,99 @@
           "primaryKey": false,
           "notNull": true
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_index": {
+          "name": "player_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource1": {
+          "name": "resource1",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "resource2": {
+          "name": "resource2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "resource3": {
+          "name": "resource3",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "resource4": {
+          "name": "resource4",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "resource5": {
+          "name": "resource5",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "public_score": {
+          "name": "public_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "hidden_score": {
+          "name": "hidden_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "knights_played": {
+          "name": "knights_played",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "has_longest_path": {
+          "name": "has_longest_path",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "has_largest_force": {
+          "name": "has_largest_force",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "is_ai": {
           "name": "is_ai",
@@ -207,33 +345,18 @@
           "notNull": true,
           "default": true
         },
-        "capital": {
-          "name": "capital",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 10000
-        },
-        "total_profit": {
-          "name": "total_profit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "routes_built": {
-          "name": "routes_built",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "last_action_at": {
+          "name": "last_action_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -241,6 +364,13 @@
           "name": "idx_players_game_id",
           "columns": [
             "game_id"
+          ],
+          "isUnique": false
+        },
+        "idx_players_user_id": {
+          "name": "idx_players_user_id",
+          "columns": [
+            "user_id"
           ],
           "isUnique": false
         }
@@ -263,8 +393,8 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
     },
-    "routes": {
-      "name": "routes",
+    "sessions": {
+      "name": "sessions",
       "schema": "",
       "columns": {
         "id": {
@@ -274,46 +404,64 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "game_id": {
           "name": "game_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "owner_id": {
-          "name": "owner_id",
+        "player_id": {
+          "name": "player_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "from_region": {
-          "name": "from_region",
+        "socket_id": {
+          "name": "socket_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "to_region": {
-          "name": "to_region",
+        "ip_address": {
+          "name": "ip_address",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "efficiency": {
-          "name": "efficiency",
-          "type": "numeric(3, 2)",
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": "'1.00'"
+          "default": true
         },
-        "profit_per_round": {
-          "name": "profit_per_round",
-          "type": "integer",
+        "connected_at": {
+          "name": "connected_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "default": 0
+          "default": "now()"
         },
-        "created_at": {
-          "name": "created_at",
+        "disconnected_at": {
+          "name": "disconnected_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_ping_at": {
+          "name": "last_ping_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -321,25 +469,45 @@
         }
       },
       "indexes": {
-        "idx_routes_game_id": {
-          "name": "idx_routes_game_id",
+        "idx_sessions_user_id": {
+          "name": "idx_sessions_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "idx_sessions_game_id": {
+          "name": "idx_sessions_game_id",
           "columns": [
             "game_id"
           ],
           "isUnique": false
         },
-        "idx_routes_owner_id": {
-          "name": "idx_routes_owner_id",
+        "idx_sessions_socket_id": {
+          "name": "idx_sessions_socket_id",
           "columns": [
-            "owner_id"
+            "socket_id"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "routes_game_id_games_id_fk": {
-          "name": "routes_game_id_games_id_fk",
-          "tableFrom": "routes",
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sessions_game_id_games_id_fk": {
+          "name": "sessions_game_id_games_id_fk",
+          "tableFrom": "sessions",
           "tableTo": "games",
           "columnsFrom": [
             "game_id"
@@ -350,12 +518,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "routes_owner_id_players_id_fk": {
-          "name": "routes_owner_id_players_id_fk",
-          "tableFrom": "routes",
+        "sessions_player_id_players_id_fk": {
+          "name": "sessions_player_id_players_id_fk",
+          "tableFrom": "sessions",
           "tableTo": "players",
           "columnsFrom": [
-            "owner_id"
+            "player_id"
           ],
           "columnsTo": [
             "id"
@@ -365,10 +533,18 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {
+        "sessions_socket_id_unique": {
+          "name": "sessions_socket_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "socket_id"
+          ]
+        }
+      }
     },
-    "trade_offers": {
-      "name": "trade_offers",
+    "trades": {
+      "name": "trades",
       "schema": "",
       "columns": {
         "id": {
@@ -394,19 +570,27 @@
           "name": "to_player_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "offered_capital": {
-          "name": "offered_capital",
-          "type": "integer",
+        "to_type": {
+          "name": "to_type",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "requested_capital": {
-          "name": "requested_capital",
-          "type": "integer",
+        "offering": {
+          "name": "offering",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "requesting": {
+          "name": "requesting",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
         },
         "status": {
           "name": "status",
@@ -430,18 +614,25 @@
         }
       },
       "indexes": {
-        "idx_trade_offers_game_id": {
-          "name": "idx_trade_offers_game_id",
+        "idx_trades_game_id": {
+          "name": "idx_trades_game_id",
           "columns": [
             "game_id"
+          ],
+          "isUnique": false
+        },
+        "idx_trades_status": {
+          "name": "idx_trades_status",
+          "columns": [
+            "status"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "trade_offers_game_id_games_id_fk": {
-          "name": "trade_offers_game_id_games_id_fk",
-          "tableFrom": "trade_offers",
+        "trades_game_id_games_id_fk": {
+          "name": "trades_game_id_games_id_fk",
+          "tableFrom": "trades",
           "tableTo": "games",
           "columnsFrom": [
             "game_id"
@@ -452,9 +643,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "trade_offers_from_player_id_players_id_fk": {
-          "name": "trade_offers_from_player_id_players_id_fk",
-          "tableFrom": "trade_offers",
+        "trades_from_player_id_players_id_fk": {
+          "name": "trades_from_player_id_players_id_fk",
+          "tableFrom": "trades",
           "tableTo": "players",
           "columnsFrom": [
             "from_player_id"
@@ -462,25 +653,104 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "trade_offers_to_player_id_players_id_fk": {
-          "name": "trade_offers_to_player_id_players_id_fk",
-          "tableFrom": "trade_offers",
-          "tableTo": "players",
-          "columnsFrom": [
-            "to_player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "games_played": {
+          "name": "games_played",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "games_won": {
+          "name": "games_won",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_users_email": {
+          "name": "idx_users_email",
+          "columns": [
+            "email"
+          ],
+          "isUnique": false
+        },
+        "idx_users_username": {
+          "name": "idx_users_username",
+          "columns": [
+            "username"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        },
+        "users_username_unique": {
+          "name": "users_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      }
     }
   },
   "enums": {},
