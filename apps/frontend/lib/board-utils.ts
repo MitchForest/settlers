@@ -1,3 +1,4 @@
+import { defineHex, hexToPoint } from 'honeycomb-grid'
 import { VertexPosition } from '@settlers/core'
 
 // Player colors for the game
@@ -8,11 +9,13 @@ export const PLAYER_COLORS = {
   3: '#FFD60A', // Yellow
 }
 
-// Convert hex coordinates to pixel positions
+// Convert hex coordinates to pixel positions using Honeycomb
 export function hexToPixel(q: number, r: number, size: number = 60): { x: number, y: number } {
-  const x = size * (3/2 * q)
-  const y = size * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r)
-  return { x, y }
+  // Create a hex with the given coordinates and custom size
+  const CustomHex = defineHex({ dimensions: size })
+  const hex = new CustomHex({ q, r })
+  const point = hexToPoint(hex)
+  return { x: point.x, y: point.y }
 }
 
 // Convert vertex positions to pixel coordinates

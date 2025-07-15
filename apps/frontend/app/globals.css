@@ -476,36 +476,11 @@
   animation: status-pulse 2s ease-in-out infinite;
 }
 
-/* React Hexgrid Styles */
-@import 'react-hexgrid/lib/react-hexgrid.css';
-
-/* Hex Board Styles - removed problematic fixed positioning */
+/* Hex Board Styles */
 .hex-board {
   width: 100%;
   height: 100%;
   position: relative;
-}
-
-/* Override react-hexgrid defaults - removed problematic fixed positioning */
-.react-hexgrid {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.react-hexgrid g {
-  @apply transition-all duration-200;
-}
-
-.react-hexgrid polygon {
-  @apply cursor-pointer;
-  stroke-width: 2;
-  stroke-opacity: 0.7;
-}
-
-.react-hexgrid polygon:hover {
-  stroke-width: 3;
-  stroke-opacity: 1;
 }
 
 /* Terrain-specific styles */

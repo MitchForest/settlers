@@ -1,6 +1,5 @@
 'use client'
 
-import { ReactFlowProvider } from 'reactflow'
 import { HexGridLayer } from './layers/HexGridLayer'
 import { ConnectionLayer } from './layers/ConnectionLayer'
 import { InteractionLayer } from './layers/InteractionLayer'
@@ -32,12 +31,10 @@ export function GameBoard() {
         <HexGridLayer board={gameState.board} />
       </div>
       
-      {/* Connection Layer: React Flow for roads and buildings */}
+      {/* Connection Layer: SVG for roads and buildings */}
       {placementMode !== 'none' && (
         <div className="absolute inset-0 z-20">
-          <ReactFlowProvider>
-            <ConnectionLayer gameState={gameState} />
-          </ReactFlowProvider>
+          <ConnectionLayer />
         </div>
       )}
       

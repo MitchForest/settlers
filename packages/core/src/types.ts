@@ -1,6 +1,8 @@
 // Core game types for Settlers
 // Theme-agnostic naming for extensibility
 
+import type { HexCoordinates, CubeCoordinates } from 'honeycomb-grid'
+
 // ============= Board Types =============
 
 // Terrain types for hex tiles
@@ -20,12 +22,9 @@ export type ResourceType =
   | 'resource4'  // Brick
   | 'resource5'  // Ore
 
-// Hexagonal coordinate system (cube coordinates)
-export interface HexCoordinate {
-  q: number  // Column
-  r: number  // Row
-  s: number  // Sum (q + r + s = 0)
-}
+// Re-export Honeycomb coordinate types
+export type HexCoordinate = CubeCoordinates
+export type { HexCoordinates }
 
 // Vertex position (intersection of hexes)
 export interface VertexPosition {

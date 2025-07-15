@@ -1,6 +1,7 @@
-// Board generator - creates the hexagonal game board
+// Board generator - creates the hexagonal game board using Honeycomb
 // Handles hex placement, number tokens, and port locations
 
+import { defineHex, Grid, fromCoordinates } from 'honeycomb-grid'
 import { 
   Board, 
   Hex, 
@@ -17,6 +18,9 @@ import {
   BOARD_LAYOUTS
 } from '../constants'
 import { shuffleArray, hexToString } from '../calculations'
+
+// Define our hex class
+const GameHex = defineHex()
 
 // Board layout definition
 export interface BoardLayout {
@@ -44,13 +48,19 @@ export function generateBoard(layout: BoardLayout, randomize: boolean = true): B
     blockerPosition: { q: 0, r: 0, s: 0 } // Will be set to desert hex
   }
 
-  // Process hexes
+  // Process hexes using Honeycomb
   const hexData = randomize ? randomizeHexes(layout.hexes) : layout.hexes
   
-  hexData.forEach(data => {
+  // Create Honeycomb grid from our layout coordinates
+  const coordinates = hexData.map(data => ({ q: data.q, r: data.r, s: -data.q - data.r }))
+  const grid = new Grid(GameHex, fromCoordinates(...coordinates))
+  
+  // Convert grid hexes to our board format
+  hexData.forEach((data, index) => {
+    const coordinate = coordinates[index]
     const hex: Hex = {
-      id: hexToString({ q: data.q, r: data.r, s: -data.q - data.r }),
-      position: { q: data.q, r: data.r, s: -data.q - data.r },
+      id: hexToString(coordinate),
+      position: coordinate,
       terrain: data.terrain as TerrainType,
       numberToken: data.number,
       hasBlocker: data.terrain === 'desert'
@@ -103,15 +113,11 @@ export function generateBoard(layout: BoardLayout, randomize: boolean = true): B
 
   // Add ports
   layout.ports.forEach(portData => {
-    const port: Port = {
+    board.ports.push({
       position: portData.position,
       type: portData.type as Port['type'],
       ratio: portData.ratio
-    }
-    board.ports.push(port)
-    
-    // Assign port to nearest vertices
-    // (Simplified - would need proper coastal vertex detection)
+    })
   })
 
   return board
@@ -194,11 +200,6 @@ function vertexToString(vertex: VertexPosition): string {
 function edgeToString(v1: VertexPosition, v2: VertexPosition): string {
   const ids = [vertexToString(v1), vertexToString(v2)].sort()
   return ids.join('-')
-}
-
-// Create standard board layout
-export function createStandardBoard(): Board {
-  return generateBoard(BOARD_LAYOUTS.standard, true)
 }
 
 // Validate board integrity
