@@ -1,64 +1,105 @@
 'use client'
 
-import { use, useEffect, useState, useCallback } from 'react'
+import { use, useEffect, useState, useCallback, useMemo } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { GameInterface } from '@/components/game/ui/GameInterface'
-import { generateBoard, GameFlowManager, GameAction, DevelopmentCardType } from '@settlers/core'
-import type { Board } from '@settlers/core'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { Board, GameAction, GameFlowManager } from '@settlers/core'
 import { useGameStore } from '@/stores/gameStore'
 
-interface GamePageProps {
-  params: Promise<{ gameId: string }>
+interface PageParams {
+  gameId: string
 }
 
-export default function GamePage({ params }: GamePageProps) {
-  // Unwrap the params promise using React.use()
+export default function GamePage({ params }: { params: Promise<PageParams> }) {
   const { gameId: _gameId } = use(params)
   
+  // Theme loading
   const { theme, loading: themeLoading, loadTheme } = useGameTheme()
-  const [board, setBoard] = useState<Board | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [_board, _setBoard] = useState<Board | null>(null)
   
   // Game state management - USE GAME STORE as single source of truth
+  const gameState = useGameStore(state => state.gameState) // Get state from store
   const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
-  const gameState = useGameStore(state => state.gameState) // Read from store
   const updateGameState = useGameStore(state => state.updateGameState) // Store updater
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null)
-  const [playerAvatars, setPlayerAvatars] = useState<Record<string, { avatar: string; name: string }>>({})
 
-  // Memoize the generateTestBoard function to fix useEffect dependency
+  // State for game board generation
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  // Player avatar mapping (for future use)
+  const _playerAvatars = useMemo(() => ({
+    'player1': { avatar: '👤', name: 'Player 1' },
+    'player2': { avatar: '🤖', name: 'Player 2' },
+    'player3': { avatar: '👨‍💻', name: 'Player 3' },
+    'player4': { avatar: '👩‍🚀', name: 'Player 4' }
+  }), [])
+
+  // Demo board generation
   const generateTestBoard = useCallback(async () => {
-    if (!theme) {
-      toast.error('Theme must be loaded before generating board')
-      return
-    }
+    if (isGenerating) return
 
     setIsGenerating(true)
     try {
-      const newBoard = generateBoard()
-      setBoard(newBoard)
+      // Create a demo game state for testing
+      const demoGame = GameFlowManager.createGame({
+        playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
+        gameId: 'demo-game',
+        randomizePlayerOrder: false
+      })
+
+      const modifiedState = demoGame.getState()
       
-      // Update game state with the new board if game manager exists
-      if (gameManager && gameState) {
-        const updatedState = {
-          ...gameState,
-          board: newBoard
+      // Modify state to add some demo resources and buildings
+      const players = Array.from(modifiedState.players.values())
+      
+      if (players.length > 0) {
+        // Give player 1 some starting resources
+        players[0].resources = {
+          wood: 3,
+          brick: 2,
+          ore: 1,
+          wheat: 2,
+          sheep: 1
         }
-        updateGameState(updatedState)
+        
+        // Give other players some resources too
+        if (players.length > 1) {
+          players[1].resources = {
+            wood: 1,
+            brick: 1,
+            ore: 2,
+            wheat: 1,
+            sheep: 2
+          }
+        }
       }
+
+      setGameManager(demoGame)
+      updateGameState(modifiedState)
+
+      // Set local player as the first player
+      const playerIds = Array.from(modifiedState.players.keys())
+      setLocalPlayerId(playerIds[0])
       
-      toast.success('Board generated successfully!')
+      toast.success('Game loaded!')
     } catch (error) {
-      console.error('Failed to generate board:', error)
-      toast.error('Failed to generate board')
+      console.error('Failed to create demo game:', error)
+      toast.error('Failed to create demo game')
     } finally {
       setIsGenerating(false)
     }
-  }, [theme, gameManager, gameState, updateGameState])
+  }, [updateGameState, isGenerating])
+
+  // Generate test board when theme is loaded
+  useEffect(() => {
+    if (theme && !gameState && !isGenerating) {
+      generateTestBoard()
+    }
+  }, [theme, gameState, isGenerating, generateTestBoard])
 
   // Auto-load settlers theme when component mounts
   useEffect(() => {
@@ -69,183 +110,6 @@ export default function GamePage({ params }: GamePageProps) {
       })
     }
   }, [theme, themeLoading, loadTheme])
-
-  // Initialize demo game once when component mounts
-  useEffect(() => {
-    if (!gameManager && theme) {
-      try {
-        const manager = GameFlowManager.createGame({
-          playerNames: ['You', 'Alice', 'Bob', 'Charlie'],
-          randomizePlayerOrder: true
-        })
-        
-        // Give players starting resources for testing
-        const state = manager.getState()
-        const updatedPlayers = new Map(state.players)
-        
-        // Set up player avatars
-        const avatars: Record<string, { avatar: string; name: string }> = {}
-        const defaultAvatars = ['🧙‍♂️', '👩‍🌾', '👨‍🔬', '👸']
-        
-        let avatarIndex = 0
-        updatedPlayers.forEach((player, playerId) => {
-          if (avatarIndex === 0) {
-            // Current player - give lots of resources and all types of development cards
-            player.resources = {
-              wood: 5,
-              brick: 4,
-              ore: 3,
-              wheat: 6,
-              sheep: 4
-            }
-            
-            // Give current player one of each development card type (playable)
-            const cardTypes: DevelopmentCardType[] = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly', 'victory']
-            cardTypes.forEach((cardType, _index) => {
-              const card = state.developmentDeck.find(c => c.type === cardType)
-              if (card) {
-                const cardIndex = state.developmentDeck.indexOf(card)
-                state.developmentDeck.splice(cardIndex, 1)
-                card.purchasedTurn = 0 // Can be played immediately
-                player.developmentCards.push(card)
-              }
-            })
-            
-            // Add some extra knights for largest army demo
-            for (let i = 0; i < 2; i++) {
-              const knightCard = state.developmentDeck.find(c => c.type === 'knight')
-              if (knightCard) {
-                const cardIndex = state.developmentDeck.indexOf(knightCard)
-                state.developmentDeck.splice(cardIndex, 1)
-                knightCard.purchasedTurn = 0
-                player.developmentCards.push(knightCard)
-              }
-            }
-            
-            // Add some newly bought cards (can't be played this turn)
-            for (let i = 0; i < 2; i++) {
-              const newCard = state.developmentDeck.pop()
-              if (newCard) {
-                newCard.purchasedTurn = 1 // Current turn, can't play yet
-                player.developmentCards.push(newCard)
-              }
-            }
-            
-            player.knightsPlayed = 2 // For largest army demonstration
-            player.score.public = 7 // Close to winning
-            player.score.hidden = 1 // Victory point card
-            player.score.total = 8
-            player.hasLargestArmy = true
-            
-          } else if (avatarIndex === 1) {
-            // Second player - moderate resources, some cards, longest road
-            player.resources = {
-              wood: 3,
-              brick: 2,
-              ore: 1,
-              wheat: 3,
-              sheep: 2
-            }
-            
-            // Give a few development cards
-            for (let i = 0; i < 3; i++) {
-              const card = state.developmentDeck.pop()
-              if (card) {
-                card.purchasedTurn = 0
-                player.developmentCards.push(card)
-              }
-            }
-            
-            player.knightsPlayed = 1
-            player.score.public = 5
-            player.score.hidden = 0
-            player.score.total = 5
-            player.hasLongestRoad = true
-            
-          } else if (avatarIndex === 2) {
-            // Third player - minimal resources, few cards
-            player.resources = {
-              wood: 1,
-              brick: 1,
-              ore: 0,
-              wheat: 2,
-              sheep: 1
-            }
-            
-            // Give one development card
-            const card = state.developmentDeck.pop()
-            if (card) {
-              card.purchasedTurn = 0
-              player.developmentCards.push(card)
-            }
-            
-            player.score.public = 3
-            player.score.hidden = 0
-            player.score.total = 3
-            
-          } else {
-            // Fourth player - balanced resources
-            player.resources = {
-              wood: 2,
-              brick: 2,
-              ore: 2,
-              wheat: 2,
-              sheep: 2
-            }
-            
-            // Give two development cards
-            for (let i = 0; i < 2; i++) {
-              const card = state.developmentDeck.pop()
-              if (card) {
-                card.purchasedTurn = 0
-                player.developmentCards.push(card)
-              }
-            }
-            
-            player.score.public = 4
-            player.score.hidden = 0
-            player.score.total = 4
-          }
-          
-          // Set up avatar
-          avatars[playerId] = {
-            avatar: defaultAvatars[avatarIndex] || '👤',
-            name: player.name
-          }
-          avatarIndex++
-        })
-        
-        const modifiedState = {
-          ...state,
-          players: updatedPlayers,
-          turn: 1,
-          phase: 'roll' as const, // Start with rolling dice
-          board: board || state.board // Use local board if available
-        }
-        
-        setGameManager(manager)
-        updateGameState(modifiedState)
-        setPlayerAvatars(avatars)
-        
-        // Set local player as the first player
-        const playerIds = Array.from(modifiedState.players.keys())
-        setLocalPlayerId(playerIds[0])
-        
-        toast.success('Game loaded!')
-      } catch (error) {
-        console.error('Failed to create demo game:', error)
-        toast.error('Failed to create demo game')
-      }
-    }
-  }, [gameManager, theme, updateGameState])
-
-  // Generate test board when theme is loaded
-  useEffect(() => {
-    if (theme && !board && !isGenerating) {
-      generateTestBoard()
-    }
-  }, [theme, board, isGenerating, generateTestBoard])
-
 
 
   const handleGameAction = (action: GameAction) => {
@@ -276,10 +140,10 @@ export default function GamePage({ params }: GamePageProps) {
               // Show resource distribution if any
               const resourceEvent = result.events.find(e => e.type === 'resourcesDistributed')
               if (resourceEvent) {
-                const distribution = resourceEvent.data.distribution
+                const distribution = resourceEvent.data.distribution as Record<string, Record<string, number>>
                 let totalGained = 0
-                Object.values(distribution).forEach((playerResources: any) => {
-                  Object.values(playerResources).forEach((amount: any) => {
+                Object.values(distribution).forEach((playerResources) => {
+                  Object.values(playerResources).forEach((amount) => {
                     totalGained += amount
                   })
                 })
@@ -306,6 +170,42 @@ export default function GamePage({ params }: GamePageProps) {
           }
           break
           
+        case 'moveRobber':
+          toast.success('Robber moved!')
+          // Check if we need to steal
+          if (result.newState.phase === 'steal') {
+            toast.info('Select a player to steal from')
+          }
+          break
+          
+        case 'stealResource':
+          const stealEvent = result.events.find(e => e.type === 'resourceStolen')
+          if (stealEvent) {
+            const targetPlayer = result.newState.players.get(stealEvent.data.targetPlayerId)
+            toast.success(`Stole a ${stealEvent.data.resourceType} from ${targetPlayer?.name}!`)
+          } else {
+            toast.info('No resources to steal')
+          }
+          // Show resource distribution if any
+          const resourceEvent = result.events.find(e => e.type === 'resourcesDistributed')
+          if (resourceEvent) {
+            const distribution = resourceEvent.data.distribution as Record<string, Record<string, number>>
+            let totalGained = 0
+            Object.values(distribution).forEach((playerResources) => {
+              Object.values(playerResources).forEach((amount) => {
+                totalGained += amount
+              })
+            })
+            if (totalGained > 0) {
+              toast.info(`${totalGained} resources distributed to players`)
+            }
+          }
+          break
+          
+        case 'discard':
+          toast.success('Cards discarded')
+          break
+          
         case 'endTurn':
           toast.info('Turn ended')
           break
@@ -330,7 +230,7 @@ export default function GamePage({ params }: GamePageProps) {
     }
   }
 
-  const handleTurnTimeout = () => {
+  const _handleTurnTimeout = () => {
     if (gameState && localPlayerId === gameState.currentPlayer) {
       toast.warning('Time is up! Ending turn automatically.')
       handleGameAction({
@@ -369,29 +269,21 @@ export default function GamePage({ params }: GamePageProps) {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
-      {/* Always show the game interface */}
-      {board && gameState ? (
-        <div className="relative w-full h-screen">
-          {/* Game board - full screen background */}
-          <GameBoard 
-            board={board} 
-            testPieces={[]}
-            disableTransitions={false}
-            forceTheme={theme}
+    <div className="min-h-screen bg-slate-900 relative">
+      {/* Main board display */}
+      {gameState ? (
+        <div className="relative w-full h-full">
+          {/* Game Board */}
+          <GameBoard
+            board={gameState.board}
+            theme={theme}
+            onGameAction={handleGameAction}
           />
           
           {/* Game Interface Overlay */}
           <GameInterface
-            gameState={gameState}
-            localPlayerId={localPlayerId}
-            playerAvatars={playerAvatars}
-            onAction={handleGameAction}
-            onTurnTimeout={handleTurnTimeout}
-            onRegenerateBoard={generateTestBoard}
+            onGameAction={handleGameAction}
           />
-
-          {/* Board Regeneration Button - Top Right */}
 
         </div>
       ) : (

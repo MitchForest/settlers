@@ -14,19 +14,18 @@ interface DiceRollerProps {
   currentRoll?: DiceRoll | null
 }
 
-export function DiceRoller({ 
-  onRoll, 
-  disabled = false, 
-  isRolling = false, 
+export function DiceRoller({
+  onRoll,
+  disabled = false,
   canRoll = false,
   currentRoll
 }: DiceRollerProps) {
-  const [isAnimating, setIsAnimating] = useState(false)
+  const [_isRolling, setIsRolling] = useState(false)
 
   const handleRoll = () => {
-    if (disabled || isAnimating || !canRoll) return
+    if (disabled || _isRolling || !canRoll) return
 
-    setIsAnimating(true)
+    setIsRolling(true)
     
     // Create the roll action for the game engine
     const rollAction: GameAction = {
@@ -37,7 +36,7 @@ export function DiceRoller({
     
     // Animation delay to show dice rolling
     setTimeout(() => {
-      setIsAnimating(false)
+      setIsRolling(false)
       onRoll(rollAction)
     }, 1200)
   }
@@ -49,12 +48,12 @@ export function DiceRoller({
         
         {/* Dice Display */}
         <div className="flex space-x-4">
-          <Die value={currentRoll?.die1} isAnimating={isAnimating} />
-          <Die value={currentRoll?.die2} isAnimating={isAnimating} />
+          <Die value={currentRoll?.die1} isAnimating={_isRolling} />
+          <Die value={currentRoll?.die2} isAnimating={_isRolling} />
         </div>
 
         {/* Roll Result */}
-        {currentRoll && !isAnimating && (
+        {currentRoll && !_isRolling && (
           <div className="text-center">
             <div className="text-2xl font-bold text-white">
               {currentRoll.sum}
@@ -68,15 +67,15 @@ export function DiceRoller({
         {/* Roll Button */}
         <Button
           onClick={handleRoll}
-          disabled={disabled || isAnimating || !canRoll}
+          disabled={disabled || _isRolling || !canRoll}
           size="lg"
           className={cn(
             "transition-all duration-200",
-            isAnimating && "scale-95",
-            canRoll && !disabled && !isAnimating && "hover:scale-105"
+            _isRolling && "scale-95",
+            canRoll && !disabled && !_isRolling && "hover:scale-105"
           )}
         >
-          {isAnimating ? (
+          {_isRolling ? (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
               <span>Rolling...</span>

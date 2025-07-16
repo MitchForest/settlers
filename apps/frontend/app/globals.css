@@ -81,6 +81,12 @@
   --player-1: #EA4335;
   --player-2: #FF8C00;
   --player-3: #4285F4;
+  
+  /* Player color classes for Tailwind */
+  --color-player-0: var(--player-0);
+  --color-player-1: var(--player-1);
+  --color-player-2: var(--player-2);
+  --color-player-3: var(--player-3);
 
   /* === TAILWIND V4 COLORS === */
   --color-background: var(--background);
@@ -270,6 +276,22 @@
   .btn-destructive {
     @apply bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm hover:shadow-md;
   }
+
+  /* === PLAYER COLORS === */
+  .bg-player-0 { background-color: var(--color-player-0); }
+  .bg-player-1 { background-color: var(--color-player-1); }
+  .bg-player-2 { background-color: var(--color-player-2); }
+  .bg-player-3 { background-color: var(--color-player-3); }
+  
+  .text-player-0 { color: var(--color-player-0); }
+  .text-player-1 { color: var(--color-player-1); }
+  .text-player-2 { color: var(--color-player-2); }
+  .text-player-3 { color: var(--color-player-3); }
+  
+  .border-player-0 { border-color: var(--color-player-0); }
+  .border-player-1 { border-color: var(--color-player-1); }
+  .border-player-2 { border-color: var(--color-player-2); }
+  .border-player-3 { border-color: var(--color-player-3); }
 
   /* === CARD DEFAULTS === */
   .card {

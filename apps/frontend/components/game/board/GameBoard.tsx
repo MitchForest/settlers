@@ -1,132 +1,102 @@
 'use client'
 
-import React, { useRef, useEffect } from 'react'
-import { Board } from '@settlers/core'
-import { useGameStore } from '@/stores/gameStore'
-
-import { useGameTheme } from '@/components/theme-provider'
+import React, { useEffect, useState } from 'react'
+import { Board, GameAction } from '@settlers/core'
 import { GameTheme } from '@/lib/theme-types'
 import { HexGridLayer } from './layers/HexGridLayer'
-import { PieceLayer } from './layers/PieceLayer'
 import { PortLayer } from './layers/PortLayer'
-
-
-import { initializeBoardGrid } from '@/lib/board-utils'
-import { useSimplePanZoom } from '@/lib/use-simple-pan-zoom'
-
-interface TestPiece {
-  type: 'settlement' | 'city' | 'road'
-  playerId: string
-  position: { x: number, y: number }
-  rotation?: number
-}
+import { PieceLayer } from './layers/PieceLayer'
+import { useGameStore } from '@/stores/gameStore'
 
 interface GameBoardProps {
-  board?: Board
-  testPieces?: TestPiece[]
-  onBoardClear?: (callback: () => void) => void
-  disableTransitions?: boolean
-  forceTheme?: GameTheme | null
+  board: Board
+  theme: GameTheme | null
+  onGameAction?: (action: GameAction) => void
 }
 
-export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBoardProps = {}) {
-  // === UNIFIED STATE MANAGEMENT ===
+export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
+  const [loading, setLoading] = useState(false)
+  
+  // Get game state and hex interaction functions from store
   const gameState = useGameStore(state => state.gameState)
   const setHoveredHex = useGameStore(state => state.setHoveredHex)
   const setSelectedHex = useGameStore(state => state.setSelectedHex)
-  const { theme: contextTheme, loading } = useGameTheme()
-  const containerRef = useRef<HTMLDivElement>(null)
-  
-  // Use forceTheme if provided, otherwise use context theme
-  const theme = forceTheme !== undefined ? forceTheme : contextTheme
-  
-  // Use prop board if provided, otherwise fall back to store
-  const board = propBoard || gameState?.board
-  
-  console.log('GameBoard render:', { 
-    propBoard: !!propBoard, 
-    storeBoard: !!gameState?.board, 
-    finalBoard: !!board,
-    gameState: !!gameState,
-    boardHexCount: board?.hexes?.size || 0,
-    firstFewHexes: board?.hexes ? Array.from(board.hexes.entries()).slice(0, 3) : []
-  })
-  
-  // === UNIFIED INTERACTION SYSTEM ===
-  // === NEW SIMPLE PAN/ZOOM SYSTEM ===
-  const { transform, isDragging } = useSimplePanZoom(containerRef, {
-    minScale: 0.3,    // Allow zooming out more to see full board
-    maxScale: 3.0,    // Allow zooming in more for detail
-    zoomStep: 0.05    // Much finer control for smooth zooming
-  })
-  
-  // === INITIALIZATION ===
-  
-  // Initialize honeycomb grid when board loads
+  const localPlayerId = useGameStore(state => state.localPlayerId)
+
+  // Track asset loading state
   useEffect(() => {
-    if (board) {
-      initializeBoardGrid(board)
-    }
-  }, [board])
-  
-
-
-  // Register board clear callback
-  useEffect(() => {
-    if (!onBoardClear) return
-
-    const clearSelection = () => {
-      // Clear board selection via game store
-      useGameStore.getState().setSelectedHex(null)
-      useGameStore.getState().setHoveredHex(null)
+    if (!theme) {
+      setLoading(false)
+      return
     }
 
-    onBoardClear(clearSelection)
-  }, [onBoardClear])
-  
+    setLoading(true)
+    const timer = setTimeout(() => setLoading(false), 500)
+    return () => clearTimeout(timer)
+  }, [theme])
 
-  
-  // === RENDER ===
-  
-  // CRITICAL FIX: Only block if no board exists
-  if (!board) {
-    return (
-      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center">
-        <div className="text-lg text-gray-500">
-          No board data available
-        </div>
-      </div>
-    )
+  // Enhanced hex click handler that supports robber movement
+  const handleHexClick = (hexId: string | null) => {
+    if (!hexId || !gameState || !localPlayerId) {
+      setSelectedHex(hexId)
+      return
+    }
+
+    // Check if this is robber movement phase
+    if (gameState.phase === 'moveRobber' && gameState.currentPlayer === localPlayerId) {
+      // Parse hex coordinates from hexId
+      const coords = hexId.split(',').map(Number)
+      if (coords.length >= 3) {
+        const [q, r, s] = coords
+        
+        // Check if this hex is different from current robber position
+        const currentRobber = board.robberPosition
+        if (!currentRobber || currentRobber.q !== q || currentRobber.r !== r || currentRobber.s !== s) {
+          // Find the hex to ensure it's not sea
+          const targetHex = Array.from(board.hexes.values()).find(hex => 
+            hex.position.q === q && hex.position.r === r && hex.position.s === s
+          )
+          
+          if (targetHex && targetHex.terrain !== 'sea') {
+            // Create moveRobber action
+            const action = {
+              type: 'moveRobber' as const,
+              playerId: localPlayerId,
+              data: {
+                hexPosition: { q, r, s }
+              }
+            }
+            
+            if (onGameAction) {
+              onGameAction(action)
+            }
+            return
+          }
+        }
+      }
+    }
+
+    // Default hex selection behavior
+    setSelectedHex(hexId)
   }
-  
+
+  console.log('GameBoard render:', {
+    boardExists: !!board,
+    themeExists: !!theme,
+    hexCount: board?.hexes?.size || 0,
+    gamePhase: gameState?.phase,
+    canMoveRobber: gameState?.phase === 'moveRobber' && gameState?.currentPlayer === localPlayerId
+  })
+
   return (
-    <div 
-      ref={containerRef}
-      className="fixed inset-0 w-screen h-screen overflow-hidden select-none"
-      style={{
-        cursor: isDragging ? 'grabbing' : 'grab',
-        background: `linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent))`
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-      tabIndex={0}
-    >
-      {/* Background pattern - stays fixed */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,var(--color-game-bg-primary)_0%,transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,var(--color-game-bg-accent)_0%,transparent_50%)]" />
-      </div>
-    
-      {/* MAIN BOARD CONTENT - CSS Transform Applied Here */}
+    <div className="game-board relative w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+      {/* Main board rendering */}
       <div 
-        className="absolute inset-0 origin-center"
-        style={{ 
-          transform,
-          pointerEvents: 'none'  // Let mouse events pass through to SVG elements
-        }}
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ pointerEvents: 'none' }}  // Disable pointer events on container
       >
-        {/* Fixed-size SVG container with proper viewBox for hexagon board */}
-        <svg 
-          className="absolute"
+        <svg
+          className="board-svg"
           viewBox="-400 -400 800 800"
           style={{ 
             width: '800px', 
@@ -143,7 +113,7 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
             theme={theme}
             disableTransitions={false}
             onHexHover={setHoveredHex}
-            onHexClick={setSelectedHex}
+            onHexClick={handleHexClick}
           />
           <PortLayer board={board} />
           <PieceLayer board={board} />

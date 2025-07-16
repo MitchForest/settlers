@@ -1,251 +1,232 @@
 'use client'
 
-import { GameState, GameAction, PlayerId } from '@settlers/core'
-import { PlayersPanel } from './PlayersPanel'
-import { PlayerSidebar } from './PlayerSidebar'
-import { DiceRoller } from './DiceRoller'
+import { useGameStore } from '@/stores/gameStore'
+import { Player, GameAction } from '@settlers/core'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { LogOut, Info, RotateCcw, Palette, Play } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { InfoIcon, Dices, User, Sword } from 'lucide-react'
+import { useState } from 'react'
 
 interface GameInterfaceProps {
-  gameState: GameState | null
-  localPlayerId: string | null
-  playerAvatars: Record<string, { avatar: string; name: string }>
-  onAction?: (action: GameAction) => void
-  onTurnTimeout?: () => void
-  onRegenerateBoard?: () => void
+  onGameAction?: (action: GameAction) => void
 }
 
-export function GameInterface({ 
-  gameState, 
-  localPlayerId, 
-  playerAvatars, 
-  onAction, 
-  onTurnTimeout,
-  onRegenerateBoard
-}: GameInterfaceProps) {
-
-  const [showRestartDialog, setShowRestartDialog] = useState(false)
+export function GameInterface({ onGameAction }: GameInterfaceProps) {
+  const gameState = useGameStore(state => state.gameState)
+  const localPlayerId = useGameStore(state => state.localPlayerId)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
-  const [timeRemaining, setTimeRemaining] = useState(120)
 
-  // Get current player and determine if it's their turn
-  const currentPlayer = gameState?.players.get(gameState.currentPlayer)
-  const isMyTurn = localPlayerId === gameState?.currentPlayer
-  const myPlayer = localPlayerId ? gameState?.players.get(localPlayerId) : null
-
-  // Determine if player can roll dice
-  const canRoll = isMyTurn && gameState?.phase === 'roll'
-
-  // Timer countdown
-  useEffect(() => {
-    if (!gameState?.currentPlayer) return
-    
-    setTimeRemaining(120)
-    
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          return 0 // Don't reset to 120 here, let separate effect handle timeout
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [gameState?.currentPlayer, gameState?.turn])
-
-  // Handle timeout
-  useEffect(() => {
-    if (timeRemaining === 0 && onTurnTimeout) {
-      onTurnTimeout()
-    }
-  }, [timeRemaining, onTurnTimeout])
-
-  // Format time display
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  // Handle game actions
-  const handleAction = (action: GameAction) => {
-    if (!localPlayerId || !onAction) {
-      toast.error('Cannot perform action: Not connected to game')
-      return
-    }
-
-    // Set the player ID for the action
-    const actionWithPlayer = {
-      ...action,
-      playerId: localPlayerId
-    }
-
-    console.log('Sending game action:', actionWithPlayer)
-    onAction(actionWithPlayer)
-  }
-
-  // Handle dice roll
-  const handleDiceRoll = (action: GameAction) => {
-    if (!canRoll) {
-      toast.error('You cannot roll dice right now')
-      return
-    }
-    handleAction(action)
-  }
-
-  // Handle end turn
-  const handleEndTurn = () => {
-    if (!isMyTurn) {
-      toast.error('Not your turn')
-      return
-    }
-
-    const endTurnAction: GameAction = {
-      type: 'endTurn',
-      playerId: localPlayerId!,
-      data: {}
-    }
-    handleAction(endTurnAction)
-  }
-
-  // Don't render if no game state
-  if (!gameState) {
+  if (!gameState || !localPlayerId) {
     return (
-      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center bg-black/50">
-        <div className="text-white text-xl">Loading game...</div>
+      <div className="fixed inset-0 flex items-center justify-center">
+        <div className="text-lg text-gray-500">Loading game...</div>
       </div>
     )
   }
 
+  const myPlayer = gameState.players.get(localPlayerId)
+  const currentPlayer = gameState.players.get(gameState.currentPlayer)
+  const isMyTurn = gameState.currentPlayer === localPlayerId
+
+  if (!myPlayer) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <div className="text-lg text-red-500">Player not found in game</div>
+      </div>
+    )
+  }
+
+  // Get players adjacent to robber for steal phase
+  const getAdjacentPlayers = () => {
+    if (!gameState.board.robberPosition) return []
+    
+    const adjacentPlayers: Array<{ playerId: string, player: Player }> = []
+    const robberHex = gameState.board.robberPosition
+    
+    // Find all vertices adjacent to the robber hex
+    gameState.board.vertices.forEach((vertex, _vertexId) => {
+      const building = vertex.building
+      if (building && building.owner !== localPlayerId) {
+        // Check if this vertex is adjacent to the robber hex
+        const isAdjacent = vertex.position.hexes.some(hexPos => 
+          hexPos.q === robberHex.q && hexPos.r === robberHex.r && hexPos.s === robberHex.s
+        )
+        
+        if (isAdjacent) {
+          const player = gameState.players.get(building.owner)
+          if (player && !adjacentPlayers.some(p => p.playerId === building.owner)) {
+            adjacentPlayers.push({ playerId: building.owner, player })
+          }
+        }
+      }
+    })
+    
+    return adjacentPlayers
+  }
+
+  const adjacentPlayers = gameState.phase === 'steal' ? getAdjacentPlayers() : []
+
+  const handleStealFromPlayer = (targetPlayerId: string) => {
+    if (!onGameAction) return
+    
+    const action: GameAction = {
+      type: 'stealResource',
+      playerId: localPlayerId,
+      data: {
+        targetPlayerId
+      }
+    }
+    
+    onGameAction(action)
+  }
+
+  const handleSkipSteal = () => {
+    if (!onGameAction) return
+    
+    const action: GameAction = {
+      type: 'endTurn',
+      playerId: localPlayerId,
+      data: {}
+    }
+    
+    onGameAction(action)
+  }
+
   return (
-    <div className="absolute inset-0 w-full h-full pointer-events-none">
-      {/* Game Header */}
-      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
-        <div className="flex items-center justify-between bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-          {/* Left side - Game info */}
-          <div className="flex items-center space-x-4">
-            <div className="text-white">
-              <div className="font-semibold">Turn {gameState.turn}</div>
-              <div className="text-sm text-white/70">
-                Phase: {gameState.phase} | {currentPlayer ? `${currentPlayer.name}'s turn` : 'Waiting...'}
+    <div className="game-interface">
+      {/* Fixed header with game info */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="container max-w-6xl mx-auto px-4 py-2">
+          <div className="flex items-center justify-between">
+            {/* Left: Current turn info */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span className="font-medium">{currentPlayer?.name || 'Unknown'}</span>
+                {isMyTurn && <Badge variant="default">Your Turn</Badge>}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Phase:</span>
+                <Badge variant="outline">{gameState.phase}</Badge>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Turn:</span>
+                <span className="font-mono text-sm">{gameState.turn}</span>
               </div>
             </div>
+
+            {/* Center: Phase instructions */}
+            <div className="text-center">
+              <p className="text-sm font-medium">
+                {getPhaseInstructions(gameState.phase, isMyTurn)}
+              </p>
+            </div>
+
+            {/* Right: Game controls */}
+            <div className="flex items-center gap-2">
+              {gameState.dice && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-md">
+                  <Dices className="h-4 w-4" />
+                  <span className="font-mono text-sm">
+                    {gameState.dice.die1} + {gameState.dice.die2} = {gameState.dice.sum}
+                  </span>
+                </div>
+              )}
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowInfoDialog(true)}
+              >
+                <InfoIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Steal Phase Dialog */}
+      {gameState.phase === 'steal' && isMyTurn && adjacentPlayers.length > 0 && (
+        <Dialog open={true} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sword className="h-5 w-5 text-red-500" />
+                Choose Player to Steal From
+              </DialogTitle>
+              <DialogDescription>
+                Select a player adjacent to the robber to steal a random resource card from them.
+              </DialogDescription>
+            </DialogHeader>
             
-            {/* Turn Timer */}
-            <div className="text-white bg-black/30 px-3 py-1 rounded-md">
-              <div className="text-sm font-mono">{formatTime(timeRemaining)}</div>
+            <div className="space-y-3">
+              {adjacentPlayers.map(({ playerId, player }) => (
+                <Card 
+                  key={playerId}
+                  className="cursor-pointer hover:bg-accent transition-colors"
+                  onClick={() => handleStealFromPlayer(playerId)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded-full bg-player-${player.color}`} />
+                        <div>
+                          <p className="font-medium">{player.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {Object.values(player.resources).reduce((a, b) => a + b, 0)} cards
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {player.score.total} VP
+                        </Badge>
+                        {player.hasLongestRoad && (
+                          <Badge variant="secondary" className="text-xs">
+                            Longest Road
+                          </Badge>
+                        )}
+                        {player.hasLargestArmy && (
+                          <Badge variant="secondary" className="text-xs">
+                            Largest Army
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={handleSkipSteal}>
+                Skip Stealing
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
-          {/* Right side - Action buttons */}
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowInfoDialog(true)}
-            >
-              <Info className="w-4 h-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={onRegenerateBoard}
-            >
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={() => setShowRestartDialog(true)}
-            >
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-             {/* Left Sidebar - My Player Info */}
-       {myPlayer && (
-         <div className="absolute left-4 top-24 bottom-4 z-20 pointer-events-auto w-80">
-           <PlayerSidebar 
-             gameState={gameState}
-             localPlayer={myPlayer}
-             isMyTurn={isMyTurn}
-             onAction={handleAction}
-             timeRemaining={timeRemaining}
-           />
-         </div>
-       )}
-
-       {/* Right Sidebar - Other Players */}
-       <div className="absolute right-4 top-24 bottom-4 z-20 pointer-events-auto w-80">
-         <PlayersPanel 
-           gameState={gameState}
-           playerAvatars={playerAvatars}
-         />
-       </div>
-
-      {/* Bottom Center - Game Actions */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 pointer-events-auto">
-        <div className="flex items-center space-x-4">
-          {/* Dice Roller */}
-          <DiceRoller
-            onRoll={handleDiceRoll}
-            disabled={!isMyTurn}
-            canRoll={canRoll}
-            currentRoll={gameState.dice}
-          />
-
-          {/* End Turn Button */}
-          {isMyTurn && gameState.phase === 'actions' && (
-            <Button
-              onClick={handleEndTurn}
-              size="lg"
-              variant="secondary"
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              End Turn
-            </Button>
-          )}
-
-          {/* Phase-specific instructions */}
-          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/20 text-white text-center max-w-md">
-            <div className="text-sm">
-              {getPhaseInstructions(gameState.phase, isMyTurn)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dialogs */}
-      <Dialog open={showRestartDialog} onOpenChange={setShowRestartDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Restart Game?</DialogTitle>
-            <DialogDescription>
-              This will end the current game and return you to the main menu. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRestartDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={() => window.location.href = '/'}>
-              Restart Game
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      {/* Game Info Dialog */}
       <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Game Information</DialogTitle>
+            <DialogDescription>
+              Current game state and victory conditions
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -299,7 +280,7 @@ function getPhaseInstructions(phase: string, isMyTurn: boolean): string {
     case 'discard':
       return "Discard half your cards (7+ cards)"
     case 'moveRobber':
-      return "Move the robber to a new hex"
+      return "Click on a hex to move the robber"
     case 'steal':
       return "Choose a player to steal from"
     case 'ended':

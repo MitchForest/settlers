@@ -23,6 +23,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   onHexClick
 }) => {
   // Get hex selection state from store
+  const gameState = useGameStore(state => state.gameState)
   const selectedHexId = useGameStore(state => state.selectedHex)
   const hoveredHexId = useGameStore(state => state.hoveredHex)
   
@@ -32,24 +33,37 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       const hexId = `${hex.position.q},${hex.position.r},${hex.position.s}`
       const pixelPos = hexToPixel(hex.position.q, hex.position.r)
       
+      // Check if this hex has the robber
+      const hasRobber = board.robberPosition && 
+        hex.position.q === board.robberPosition.q &&
+        hex.position.r === board.robberPosition.r &&
+        hex.position.s === board.robberPosition.s
+      
+      // Check if player can move robber to this hex
+      const canMoveRobber = gameState?.phase === 'moveRobber' && 
+        gameState.players?.get(gameState.currentPlayer)?.id === gameState.currentPlayer &&
+        !hasRobber && // Can't move to same hex
+        hex.terrain !== 'sea' // Can't move to sea hexes
+      
       return {
         ...hex,
         id: hexId,
-        pixelPosition: pixelPos
+        pixelPosition: pixelPos,
+        hasRobber: hasRobber || false,
+        canMoveRobber: canMoveRobber || false
       }
     })
     
     console.log('HexGridLayer renderHexes:', {
       totalHexes: hexes.length,
-      firstFew: hexes.slice(0, 3).map(h => ({
-        id: h.id,
-        terrain: h.terrain,
-        position: h.pixelPosition
-      }))
+      robberPosition: board.robberPosition,
+      gamePhase: gameState?.phase,
+      hexesWithRobber: hexes.filter(h => h.hasRobber).length,
+      canMoveRobberCount: hexes.filter(h => h.canMoveRobber).length
     })
     
     return hexes
-  }, [board.hexes])
+  }, [board.hexes, board.robberPosition, gameState?.phase, gameState?.currentPlayer, gameState?.players])
   
 
   
@@ -92,6 +106,8 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
             isEmpty={isEmptySlot}
             disableTransitions={disableTransitions}
             hexId={hex.id}
+            hasRobber={hex.hasRobber}
+            canMoveRobber={hex.canMoveRobber}
             onHexHover={onHexHover}
             onHexClick={onHexClick}
           />

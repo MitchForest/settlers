@@ -321,7 +321,7 @@ export function canMoveRobber(
   }
   
   // Can't place on same hex
-  if (hexToString(hex.position) === hexToString(state.board.robberPosition)) {
+  if (state.board.robberPosition && hexToString(hex.position) === hexToString(state.board.robberPosition)) {
     return { isValid: false, reason: 'Must move robber to different hex' }
   }
   

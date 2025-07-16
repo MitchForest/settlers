@@ -1,8 +1,9 @@
 'use client'
 
-import { Player, GameState, GameAction, BUILDING_COSTS, hasResources, GamePhase } from '@settlers/core'
-import { Button } from '@/components/ui/button'
+import React from 'react'
+import { GameState, Player, GameAction } from '@settlers/core'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -62,10 +63,10 @@ export function PlayerSidebar({
 }: PlayerSidebarProps) {
   
   // Check what player can build
-  const canBuildSettlement = hasResources(localPlayer.resources, BUILDING_COSTS.settlement) && localPlayer.buildings.settlements > 0
-  const canBuildCity = hasResources(localPlayer.resources, BUILDING_COSTS.city) && localPlayer.buildings.cities > 0
-  const canBuildRoad = hasResources(localPlayer.resources, BUILDING_COSTS.road) && localPlayer.buildings.roads > 0
-  const canBuyCard = hasResources(localPlayer.resources, BUILDING_COSTS.developmentCard)
+  const canBuildSettlement = localPlayer.resources.wood >= 1 && localPlayer.resources.brick >= 1 && localPlayer.resources.wheat >= 1 && localPlayer.resources.sheep >= 1 && localPlayer.buildings.settlements > 0
+  const canBuildCity = localPlayer.resources.wheat >= 2 && localPlayer.resources.ore >= 3 && localPlayer.buildings.cities > 0
+  const canBuildRoad = localPlayer.resources.wood >= 1 && localPlayer.resources.brick >= 1 && localPlayer.buildings.roads > 0
+      const canBuyCard = localPlayer.resources.wheat >= 1 && localPlayer.resources.sheep >= 1 && localPlayer.resources.ore >= 1
 
   // Handle building actions
   const handleBuildAction = (buildingType: 'settlement' | 'city' | 'road') => {

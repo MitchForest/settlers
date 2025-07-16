@@ -1,8 +1,9 @@
 import React from 'react'
 import { defineHex, Orientation } from 'honeycomb-grid'
-import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
+import { ResourceTheme } from '@/lib/theme-types'
 import { HEX_RADIUS } from '@/lib/board-utils'
 import { TOKEN_DESIGN, PROBABILITY_DOTS } from '@/lib/game-constants'
+import { GameTheme } from '@/lib/theme-types'
 
 // Generate hexagon path points for SVG using honeycomb-grid
 function getHexPath(radius: number): string {
@@ -50,7 +51,25 @@ function getProbabilityDots(num: number): number {
   return probabilities[num] || 0
 }
 
-export function HexTile({
+// Enhanced interface with robber support and click handlers
+interface HexTileProps {
+  terrain: string | null
+  numberToken: number | null
+  position: { x: number; y: number }
+  theme: GameTheme | null
+  assetResolver: unknown
+  isHovered?: boolean
+  isSelected?: boolean
+  isEmpty?: boolean
+  disableTransitions?: boolean
+  hexId: string
+  hasRobber?: boolean
+  canMoveRobber?: boolean
+  onHexHover?: (hexId: string | null) => void
+  onHexClick?: (hexId: string | null) => void
+}
+
+export const HexTile: React.FC<HexTileProps> = ({
   terrain,
   numberToken,
   position,
@@ -58,34 +77,46 @@ export function HexTile({
   isHovered = false,
   isSelected = false,
   isEmpty = false,
-  disableTransitions: _disableTransitions = false,
+  hexId,
+  hasRobber = false,
+  canMoveRobber = false,
   onHexHover,
-  onHexClick,
-  hexId
-}: HexTileProps) {
-  // Use theme resources or fallback to empty array
-  const resources = theme?.resources || []
-  const terrainColor = terrain ? getTerrainColor(terrain, resources) : '#F4E4BC'
-  const terrainTexture = terrain ? getTerrainTexture(terrain, resources) : null
+  onHexClick
+}) => {
   const hexPath = getHexPath(HEX_RADIUS)
+  const showHoverEffect = isHovered && !isEmpty
   
-  // Generate unique pattern ID for this hex
-  const patternId = terrainTexture ? `texture-${terrain}-${Math.random().toString(36).substr(2, 9)}` : null
+  // Asset resolution
+  const resources = theme?.resources || []
+  const terrainTexture = getTerrainTexture(terrain || '', resources)
+  const terrainColor = getTerrainColor(terrain || '', resources)
+  const patternId = terrainTexture ? `texture-${hexId}` : null
   
-  // All hexes are hoverable now (including sea) for consistent interaction
-  const showHoverEffect = isHovered
+  const handleMouseEnter = () => {
+    if (onHexHover) {
+      onHexHover(hexId)
+    }
+  }
+  
+  const handleMouseLeave = () => {
+    if (onHexHover) {
+      onHexHover(null)
+    }
+  }
+  
+  const handleClick = () => {
+    if (onHexClick && (canMoveRobber || !isEmpty)) {
+      onHexClick(hexId)
+    }
+  }
 
   return (
     <g 
+      className={`hex-tile ${canMoveRobber ? 'cursor-pointer' : ''}`}
       transform={`translate(${position.x}, ${position.y})`}
-      className="cursor-pointer"
-      data-hex-id={hexId}
-      onMouseEnter={() => onHexHover?.(hexId || null)}
-      onMouseLeave={() => onHexHover?.(null)}
-      onClick={() => onHexClick?.(hexId || null)}
-      style={{ 
-        pointerEvents: 'all',
-      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
     >
       {/* Texture pattern definition */}
       {terrainTexture && patternId && (
@@ -121,6 +152,20 @@ export function HexTile({
         }}
       />
 
+      {/* Robber movement highlight */}
+      {canMoveRobber && (
+        <path
+          d={hexPath}
+          fill="rgba(220, 38, 38, 0.15)"
+          stroke="rgba(220, 38, 38, 0.5)"
+          strokeWidth={2}
+          className="pointer-events-none animate-pulse"
+          style={{
+            transition: `opacity var(--interaction-timing) var(--interaction-easing)`,
+          }}
+        />
+      )}
+
       {/* Subtle white hover overlay */}
       {showHoverEffect && (
         <path
@@ -146,7 +191,7 @@ export function HexTile({
       )}
       
       {/* Number Token */}
-      {numberToken && !isEmpty && (
+      {numberToken && !isEmpty && !hasRobber && (
         <g>
           {/* Number token background - standardized design */}
           <circle
@@ -181,6 +226,72 @@ export function HexTile({
               fill={numberToken === 6 || numberToken === 8 ? PROBABILITY_DOTS.redColor : PROBABILITY_DOTS.color}
             />
           ))}
+        </g>
+      )}
+
+      {/* Robber piece */}
+      {hasRobber && (
+        <g className="robber-piece">
+          {/* Robber shadow */}
+          <circle
+            cx="2"
+            cy="2"
+            r="18"
+            fill="rgba(0, 0, 0, 0.3)"
+            className="pointer-events-none"
+          />
+          
+          {/* Robber body - dark figure */}
+          <circle
+            cx="0"
+            cy="0"
+            r="16"
+            fill="#1a1a1a"
+            stroke="#000"
+            strokeWidth="2"
+            className="pointer-events-none"
+          />
+          
+          {/* Robber hood/head */}
+          <circle
+            cx="0"
+            cy="-8"
+            r="8"
+            fill="#2a2a2a"
+            stroke="#000"
+            strokeWidth="1"
+            className="pointer-events-none"
+          />
+          
+          {/* Robber eyes */}
+          <circle
+            cx="-3"
+            cy="-8"
+            r="1.5"
+            fill="#ff0000"
+            className="pointer-events-none"
+          />
+          <circle
+            cx="3"
+            cy="-8"
+            r="1.5"
+            fill="#ff0000"
+            className="pointer-events-none"
+          />
+          
+          {/* Robber text label */}
+          <text
+            x="0"
+            y="26"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontWeight="bold"
+            fill="#ff0000"
+            className="pointer-events-none"
+          >
+            ROBBER
+          </text>
         </g>
       )}
     </g>
