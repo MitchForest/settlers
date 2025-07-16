@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import TradingInterface from './TradingInterface'
 
 interface PlayerSidebarProps {
   gameState: GameState
@@ -239,6 +240,19 @@ export function PlayerSidebar({
               </div>
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Trading */}
+      {isMyTurn && gameState.phase === 'actions' && (
+        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
+          <h4 className="text-lg font-semibold text-white mb-3">Trading</h4>
+          <TradingInterface
+            gameState={gameState}
+            localPlayer={localPlayer}
+            isMyTurn={isMyTurn}
+            onAction={onAction}
+          />
         </Card>
       )}
 

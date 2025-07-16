@@ -32,9 +32,7 @@ app.get('/', async (c) => {
         status: games.status,
         phase: games.phase,
         turn: games.turn,
-        maxPlayers: games.maxPlayers,
-        createdAt: games.createdAt,
-        startedAt: games.startedAt
+        createdAt: games.createdAt
       })
       .from(games)
       .orderBy(desc(games.createdAt))
@@ -87,8 +85,7 @@ app.post('/',
     try {
       // Create game using GameFlowManager
       const gameManager = GameFlowManager.createGame({
-        playerNames: data.playerNames,
-        settings: data.settings
+        playerNames: data.playerNames
       })
 
       const gameState = gameManager.getState()
@@ -97,35 +94,51 @@ app.post('/',
       // Save to database
       await db.insert(games).values({
         id: gameId,
-        state: gameState,
+        name: `Game ${gameId.slice(0, 8)}`,
+        settings: {
+          victoryPoints: 10,
+          boardLayout: 'standard',
+          randomizePlayerOrder: true,
+          randomizeTerrain: true,
+          randomizeNumbers: true
+        },
+        board: {
+          hexes: [],
+          ports: [],
+          robberPosition: { q: 0, r: 0, s: 0 }
+        },
         phase: gameState.phase,
         turn: gameState.turn,
-        currentPlayerIndex: gameState.currentPlayerIndex,
-        maxPlayers: data.playerNames.length,
+        currentPlayerIndex: 0, // Convert from PlayerId to index later
         status: 'waiting'
       })
 
       // Create player records
+      let playerIndex = 0
       for (const [playerId, player] of gameState.players) {
         await db.insert(players).values({
           id: playerId,
           gameId,
           name: player.name,
-          color: player.color.toString(),
-          playerIndex: gameState.playerOrder.indexOf(playerId),
-          wood: player.resources.wood,
-          brick: player.resources.brick,
-          sheep: player.resources.sheep,
-          wheat: player.resources.wheat,
-          ore: player.resources.ore,
-          publicScore: player.score.public,
-          hiddenScore: player.score.hidden,
-          knightsPlayed: player.knightsPlayed,
-                  hasLongestRoad: player.hasLongestRoad,
-        hasLargestArmy: player.hasLargestArmy,
-          isAI: player.isAI,
-          isConnected: false
+          color: playerIndex, // Use index as color for now
+          isHost: playerIndex === 0,
+          resources: {
+            wood: player.resources.wood,
+            brick: player.resources.brick,
+            sheep: player.resources.sheep,
+            wheat: player.resources.wheat,
+            ore: player.resources.ore
+          },
+          score: {
+            public: player.score.public,
+            hidden: player.score.hidden,
+            total: player.score.total
+          },
+          knightsPlayed: player.knightsPlayed || 0,
+          hasLongestRoad: player.hasLongestRoad || false,
+          hasLargestArmy: player.hasLargestArmy || false
         })
+        playerIndex++
       }
 
       return c.json({ 

@@ -187,6 +187,7 @@ export interface GameState {
   developmentDeck: DevelopmentCard[]
   discardPile: DevelopmentCard[]
   winner: PlayerId | null
+  activeTrades: Trade[]  // All active trades (pending, accepted but not executed)
   pendingRoadBuilding?: {
     playerId: PlayerId
     roadsRemaining: number
@@ -202,7 +203,12 @@ export type ActionType =
   | 'placeBuilding'
   | 'placeRoad'
   | 'build'
-  | 'trade'
+  | 'bankTrade'
+  | 'portTrade'
+  | 'createTradeOffer'
+  | 'acceptTrade'
+  | 'rejectTrade'
+  | 'cancelTrade'
   | 'playCard'
   | 'buyCard'
   | 'moveRobber'
@@ -218,14 +224,21 @@ export interface GameAction {
 
 // ============= Trading System =============
 
+export type TradeType = 'bank' | 'port' | 'player'
+
 export interface Trade {
   id: string
+  type: TradeType
   initiator: PlayerId
-  target: PlayerId | null  // null for bank trade
+  target: PlayerId | null  // null for bank/port trades, specific player for direct trades
   offering: Partial<ResourceCards>
   requesting: Partial<ResourceCards>
-  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
-  ratio?: number  // For bank trades (3:1, 4:1, etc.)
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired'
+  ratio?: number  // For bank/port trades (2:1, 3:1, 4:1)
+  portType?: 'generic' | ResourceType  // For port trades
+  createdAt: Date
+  expiresAt?: Date  // For player trades with timers
+  isOpenOffer?: boolean  // true if any player can accept, false for direct offers
 }
 
 // ============= Events =============

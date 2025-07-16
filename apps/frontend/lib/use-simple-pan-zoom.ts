@@ -8,7 +8,7 @@ interface PanZoomState {
   scale: number  // Zoom scale (1.0 = 100%)
 }
 
-interface PanZoomControls {
+export interface PanZoomControls {
   transform: string          // CSS transform string
   isDragging: boolean       // Current drag state
   reset: () => void         // Reset to center

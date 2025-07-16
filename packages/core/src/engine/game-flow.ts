@@ -12,7 +12,8 @@ import {
   GameAction,
   GameEvent,
   PlayerColor,
-  DevelopmentCardType
+  DevelopmentCardType,
+  Trade
 } from '../types'
 import {
   GAME_RULES,
@@ -97,6 +98,7 @@ export class GameFlowManager {
       discardPile: [],
       dice: null,
       winner: null,
+      activeTrades: [],
       startedAt: new Date(),
       updatedAt: new Date()
     }
@@ -206,7 +208,7 @@ export class GameFlowManager {
         break
         
       case 'actions':
-        actions.push('build', 'trade', 'playCard', 'endTurn')
+        actions.push('build', 'bankTrade', 'portTrade', 'createTradeOffer', 'playCard', 'endTurn')
         if (this.canBuyDevelopmentCard(currentPlayerId)) {
           actions.push('buyCard')
         }
@@ -315,6 +317,58 @@ export class GameFlowManager {
     return manager
   }
 
+  // ============= Trading Management =============
+  
+  cleanupExpiredTrades(): boolean {
+    if (!this.state.activeTrades || this.state.activeTrades.length === 0) {
+      return false
+    }
+    
+    const now = new Date()
+    const beforeCount = this.state.activeTrades.length
+    
+    // Filter out expired trades
+    this.state.activeTrades = this.state.activeTrades.filter(trade => {
+      if (trade.expiresAt && trade.expiresAt <= now) {
+        // Add event for expired trade
+        this.eventHistory.push({
+          id: `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'tradeExpired',
+          gameId: this.state.id,
+          playerId: trade.initiator,
+          data: { tradeId: trade.id },
+          timestamp: now
+        })
+        return false // Remove this trade
+      }
+      return true // Keep this trade
+    })
+    
+    const afterCount = this.state.activeTrades.length
+    const expiredCount = beforeCount - afterCount
+    
+    if (expiredCount > 0) {
+      this.state.updatedAt = new Date()
+      return true
+    }
+    
+    return false
+  }
+  
+  // Get active trades for a specific player
+  getActiveTradesForPlayer(playerId: PlayerId): Trade[] {
+    return this.state.activeTrades.filter(trade => 
+      trade.initiator === playerId || 
+      trade.target === playerId || 
+      (trade.isOpenOffer && trade.initiator !== playerId)
+    )
+  }
+  
+  // Get trade by ID
+  getTradeById(tradeId: string): Trade | null {
+    return this.state.activeTrades.find(trade => trade.id === tradeId) || null
+  }
+
   // ============= Private Helpers =============
   
   private createDefaultState(): GameState {
@@ -332,6 +386,7 @@ export class GameFlowManager {
       discardPile: [],
       dice: null,
       winner: null,
+      activeTrades: [],
       startedAt: new Date(),
       updatedAt: new Date()
     }

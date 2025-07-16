@@ -2,16 +2,16 @@
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ZoomPanControls } from '@/lib/use-zoom-pan'
+import { PanZoomControls } from '@/lib/use-simple-pan-zoom'
 import { Plus, Minus, RotateCcw } from 'lucide-react'
 
 interface ZoomPanControlsUIProps {
-  controls: ZoomPanControls
+  controls: PanZoomControls
   className?: string
 }
 
 export function ZoomPanControlsUI({ controls, className = '' }: ZoomPanControlsUIProps) {
-  const { zoom, canZoomIn, canZoomOut, zoomIn, zoomOut, reset } = controls
+  const { canZoomIn, canZoomOut, zoomIn, zoomOut, reset } = controls
   
   return (
     <Card className={`p-2 space-y-2 bg-background/90 backdrop-blur-sm ${className}`}>
@@ -29,7 +29,7 @@ export function ZoomPanControlsUI({ controls, className = '' }: ZoomPanControlsU
       
       {/* Zoom Level Display */}
       <div className="text-center text-xs font-medium py-1 px-2 bg-muted rounded">
-        {Math.round(zoom * 100)}%
+        Zoom
       </div>
       
       {/* Zoom Out */}

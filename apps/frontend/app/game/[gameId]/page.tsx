@@ -111,6 +111,21 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     }
   }, [theme, themeLoading, loadTheme])
 
+  // Check for expired trades periodically
+  useEffect(() => {
+    if (!gameManager || !gameState) return
+
+    const interval = setInterval(() => {
+      const hadExpiredTrades = gameManager.cleanupExpiredTrades()
+      if (hadExpiredTrades) {
+        updateGameState(gameManager.getState())
+        toast.info('Some trade offers have expired')
+      }
+    }, 5000) // Check every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [gameManager, gameState, updateGameState])
+
 
   const handleGameAction = (action: GameAction) => {
     if (!gameManager || !gameState) {
@@ -208,6 +223,46 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           
         case 'endTurn':
           toast.info('Turn ended')
+          break
+
+        case 'bankTrade':
+          toast.success('Bank trade completed!')
+          break
+
+        case 'portTrade':
+          const portEvent = result.events.find(e => e.type === 'portTradeExecuted')
+          if (portEvent) {
+            const portType = portEvent.data.portType
+            toast.success(`${portType === 'generic' ? 'Generic' : portType} port trade completed!`)
+          }
+          break
+
+        case 'createTradeOffer':
+          const tradeOfferEvent = result.events.find(e => e.type === 'tradeOfferCreated')
+          if (tradeOfferEvent) {
+            const isOpen = tradeOfferEvent.data.isOpenOffer
+            toast.success(isOpen ? 'Open trade offer created!' : 'Trade offer sent!')
+          }
+          break
+
+        case 'acceptTrade':
+          const acceptEvent = result.events.find(e => e.type === 'tradeAccepted')
+          if (acceptEvent) {
+            const initiatorName = result.newState.players.get(acceptEvent.data.initiator)?.name
+            toast.success(`Trade with ${initiatorName} completed!`)
+          }
+          break
+
+        case 'rejectTrade':
+          const rejectEvent = result.events.find(e => e.type === 'tradeRejected')
+          if (rejectEvent) {
+            const initiatorName = result.newState.players.get(rejectEvent.data.initiator)?.name
+            toast.info(`Trade with ${initiatorName} rejected`)
+          }
+          break
+
+        case 'cancelTrade':
+          toast.info('Trade offer cancelled')
           break
           
         default:

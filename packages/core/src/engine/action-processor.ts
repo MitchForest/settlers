@@ -13,7 +13,8 @@ import {
   Road,
   GamePhase,
   DiceRoll,
-  EdgePosition
+  EdgePosition,
+  Trade
 } from '../types'
 import {
   BUILDING_COSTS,
@@ -69,8 +70,18 @@ export function processAction(
       return processPlaceRoad(state, action)
     case 'build':
       return processBuildAction(state, action)
-    case 'trade':
-      return processTradeAction(state, action)
+    case 'bankTrade':
+      return processBankTrade(state, action)
+    case 'portTrade':
+      return processPortTrade(state, action)
+    case 'createTradeOffer':
+      return processCreateTradeOffer(state, action)
+    case 'acceptTrade':
+      return processAcceptTrade(state, action)
+    case 'rejectTrade':
+      return processRejectTrade(state, action)
+    case 'cancelTrade':
+      return processCancelTrade(state, action)
     case 'playCard':
       return processPlayCard(state, action)
     case 'buyCard':
@@ -313,15 +324,379 @@ function processBuildAction(state: GameState, action: GameAction): ProcessResult
   }
 }
 
-// ============= Trade Action =============
+// ============= Trading System =============
 
-function processTradeAction(state: GameState, action: GameAction): ProcessResult {
-  // Trade implementation would go here
+function processBankTrade(state: GameState, action: GameAction): ProcessResult {
+  const { offering, requesting } = action.data
+  const player = state.players.get(action.playerId)!
+  const events: GameEvent[] = []
+  
+  // Validate 4:1 bank trade ratio
+  const offeringCount = Object.values(offering as Record<string, number>).reduce((sum, count) => sum + (count || 0), 0)
+  const requestingCount = Object.values(requesting as Record<string, number>).reduce((sum, count) => sum + (count || 0), 0)
+  
+  if (offeringCount !== 4 || requestingCount !== 1) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Bank trades must be 4:1 ratio'
+    }
+  }
+  
+  // Check if player has the required resources
+  for (const [resource, count] of Object.entries(offering)) {
+    if ((player.resources as any)[resource] < (count || 0)) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: `Insufficient ${resource} resources`
+      }
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  const newPlayer = { ...player }
+  
+  // Execute trade
+  newPlayer.resources = subtractResources(player.resources, offering as ResourceCards)
+  newPlayer.resources = addResources(newPlayer.resources, requesting as ResourceCards)
+  
+  newState.players.set(action.playerId, newPlayer)
+  
+  events.push(createEvent(state, 'bankTradeExecuted', action.playerId, { 
+    offering, 
+    requesting 
+  }))
+  
   return {
-    success: false,
-    newState: state,
-    events: [],
-    error: 'Trade not implemented yet'
+    success: true,
+    newState,
+    events,
+    message: 'Bank trade completed'
+  }
+}
+
+function processPortTrade(state: GameState, action: GameAction): ProcessResult {
+  const { offering, requesting, portType, ratio } = action.data
+  const player = state.players.get(action.playerId)!
+  const events: GameEvent[] = []
+  
+  // Validate port trade ratio
+  const offeringCount = Object.values(offering as Record<string, number>).reduce((sum, count) => sum + (count || 0), 0)
+  const requestingCount = Object.values(requesting as Record<string, number>).reduce((sum, count) => sum + (count || 0), 0)
+  
+  if (offeringCount !== ratio || requestingCount !== 1) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: `Port trades must be ${ratio}:1 ratio`
+    }
+  }
+  
+  // For specific ports, validate resource type
+  if (portType !== 'generic') {
+    const offeredResourceTypes = Object.keys(offering).filter(key => (offering as any)[key] > 0)
+    if (offeredResourceTypes.length !== 1 || offeredResourceTypes[0] !== portType) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: `Must trade ${portType} resources for this port`
+      }
+    }
+  }
+  
+  // Check if player has the required resources
+  for (const [resource, count] of Object.entries(offering)) {
+    if ((player.resources as any)[resource] < (count || 0)) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: `Insufficient ${resource} resources`
+      }
+    }
+  }
+  
+  // TODO: Validate player has access to this port
+  
+  let newState = deepCloneState(state)
+  const newPlayer = { ...player }
+  
+  // Execute trade
+  newPlayer.resources = subtractResources(player.resources, offering as ResourceCards)
+  newPlayer.resources = addResources(newPlayer.resources, requesting as ResourceCards)
+  
+  newState.players.set(action.playerId, newPlayer)
+  
+  events.push(createEvent(state, 'portTradeExecuted', action.playerId, { 
+    offering, 
+    requesting, 
+    portType, 
+    ratio 
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: `${portType} port trade completed`
+  }
+}
+
+function processCreateTradeOffer(state: GameState, action: GameAction): ProcessResult {
+  const { offering, requesting, target, isOpenOffer, expirationMinutes } = action.data
+  const player = state.players.get(action.playerId)!
+  const events: GameEvent[] = []
+  
+  // Validate player has the offered resources
+  for (const [resource, count] of Object.entries(offering)) {
+    if ((player.resources as any)[resource] < (count || 0)) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: `Insufficient ${resource} resources`
+      }
+    }
+  }
+  
+  // Validate requested resources
+  const requestingCount = Object.values(requesting as Record<string, number>).reduce((sum, count) => sum + (count || 0), 0)
+  if (requestingCount === 0) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Must request at least one resource'
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  
+  // Create trade offer
+  const tradeId = `trade-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  const trade: Trade = {
+    id: tradeId,
+    type: 'player',
+    initiator: action.playerId,
+    target: target || null,
+    offering,
+    requesting,
+    status: 'pending',
+    createdAt: new Date(),
+    isOpenOffer: isOpenOffer || false
+  }
+  
+  // Add expiration if specified
+  if (expirationMinutes && expirationMinutes > 0) {
+    trade.expiresAt = new Date(Date.now() + expirationMinutes * 60 * 1000)
+  }
+  
+  newState.activeTrades.push(trade)
+  
+  events.push(createEvent(state, 'tradeOfferCreated', action.playerId, { 
+    tradeId,
+    offering, 
+    requesting, 
+    target,
+    isOpenOffer: isOpenOffer || false
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: isOpenOffer ? 'Open trade offer created' : 'Trade offer sent'
+  }
+}
+
+function processAcceptTrade(state: GameState, action: GameAction): ProcessResult {
+  const { tradeId } = action.data
+  const acceptingPlayer = state.players.get(action.playerId)!
+  const events: GameEvent[] = []
+  
+  // Find the trade
+  const trade = state.activeTrades.find(t => t.id === tradeId)
+  if (!trade || trade.status !== 'pending') {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Trade not found or no longer available'
+    }
+  }
+  
+  // Validate accepting player can accept this trade
+  if (!trade.isOpenOffer && trade.target !== action.playerId) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'This trade is not for you'
+    }
+  }
+  
+  // Can't accept your own trade
+  if (trade.initiator === action.playerId) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Cannot accept your own trade'
+    }
+  }
+  
+  // Check if accepting player has the requested resources
+  for (const [resource, count] of Object.entries(trade.requesting)) {
+    if ((acceptingPlayer.resources as any)[resource] < (count || 0)) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: `Insufficient ${resource} resources to accept trade`
+      }
+    }
+  }
+  
+  // Check if initiating player still has the offered resources
+  const initiatingPlayer = state.players.get(trade.initiator)!
+  for (const [resource, count] of Object.entries(trade.offering)) {
+    if ((initiatingPlayer.resources as any)[resource] < (count || 0)) {
+      return {
+        success: false,
+        newState: state,
+        events: [],
+        error: 'Trade initiator no longer has the offered resources'
+      }
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  
+  // Execute the trade
+  const newInitiatingPlayer = { ...initiatingPlayer }
+  const newAcceptingPlayer = { ...acceptingPlayer }
+  
+  // Initiator gives their offering and receives their requesting
+  newInitiatingPlayer.resources = subtractResources(initiatingPlayer.resources, trade.offering as ResourceCards)
+  newInitiatingPlayer.resources = addResources(newInitiatingPlayer.resources, trade.requesting as ResourceCards)
+  
+  // Accepter gives the requesting and receives the offering
+  newAcceptingPlayer.resources = subtractResources(acceptingPlayer.resources, trade.requesting as ResourceCards)
+  newAcceptingPlayer.resources = addResources(newAcceptingPlayer.resources, trade.offering as ResourceCards)
+  
+  newState.players.set(trade.initiator, newInitiatingPlayer)
+  newState.players.set(action.playerId, newAcceptingPlayer)
+  
+  // Remove the trade from active trades
+  newState.activeTrades = newState.activeTrades.filter(t => t.id !== tradeId)
+  
+  events.push(createEvent(state, 'tradeAccepted', action.playerId, { 
+    tradeId,
+    initiator: trade.initiator,
+    accepter: action.playerId,
+    offering: trade.offering,
+    requesting: trade.requesting
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: 'Trade completed successfully'
+  }
+}
+
+function processRejectTrade(state: GameState, action: GameAction): ProcessResult {
+  const { tradeId } = action.data
+  const events: GameEvent[] = []
+  
+  // Find the trade
+  const trade = state.activeTrades.find(t => t.id === tradeId)
+  if (!trade || trade.status !== 'pending') {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Trade not found or no longer available'
+    }
+  }
+  
+  // Validate player can reject this trade
+  if (!trade.isOpenOffer && trade.target !== action.playerId) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'This trade is not for you'
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  
+  // For direct trades, remove the trade. For open offers, just log the rejection
+  if (!trade.isOpenOffer) {
+    newState.activeTrades = newState.activeTrades.filter(t => t.id !== tradeId)
+  }
+  
+  events.push(createEvent(state, 'tradeRejected', action.playerId, { 
+    tradeId,
+    initiator: trade.initiator,
+    rejecter: action.playerId
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: 'Trade rejected'
+  }
+}
+
+function processCancelTrade(state: GameState, action: GameAction): ProcessResult {
+  const { tradeId } = action.data
+  const events: GameEvent[] = []
+  
+  // Find the trade
+  const trade = state.activeTrades.find(t => t.id === tradeId)
+  if (!trade) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Trade not found'
+    }
+  }
+  
+  // Only the initiator can cancel their own trade
+  if (trade.initiator !== action.playerId) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Only the trade initiator can cancel the trade'
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  
+  // Remove the trade from active trades
+  newState.activeTrades = newState.activeTrades.filter(t => t.id !== tradeId)
+  
+  events.push(createEvent(state, 'tradeCancelled', action.playerId, { 
+    tradeId,
+    initiator: trade.initiator
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: 'Trade cancelled'
   }
 }
 

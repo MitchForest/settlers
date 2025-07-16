@@ -21,6 +21,6 @@ export function getClient() {
 export const db = drizzle(getClient(), { schema })
 
 // Export tables for easier access
-export const { games, players, gameEvents, trades, users, sessions } = schema
+export const { games, players, gameEvents, trades, developmentCards, placedBuildings, placedRoads, gamePlayersRelation } = schema
 
 export type Database = typeof db 

@@ -193,3 +193,45 @@ export function getRemainingBuildings(player: Player) {
     roads: player.buildings.roads
   }
 } 
+
+// ============= Trading Calculations =============
+
+export function generateTradeId(): string {
+  return `trade-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+export function calculateTradeValue(resources: Partial<ResourceCards>): number {
+  return Object.values(resources).reduce((sum, count) => sum + (count || 0), 0)
+}
+
+export function isValidBankTrade(offering: Partial<ResourceCards>, requesting: Partial<ResourceCards>): boolean {
+  const offeringCount = calculateTradeValue(offering)
+  const requestingCount = calculateTradeValue(requesting)
+  
+  // Bank trades must be 4:1 ratio
+  return offeringCount === 4 && requestingCount === 1
+}
+
+export function isValidPortTrade(offering: Partial<ResourceCards>, requesting: Partial<ResourceCards>, ratio: number, portType: 'generic' | string): boolean {
+  const offeringCount = calculateTradeValue(offering)
+  const requestingCount = calculateTradeValue(requesting)
+  
+  // Port trades must match the ratio (2:1 or 3:1)
+  if (offeringCount !== ratio || requestingCount !== 1) {
+    return false
+  }
+  
+  // For specific port types, all offered resources must match the port type
+  if (portType !== 'generic') {
+    const offeredResourceTypes = Object.keys(offering).filter(key => (offering as any)[key] > 0)
+    return offeredResourceTypes.length === 1 && offeredResourceTypes[0] === portType
+  }
+  
+  return true
+}
+
+export function hasAccessToPort(playerId: string, portType: 'generic' | string, board: any): boolean {
+  // TODO: Implement port access detection based on player settlements/cities
+  // For now, return true for generic ports (3:1) which all players have access to via bank
+  return portType === 'generic'
+} 

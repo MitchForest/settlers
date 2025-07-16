@@ -1,7 +1,7 @@
 // WebSocket server implementation using Bun's native WebSocket
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
 import { GameFlowManager, GameAction, ProcessResult } from '@settlers/core'
-import { games, players, gameEvents, sessions, db } from '../db'
+import { games, players, gameEvents, db } from '../db'
 import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -108,13 +108,14 @@ export const websocketHandlers: WebSocketHandler<WSData> = {
 
     // Update session status
     try {
-      await db
-        .update(sessions)
-        .set({
-          isActive: false,
-          disconnectedAt: new Date()
-        })
-        .where(eq(sessions.socketId, sessionId))
+      // TODO: Implement session cleanup
+      // await db
+      //   .update(sessions)
+      //   .set({
+      //     isActive: false,
+      //     disconnectedAt: new Date()
+      //   })
+      //   .where(eq(sessions.socketId, sessionId))
     } catch (error) {
       console.error('Error updating session on close:', error)
     }
@@ -134,10 +135,10 @@ async function handleCreateGame(ws: ServerWebSocket<WSData>, data: any) {
   try {
     const { playerNames, settings } = data
     
-    // Create game using GameFlowManager
+    // Create game using GameFlowManager - only pass supported options
     const gameManager = GameFlowManager.createGame({
       playerNames,
-      settings
+      randomizePlayerOrder: settings?.randomizePlayerOrder ?? true
     })
     
     const gameState = gameManager.getState()
@@ -146,19 +147,48 @@ async function handleCreateGame(ws: ServerWebSocket<WSData>, data: any) {
     // Store game manager
     gameRooms.set(gameId, gameManager)
     
-    // Save to database
+    // Get current player index for database
+    const playerIds = Array.from(gameState.players.keys())
+    const currentPlayerIndex = playerIds.indexOf(gameState.currentPlayer)
+    
+    // Save to database - align with schema
     await db.insert(games).values({
       id: gameId,
-      state: gameState,
+      name: `Game ${gameId.slice(-8)}`, // Generate a simple name
+      status: 'waiting',
       phase: gameState.phase,
       turn: gameState.turn,
-      currentPlayerIndex: gameState.currentPlayerIndex,
-      maxPlayers: playerNames.length,
-      status: 'waiting'
+      currentPlayerIndex: currentPlayerIndex,
+      settings: settings || {
+        victoryPoints: 10,
+        boardLayout: 'classic',
+        randomizePlayerOrder: true,
+        randomizeTerrain: false,
+        randomizeNumbers: false
+      },
+      board: {
+        hexes: Array.from(gameState.board.hexes.values()).map(hex => ({
+          id: hex.id,
+          position: hex.position,
+          terrain: hex.terrain === 'sea' ? null : hex.terrain as 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null,
+          numberToken: hex.numberToken,
+          hasRobber: hex.hasRobber
+        })),
+        ports: gameState.board.ports.map(port => ({
+          id: port.id,
+          position: { q: 0, r: 0, s: 0 }, // Simplified position for now
+          type: port.type === 'generic' ? 'generic' as const : 'resource' as const,
+          ratio: port.ratio,
+          resourceType: port.type !== 'generic' ? port.type as 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep' : undefined
+        })),
+        robberPosition: gameState.board.robberPosition || { q: 0, r: 0, s: 0 }
+      },
+      dice: gameState.dice || null,
+      winner: gameState.winner
     })
     
     // Get first player ID for the creator
-    const firstPlayerId = gameState.playerOrder[0]
+    const firstPlayerId = playerIds[0]
     
     // Update WebSocket data
     ws.data.gameId = gameId
@@ -270,25 +300,45 @@ async function handleGameAction(
     const gameState = gameManager.getState()
     for (const event of result.events) {
       await db.insert(gameEvents).values({
+        id: event.id,
         gameId,
         playerId: event.playerId || null,
         type: event.type,
-        data: event.data,
-        turn: gameState.turn,
-        phase: gameState.phase,
-        timestamp: new Date()
+        data: event.data
       })
     }
+    
+    // Get current player index for database update
+    const playerIds = Array.from(gameState.players.keys())
+    const currentPlayerIndex = playerIds.indexOf(gameState.currentPlayer)
     
     // Update game state in database
     await db
       .update(games)
       .set({
-        state: gameState,
         phase: gameState.phase,
         turn: gameState.turn,
-        currentPlayerIndex: gameState.currentPlayerIndex,
-        lastActivityAt: new Date()
+        currentPlayerIndex: currentPlayerIndex,
+              board: {
+        hexes: Array.from(gameState.board.hexes.values()).map(hex => ({
+          id: hex.id,
+          position: hex.position,
+          terrain: hex.terrain === 'sea' ? null : hex.terrain as 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null,
+          numberToken: hex.numberToken,
+          hasRobber: hex.hasRobber
+        })),
+        ports: gameState.board.ports.map(port => ({
+          id: port.id,
+          position: { q: 0, r: 0, s: 0 }, // Simplified position for now
+          type: port.type === 'generic' ? 'generic' as const : 'resource' as const,
+          ratio: port.ratio,
+          resourceType: port.type !== 'generic' ? port.type as 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep' : undefined
+        })),
+        robberPosition: gameState.board.robberPosition || { q: 0, r: 0, s: 0 }
+      },
+        dice: gameState.dice,
+        winner: gameState.winner,
+        updatedAt: new Date()
       })
       .where(eq(games.id, gameId))
     
