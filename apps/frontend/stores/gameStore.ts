@@ -36,6 +36,8 @@ interface GameStore {
   sendAction: (action: GameAction) => void
   setPlacementMode: (mode: 'none' | 'settlement' | 'city' | 'road') => void
   updateGameState: (state: GameState) => void
+  setHoveredHex: (hexId: string | null) => void
+  setSelectedHex: (hexId: string | null) => void
   
   // Computed
   currentPlayer: () => Player | null
@@ -114,6 +116,9 @@ export const useGameStore = create<GameStore>()(
         // TODO: Update valid placements based on new state
         // This would call validation functions from core
       },
+      
+      setHoveredHex: (hexId) => set({ hoveredHex: hexId }),
+      setSelectedHex: (hexId) => set({ selectedHex: hexId }),
       
       // Computed
       currentPlayer: () => {

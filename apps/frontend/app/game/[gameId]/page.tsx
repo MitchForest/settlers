@@ -16,7 +16,7 @@ interface GamePageProps {
 
 export default function GamePage({ params }: GamePageProps) {
   // Unwrap the params promise using React.use()
-  const { gameId } = use(params)
+  const { gameId: _gameId } = use(params)
   
   const { theme, loading: themeLoading, loadTheme } = useGameTheme()
   const [board, setBoard] = useState<Board | null>(null)
@@ -133,10 +133,7 @@ export default function GamePage({ params }: GamePageProps) {
     }
   }, [theme, board, isGenerating, generateTestBoard])
 
-  const regenerateBoard = () => {
-    setBoard(null)
-    generateTestBoard()
-  }
+
 
   const handleGameAction = (action: GameAction) => {
     if (!gameManager || !gameState) {

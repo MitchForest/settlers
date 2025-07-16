@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { defineHex, Orientation } from 'honeycomb-grid'
 import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
-
-const HEX_RADIUS = 32
+import { HEX_RADIUS } from '@/lib/board-utils'
 
 // Generate hexagon path points for SVG using honeycomb-grid
 function getHexPath(radius: number): string {
@@ -10,8 +9,8 @@ function getHexPath(radius: number): string {
   const CustomHex = defineHex({ dimensions: radius, orientation: Orientation.FLAT })
   const hex = new CustomHex({ q: 0, r: 0 }) // Create hex at origin
   const corners = hex.corners // Library calculates all the math! (corners is a getter)
-  const points = corners.map((corner: any) => [corner.x, corner.y])
-  return `M ${points.map((p: any) => p.join(',')).join(' L ')} Z`
+  const points = corners.map((corner: { x: number; y: number }) => [corner.x, corner.y])
+  return `M ${points.map((p: number[]) => p.join(',')).join(' L ')} Z`
 }
 
 // Get terrain texture path from theme
@@ -58,10 +57,11 @@ export function HexTile({
   isHovered = false,
   isSelected = false,
   isEmpty = false,
-  disableTransitions = false
+  disableTransitions: _disableTransitions = false,
+  onHexHover,
+  onHexClick,
+  hexId
 }: HexTileProps) {
-  const [localHovered, setLocalHovered] = useState(false)
-  
   // Use theme resources or fallback to empty array
   const resources = theme?.resources || []
   const terrainColor = terrain ? getTerrainColor(terrain, resources) : '#F4E4BC'
@@ -71,29 +71,18 @@ export function HexTile({
   // Generate unique pattern ID for this hex
   const patternId = terrainTexture ? `texture-${terrain}-${Math.random().toString(36).substr(2, 9)}` : null
   
-  // Only apply hover effects to playable terrain (not sea or desert)
-  const isPlayableTerrain = terrain && terrain !== 'sea' && terrain !== 'desert'
-  const showHoverEffect = (isHovered || localHovered) && isPlayableTerrain
-  
-  const handleMouseEnter = () => {
-    if (isPlayableTerrain) {
-      setLocalHovered(true)
-    }
-  }
-  
-  const handleMouseLeave = () => {
-    if (isPlayableTerrain) {
-      setLocalHovered(false)
-    }
-  }
+  // All hexes are hoverable now (including sea) for consistent interaction
+  const showHoverEffect = isHovered
 
   return (
     <g 
       transform={`translate(${position.x}, ${position.y})`}
-      className={isPlayableTerrain ? "cursor-pointer" : ""}
-      data-hex-interactive={isPlayableTerrain ? "true" : undefined}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      className="cursor-pointer"
+      data-hex-id={hexId}
+      onMouseEnter={() => onHexHover?.(hexId || null)}
+      onMouseLeave={() => onHexHover?.(null)}
+      onClick={() => onHexClick?.(hexId || null)}
+      style={{ pointerEvents: 'all' }}
     >
       {/* Texture pattern definition */}
       {terrainTexture && patternId && (
@@ -124,17 +113,44 @@ export function HexTile({
         stroke={theme?.ui?.hexBorder || '#2D3748'}
         strokeWidth={theme?.ui?.hexBorderWidth || 1}
         opacity={isEmpty ? 0.3 : 1}
-        className={`
-          transition-all duration-200
-          ${isSelected ? "filter-[url(#hexGlow)]" : ""}
-          ${showHoverEffect ? "brightness-110 drop-shadow-md" : ""}
-          ${!disableTransitions ? "transition-all duration-200" : ""}
-        `}
+        className="transition-all duration-200 ease-out"
         style={{
-          filter: showHoverEffect ? 'brightness(1.15) drop-shadow(0 4px 8px rgba(0,0,0,0.2))' : 
-                  isSelected ? 'brightness(1.2)' : 'none'
+          // Modern, subtle hover effects
+          transform: showHoverEffect ? 'scale(1.02)' : 'scale(1)',
+          transformOrigin: 'center',
+          filter: showHoverEffect 
+            ? 'brightness(1.1) saturate(1.1)' 
+            : isSelected 
+              ? 'brightness(1.15) saturate(1.2)' 
+              : 'none',
         }}
       />
+
+      {/* Subtle hover overlay */}
+      {showHoverEffect && (
+        <path
+          d={hexPath}
+          fill="rgba(255, 255, 255, 0.08)"
+          stroke="rgba(255, 255, 255, 0.2)"
+          strokeWidth="1"
+          className="transition-all duration-200 ease-out pointer-events-none"
+          style={{
+            transform: 'scale(1.02)',
+            transformOrigin: 'center',
+          }}
+        />
+      )}
+
+      {/* Selection indicator */}
+      {isSelected && (
+        <path
+          d={hexPath}
+          fill="rgba(37, 99, 235, 0.08)"
+          stroke="rgba(37, 99, 235, 0.6)"
+          strokeWidth="2"
+          className="transition-all duration-300 ease-out pointer-events-none"
+        />
+      )}
       
       {/* Number Token */}
       {numberToken && !isEmpty && (
@@ -155,39 +171,25 @@ export function HexTile({
             y="-2"
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize="14"
+            fontSize="12"
             fontWeight="bold"
-            fill={numberToken === 6 || numberToken === 8 ? '#DC2626' : '#000000'}
-            className="pointer-events-none select-none"
+            fill={theme?.ui?.numberTokenText || '#000000'}
           >
             {numberToken}
           </text>
           
           {/* Probability dots */}
-          {getProbabilityDots(numberToken) > 0 && (
-            <g>
-              {Array.from({ length: getProbabilityDots(numberToken) }).map((_, i) => {
-                const totalDots = getProbabilityDots(numberToken)
-                const dotSpacing = 2.5
-                const startX = -(totalDots - 1) * (dotSpacing / 2)
-                return (
-                  <circle
-                    key={i}
-                    cx={startX + i * dotSpacing}
-                    cy="8"
-                    r="1"
-                    fill={numberToken === 6 || numberToken === 8 ? '#DC2626' : '#000000'}
-                    className="pointer-events-none"
-                  />
-                )
-              })}
-            </g>
-          )}
+          {Array.from({ length: getProbabilityDots(numberToken) }, (_, i) => (
+            <circle
+              key={i}
+              cx={-8 + (i * 4)}
+              cy="12"
+              r="1.5"
+              fill={theme?.ui?.numberTokenText || '#000000'}
+            />
+          ))}
         </g>
       )}
-      
-      {/* Robber (if present) */}
-      {/* Note: Robber rendering would go here when we implement it */}
     </g>
   )
 }

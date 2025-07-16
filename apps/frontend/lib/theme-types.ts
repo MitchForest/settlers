@@ -54,6 +54,7 @@ export interface UIConfig {
   hexBorderWidth: number
   numberTokenBackground: string
   numberTokenBorder: string
+  numberTokenText: string
   robberColor: string
 }
 
@@ -82,6 +83,9 @@ export interface HexTileProps {
   isSelected?: boolean
   isEmpty?: boolean
   disableTransitions?: boolean
+  hexId?: string
+  onHexHover?: (hexId: string | null) => void
+  onHexClick?: (hexId: string | null) => void
 }
 
 export interface GamePieceProps {

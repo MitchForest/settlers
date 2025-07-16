@@ -49,15 +49,6 @@ const DEV_CARD_INFO = {
 } as const
 
 export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: PlayerSidebarProps) {
-  // Debug logging
-  console.log('PlayerSidebar Debug:', {
-    isMyTurn,
-    gamePhase: gameState.phase,
-    playerResources: localPlayer.resources,
-    playerDevCards: localPlayer.developmentCards,
-    turn: gameState.turn
-  })
-
   const canBuildSettlement = hasResources(localPlayer.resources, BUILDING_COSTS.settlement) && localPlayer.buildings.settlements > 0
   const canBuildCity = hasResources(localPlayer.resources, BUILDING_COSTS.city) && localPlayer.buildings.cities > 0
   const canBuildRoad = hasResources(localPlayer.resources, BUILDING_COSTS.road) && localPlayer.buildings.roads > 0
@@ -68,13 +59,6 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
     card.purchasedTurn < gameState.turn &&
     card.type !== 'victory' // Victory cards are passive
   )
-
-  console.log('Dev cards debug:', {
-    totalCards: localPlayer.developmentCards.length,
-    playableCards: playableCards.length,
-    victoryCards: localPlayer.developmentCards.filter(card => card.type === 'victory').length,
-    newCards: localPlayer.developmentCards.filter(card => card.purchasedTurn === gameState.turn && card.type !== 'victory').length
-  })
 
   const handleAction = (actionType: string, data?: unknown) => {
     const action: GameAction = {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 export interface ViewBoxState {
   x: number      // Left edge
@@ -18,15 +18,25 @@ export interface ZoomPanControls {
   zoomIn: () => void
   zoomOut: () => void
   pan: (deltaX: number, deltaY: number) => void
+  panTo: (x: number, y: number) => void
   reset: () => void
   getViewBoxString: () => string
 }
+
+// Alias for compatibility with new interaction system
+export type ViewBoxControls = ZoomPanControls
 
 interface UseZoomPanOptions {
   initialViewBox?: ViewBoxState
   minZoom?: number
   maxZoom?: number
   zoomStep?: number
+  panBounds?: {
+    minX: number
+    maxX: number
+    minY: number
+    maxY: number
+  }
 }
 
 const DEFAULT_VIEW_BOX: ViewBoxState = {
@@ -40,18 +50,20 @@ export function useZoomPan({
   initialViewBox = DEFAULT_VIEW_BOX,
   minZoom = 0.5,
   maxZoom = 3.0,
-  zoomStep = 0.2
+  zoomStep = 0.2,
+  panBounds
 }: UseZoomPanOptions = {}): ZoomPanControls {
   
   const [viewBox, setViewBox] = useState<ViewBoxState>(initialViewBox)
   const [zoom, setZoomLevel] = useState(1.0)
+  const animationFrameRef = useRef<number | null>(null)
   
   // Calculate zoom bounds
   const canZoomIn = zoom < maxZoom
   const canZoomOut = zoom > minZoom
 
   const setZoom = useCallback((newZoom: number) => {
-    const clampedZoom = Math.min(Math.max(newZoom, minZoom), maxZoom)
+    const clampedZoom = Math.max(minZoom, Math.min(maxZoom, newZoom))
     setZoomLevel(clampedZoom)
     
     // Update viewBox based on zoom level
@@ -81,45 +93,70 @@ export function useZoomPan({
     }
   }, [zoom, zoomStep, canZoomOut, setZoom])
 
+  // Smooth, incremental panning with constraints
   const pan = useCallback((deltaX: number, deltaY: number) => {
-    setViewBox(prev => {
-      // Calculate the center of the initial view box
-      const centerX = initialViewBox.x + initialViewBox.width / 2
-      const centerY = initialViewBox.y + initialViewBox.height / 2
-      
-      // Calculate 25% of the initial view box dimensions as max offset
-      const maxOffsetX = initialViewBox.width * 0.25
-      const maxOffsetY = initialViewBox.height * 0.25
-      
-      // Calculate new position
-      const newX = prev.x + deltaX
-      const newY = prev.y + deltaY
-      
-      // Calculate the center of the new view box
-      const newCenterX = newX + prev.width / 2
-      const newCenterY = newY + prev.height / 2
-      
-      // Calculate offset from original center
-      const offsetX = newCenterX - centerX
-      const offsetY = newCenterY - centerY
-      
-      // Clamp the offset to within 25% of the original view box size
-      const clampedOffsetX = Math.min(Math.max(offsetX, -maxOffsetX), maxOffsetX)
-      const clampedOffsetY = Math.min(Math.max(offsetY, -maxOffsetY), maxOffsetY)
-      
-      // Calculate the constrained position
-      const constrainedX = centerX + clampedOffsetX - prev.width / 2
-      const constrainedY = centerY + clampedOffsetY - prev.height / 2
-      
-      return {
-        ...prev,
-        x: constrainedX,
-        y: constrainedY
-      }
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
+    // Use requestAnimationFrame for smooth updates
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setViewBox(prev => {
+        let newX = prev.x + deltaX
+        let newY = prev.y + deltaY
+        
+        // Apply pan bounds if specified
+        if (panBounds) {
+          newX = Math.max(panBounds.minX, Math.min(panBounds.maxX - prev.width, newX))
+          newY = Math.max(panBounds.minY, Math.min(panBounds.maxY - prev.height, newY))
+        }
+        
+        return {
+          ...prev,
+          x: newX,
+          y: newY
+        }
+      })
     })
-  }, [initialViewBox])
+  }, [panBounds])
+
+  // Direct pan to specific coordinates
+  const panTo = useCallback((x: number, y: number) => {
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setViewBox(prev => {
+        let newX = x - prev.width / 2
+        let newY = y - prev.height / 2
+        
+        // Apply pan bounds if specified
+        if (panBounds) {
+          newX = Math.max(panBounds.minX, Math.min(panBounds.maxX - prev.width, newX))
+          newY = Math.max(panBounds.minY, Math.min(panBounds.maxY - prev.height, newY))
+        }
+        
+        return {
+          ...prev,
+          x: newX,
+          y: newY
+        }
+      })
+    })
+  }, [panBounds])
 
   const reset = useCallback(() => {
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
     setViewBox(initialViewBox)
     setZoomLevel(1.0)
   }, [initialViewBox])
@@ -137,6 +174,7 @@ export function useZoomPan({
     zoomIn,
     zoomOut,
     pan,
+    panTo,
     reset,
     getViewBoxString
   }

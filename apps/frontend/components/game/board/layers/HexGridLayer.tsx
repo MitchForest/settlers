@@ -4,29 +4,30 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { HexTile, HexTileFilters } from './HexTile'
 import { GameTheme, AssetResolver } from '@/lib/theme-types'
 import { getAssetResolver } from '@/lib/theme-loader'
-import { hexToPixel } from '@/lib/board-utils'
-import type { Board, Hex } from '@settlers/core'
-
-
+import { hexToPixel, HEX_RADIUS } from '@/lib/board-utils'
+import type { Board } from '@settlers/core'
 
 interface HexGridLayerProps {
   board: Board
   theme: GameTheme | null
-  onHexSelect?: (hexId: string) => void
   selectedHexId?: string
+  hoveredHexId?: string
   disableTransitions?: boolean
   viewBox?: string // Override viewBox calculation
+  onHexHover?: (hexId: string | null) => void
+  onHexClick?: (hexId: string | null) => void
 }
 
 export const HexGridLayer: React.FC<HexGridLayerProps> = ({ 
   board, 
   theme, 
-  onHexSelect,
   selectedHexId,
+  hoveredHexId,
   disableTransitions = false,
-  viewBox
+  viewBox,
+  onHexHover,
+  onHexClick
 }) => {
-  const [hoveredHexId, setHoveredHexId] = useState<string | null>(null)
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
   
   // Initialize asset resolver
@@ -52,7 +53,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   const renderHexes = useMemo(() => {
     return Array.from(board.hexes.values()).map(hex => {
       const hexId = `${hex.position.q},${hex.position.r},${hex.position.s}`
-      const pixelPos = hexToPixel(hex.position.q, hex.position.r, 32)
+      const pixelPos = hexToPixel(hex.position.q, hex.position.r)
       
       return {
         ...hex,
@@ -94,19 +95,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
     })
   }, [renderHexes, selectedHexId, hoveredHexId])
 
-  const handleHexClick = (hexId: string, hex: Hex) => {
-    // Only allow selection of filled hexes (not empty slots)
-    const isEmptySlot = hex.terrain === null || hex.terrain === undefined
-    if (!isEmptySlot && onHexSelect) {
-      onHexSelect(hexId)
-    }
-  }
-
-  const handleHexHover = (hexId: string | null) => {
-    // Allow hover on all hexes, but empty ones show different cursor
-    setHoveredHexId(hexId)
-  }
-
   // CRITICAL FIX: Always render, assetResolver is optional
   // When assetResolver is null, HexTile components will use geometric fallbacks
   return (
@@ -121,10 +109,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         {/* Filter definitions */}
         <HexTileFilters />
         
-
-        
-
-        
         {/* Hex tiles - render with geometric fallbacks if no theme/assetResolver */}
         {sortedHexes.map(hex => {
           const isEmptySlot = hex.terrain === null || hex.terrain === undefined
@@ -132,27 +116,21 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
           const isSelected = selectedHexId === hex.id
           
           return (
-            <g
+            <HexTile
               key={hex.id}
-              style={{ 
-                cursor: isEmptySlot ? 'default' : 'pointer'
-              }}
-              onMouseEnter={() => handleHexHover(hex.id)}
-              onMouseLeave={() => handleHexHover(null)}
-              onClick={() => handleHexClick(hex.id, hex)}
-            >
-              <HexTile
-                terrain={hex.terrain}
-                numberToken={hex.numberToken}
-                position={hex.pixelPosition}
-                theme={theme} // Can be null - HexTile handles fallbacks
-                assetResolver={assetResolver} // Can be null - HexTile handles fallbacks
-                isHovered={isHovered}
-                isSelected={isSelected}
-                isEmpty={isEmptySlot}
-                disableTransitions={disableTransitions}
-              />
-            </g>
+              terrain={hex.terrain}
+              numberToken={hex.numberToken}
+              position={hex.pixelPosition}
+              theme={theme} // Can be null - HexTile handles fallbacks
+              assetResolver={assetResolver} // Can be null - HexTile handles fallbacks
+              isHovered={isHovered}
+              isSelected={isSelected}
+              isEmpty={isEmptySlot}
+              disableTransitions={disableTransitions}
+              hexId={hex.id}
+              onHexHover={onHexHover}
+              onHexClick={onHexClick}
+            />
           )
         })}
       </svg>

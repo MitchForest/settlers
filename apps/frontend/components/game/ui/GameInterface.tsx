@@ -6,7 +6,7 @@ import { PlayerSidebar } from './PlayerSidebar'
 import { DiceRoller } from './DiceRoller'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Bot, LogOut, Info, RotateCcw, Palette, Play } from 'lucide-react'
+import { LogOut, Info, RotateCcw, Palette, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 
@@ -68,12 +68,12 @@ export function GameInterface({
 
   const handleAuto = () => {
     // AI play functionality - to be implemented later
-    console.log('Auto play')
+            // Handle auto play
   }
 
   const handleExit = () => {
     // Exit game functionality
-    console.log('Exit game')
+            // Handle exit game
   }
 
   const handleInfo = () => {
@@ -108,9 +108,9 @@ export function GameInterface({
   }
 
   return (
-    <div className="relative w-full h-screen flex flex-col">
+    <div className="relative w-full h-screen flex flex-col pointer-events-none">
       {/* Top Players Panel */}
-      <div className="absolute top-4 left-4 right-4 z-20">
+      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
         <PlayersPanel
           gameState={gameState}
           playerAvatars={playerAvatars}
@@ -118,7 +118,7 @@ export function GameInterface({
       </div>
 
       {/* Left Sidebar - positioned with equal visual gaps; dont change */}
-      <div className="absolute left-4 top-32 bottom-23 w-80 z-10">
+      <div className="absolute left-4 top-32 bottom-23 w-80 z-10 pointer-events-auto">
         <PlayerSidebar
           gameState={gameState}
           localPlayer={localPlayer}
@@ -128,7 +128,7 @@ export function GameInterface({
       </div>
 
       {/* Floating Action Bar - Connected toolbar below sidebar */}
-      <div className="absolute left-4 bottom-4 z-10 w-80">
+      <div className="absolute left-4 bottom-4 z-10 w-80 pointer-events-auto">
         <div className="flex items-center justify-between bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-2">
           {/* Turn Timer */}
           <div className="flex items-center space-x-2 px-2 py-1">
@@ -168,7 +168,7 @@ export function GameInterface({
               size="icon"
               onClick={() => {
                 // TODO: Implement theme toggle (PNG vs plain backgrounds)
-                console.log('Toggle theme assets')
+                // Toggle theme assets
               }}
               className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
               title="Toggle Theme Assets"
@@ -251,7 +251,7 @@ export function GameInterface({
               onClick={() => {
                 setShowRestartDialog(false)
                 // TODO: Implement restart functionality
-                console.log('Restarting game...')
+                // Handle game restart
               }}
               className="bg-orange-600/80 hover:bg-orange-700/90 text-white border-0"
             >

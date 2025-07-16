@@ -11,10 +11,11 @@ import { useGameTheme } from '@/components/theme-provider'
 import { getAssetResolver } from '@/lib/theme-loader'
 import { cn } from '@/lib/utils'
 import { Board } from '@settlers/core'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AssetResolver, GameTheme } from '@/lib/theme-types'
 import { useZoomPan } from '@/lib/use-zoom-pan'
-import { useBoardInteractions } from '@/lib/use-board-interactions'
+import { useInteractionSystem } from '@/lib/interaction-system'
+import { initializeBoardGrid } from '@/lib/board-utils'
 
 interface TestPiece {
   type: 'settlement' | 'city' | 'road'
@@ -32,29 +33,12 @@ interface GameBoardProps {
 }
 
 export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, disableTransitions = false, forceTheme }: GameBoardProps = {}) {
+  // === UNIFIED STATE MANAGEMENT ===
   const gameState = useGameStore(state => state.gameState)
   const placementMode = useGameStore(state => state.placementMode)
   const { theme: contextTheme, loading } = useGameTheme()
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
-  const [selectedHexId, setSelectedHexId] = useState<string | undefined>(undefined)
-  
-  // Zoom and pan controls
-  const zoomPanControls = useZoomPan()
-  const boardInteractions = useBoardInteractions({ 
-    controls: zoomPanControls,
-    shouldAllowPan: (event: React.MouseEvent) => {
-      // Don't allow panning if clicking on a hex tile or interactive game element
-      const target = event.target as Element
-      if (!target) return true
-      
-      // Check if the clicked element is a hex tile or within hex-related elements
-      const isHexTile = target.closest('g[class*="cursor-pointer"]') || 
-                       target.closest('.hex-tile') ||
-                       target.closest('[data-hex-interactive]')
-      
-      return !isHexTile
-    }
-  })
+  const containerRef = useRef<HTMLDivElement>(null)
   
   // Use forceTheme if provided, otherwise use context theme
   const theme = forceTheme !== undefined ? forceTheme : contextTheme
@@ -62,10 +46,26 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
   // Use prop board if provided, otherwise fall back to store
   const board = propBoard || gameState?.board
   
-  // Initialize asset resolver only if theme exists (optional enhancement)
+  // === UNIFIED INTERACTION SYSTEM ===
+  const zoomPanControls = useZoomPan()
+  const interactions = useInteractionSystem({
+    viewBoxControls: zoomPanControls,
+    containerRef
+  })
+  
+  // === INITIALIZATION ===
+  
+  // Initialize honeycomb grid when board loads
+  useEffect(() => {
+    if (board) {
+      initializeBoardGrid(board)
+    }
+  }, [board])
+  
+  // Initialize asset resolver
   useEffect(() => {
     if (!theme) {
-      setAssetResolver(null) // No theme = use geometric fallbacks
+      setAssetResolver(null)
       return
     }
     
@@ -74,29 +74,29 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
         const resolver = await getAssetResolver(theme)
         setAssetResolver(() => resolver)
       } catch (error) {
-        console.error('Theme asset loading failed, using fallbacks:', error)
-        setAssetResolver(null) // Fall back to geometric shapes on error
+        console.error('Failed to load theme assets, using fallbacks:', error)
+        setAssetResolver(null)
       }
     }
     initResolver()
   }, [theme])
 
-  // Memoize the clear function to prevent infinite loops
-  const clearSelection = useCallback(() => {
-    setSelectedHexId(undefined)
-  }, [])
-
-  // Register the clear selection function with parent
+  // Register board clear callback
   useEffect(() => {
-    if (onBoardClear) {
-      onBoardClear(clearSelection)
+    if (!onBoardClear) return
+
+    const clearSelection = () => {
+      // Clear board selection via game store
+      useGameStore.getState().setSelectedHex(null)
+      useGameStore.getState().setHoveredHex(null)
     }
-  }, [onBoardClear, clearSelection])
+
+    onBoardClear(clearSelection)
+  }, [onBoardClear])
   
-  console.log('GameBoard render:', { board: !!board, loading, theme: !!theme, assetResolver: !!assetResolver })
+  // === RENDER ===
   
   // CRITICAL FIX: Only block if no board exists
-  // Theme loading should NOT block board rendering - themes are optional enhancements
   if (!board) {
     return (
       <div className="fixed inset-0 w-screen h-screen flex items-center justify-center">
@@ -109,18 +109,14 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
   
   return (
     <div 
+      ref={containerRef}
       className={cn(
         "fixed inset-0 w-screen h-screen overflow-hidden select-none",
-        boardInteractions.isDragging ? "cursor-grabbing" : "cursor-grab"
+        interactions.isPanning ? "cursor-grabbing" : "cursor-grab"
       )}
       style={{
         background: `linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent))`
       }}
-      onWheel={boardInteractions.handleWheel}
-      onMouseDown={boardInteractions.handleMouseDown}
-      onMouseMove={boardInteractions.handleMouseMove}
-      onMouseUp={boardInteractions.handleMouseUp}
-      onMouseLeave={boardInteractions.handleMouseLeave}
     >
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-20">
@@ -128,104 +124,97 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,var(--color-game-bg-accent)_0%,transparent_50%)]" />
       </div>
     
-    {/* Base Layer: Hex Grid for terrain - renders with or without theme */}
-    <div className="absolute inset-0 z-10 pointer-events-auto">
-      <HexGridLayer 
-        board={board} 
-        theme={theme} // Can be null - component handles fallbacks
-        selectedHexId={selectedHexId}
-        disableTransitions={disableTransitions}
-        viewBox={zoomPanControls.getViewBoxString()}
-        onHexSelect={(hexId) => {
-          console.log('Hex selected:', hexId)
-          setSelectedHexId(hexId === selectedHexId ? undefined : hexId) // Toggle selection
-        }}
-      />
-    </div>
-    
-    {/* Port Layer - renders ports around the board */}
-    {board && (
-      <div className="absolute inset-0 z-12 pointer-events-none">
-        <svg
-          width="100%"
-          height="100%"
-          className="port-layer-svg"
-          style={{ background: 'transparent' }}
+      {/* Base Layer: Hex Grid for terrain */}
+      <div className="absolute inset-0 z-10 pointer-events-none">
+        <HexGridLayer 
+          board={board} 
+          theme={theme}
+          selectedHexId={interactions.selectedHexId || undefined}
+          hoveredHexId={interactions.hoveredHexId || undefined}
+          disableTransitions={disableTransitions}
           viewBox={zoomPanControls.getViewBoxString()}
-        >
-          <PortLayer board={board} />
-        </svg>
+          onHexHover={interactions.onHexHover}
+          onHexClick={interactions.onHexSelect}
+        />
       </div>
-    )}
-
-    {/* Game Pieces Layer - renders settlements, cities, and roads */}
-    {board && (
-      <div className="absolute inset-0 z-15 pointer-events-auto">
-        <svg
-          width="100%"
-          height="100%"
-          className="game-pieces-svg"
-          style={{ background: 'transparent' }}
-          viewBox={zoomPanControls.getViewBoxString()}
-        >
-          <PieceLayer 
-            board={board} 
-            gameState={gameState || undefined}
-            onSettlementClick={(vertexId: string) => console.log('Settlement clicked:', vertexId)}
-            onCityClick={(vertexId: string) => console.log('City clicked:', vertexId)}
-            onRoadClick={(edgeId: string) => console.log('Road clicked:', edgeId)}
-          />
-        </svg>
-      </div>
-    )}
-
-    {/* Test Pieces Layer - renders with geometric fallbacks if no theme */}
-    {testPieces.length > 0 && (
-      <div className="absolute inset-0 z-16 pointer-events-none">
-        <svg
-          width="100%"
-          height="100%"
-          className="test-pieces-svg"
-          style={{ background: 'transparent' }}
-        >
-          {testPieces.map((piece, index) => (
-            <GamePiece
-              key={index}
-              type={piece.type}
-              playerId={piece.playerId}
-              position={piece.position}
-              theme={theme} // Can be null - component handles fallbacks
-              assetResolver={assetResolver} // Can be null - component handles fallbacks
-              rotation={piece.rotation}
+      
+      {/* Port Layer - renders ports around the board */}
+      {board && (
+        <div className="absolute inset-0 z-12 pointer-events-none">
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={zoomPanControls.getViewBoxString()}
+            className="port-layer-svg"
+            style={{ background: 'transparent' }}
+          >
+            {/* Port components would go here */}
+          </svg>
+        </div>
+      )}
+      
+      {/* Piece Layer: Game pieces (settlements, cities, roads) */}
+      {(testPieces.length > 0 || gameState) && (
+        <div className="absolute inset-0 z-15 pointer-events-none">
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={zoomPanControls.getViewBoxString()}
+            className="piece-layer-svg"
+            style={{ background: 'transparent' }}
+          >
+            {/* Test pieces */}
+            {testPieces.map((piece, index) => (
+              <GamePiece 
+                key={`test-${index}`}
+                type={piece.type}
+                playerId={piece.playerId}
+                position={piece.position}
+                theme={theme}
+                assetResolver={assetResolver}
+                rotation={piece.rotation}
+              />
+            ))}
+            
+            {/* Real game pieces would go here when we implement them */}
+            <PieceLayer 
+              board={board} 
+              gameState={gameState || undefined}
+              onSettlementClick={(vertexId: string) => {/* Handle settlement click */}}
+              onCityClick={(vertexId: string) => {/* Handle city click */}}
+              onRoadClick={(edgeId: string) => {/* Handle road click */}}
             />
-          ))}
-        </svg>
+          </svg>
+        </div>
+      )}
+      
+      {/* Connection Layer: SVG for roads and buildings */}
+      {placementMode !== 'none' && (
+        <div className="absolute inset-0 z-20 pointer-events-none">
+          <ConnectionLayer />
+        </div>
+      )}
+      
+      {/* Interaction Layer: Overlays, tooltips, highlights */}
+      <div className="absolute inset-0 z-30 pointer-events-none">
+        {gameState && (
+          <InteractionLayer 
+            gameState={gameState}
+            hoveredHexId={interactions.hoveredHexId}
+            selectedHexId={interactions.selectedHexId}
+            viewBox={zoomPanControls.getViewBoxString()}
+          />
+        )}
       </div>
-    )}
-    
-    {/* Connection Layer: SVG for roads and buildings */}
-    {placementMode !== 'none' && (
-      <div className="absolute inset-0 z-20 pointer-events-none">
-        <ConnectionLayer />
-      </div>
-    )}
-    
-    {/* Interaction Layer: Overlays, tooltips, highlights */}
-    <div className="absolute inset-0 z-30 pointer-events-none">
-      {gameState && <InteractionLayer gameState={gameState} />}
+      
+     
+      
+      {/* Theme loading indicator (optional, non-blocking) */}
+      {loading && (
+        <div className="absolute top-4 left-4 z-50 bg-black/50 text-white px-3 py-1 rounded-md text-sm">
+          Loading theme...
+        </div>
+      )}
     </div>
-    
-    {/* Mini-map overlay */}
-    <div className="absolute bottom-4 right-4 z-40">
-      {/* TODO: Add MiniMap component */}
-    </div>
-    
-    {/* Theme loading indicator (optional, non-blocking) */}
-    {loading && (
-      <div className="absolute top-4 left-4 z-50 bg-black/50 text-white px-3 py-1 rounded-md text-sm">
-        Loading theme...
-      </div>
-    )}
-  </div>
-)
+  )
 } 
