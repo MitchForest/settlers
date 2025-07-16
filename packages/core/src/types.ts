@@ -169,6 +169,43 @@ export type GamePhase =
   | 'steal'       // Steal from player
   | 'ended'       // Game over
 
+// ============= Setup Phase Types (Phase 6) =============
+
+export type SetupPhase = 'determineOrder' | 'setup1' | 'setup2'
+
+export interface SetupState {
+  phase: SetupPhase
+  turnOrder: PlayerId[]
+  currentSetupPlayer: PlayerId
+  setupRound: 1 | 2
+  placedSettlements: Map<PlayerId, number>
+  placedRoads: Map<PlayerId, number>
+}
+
+// ============= Turn Management Types (Phase 7) =============
+
+export interface TurnState {
+  currentPhase: GamePhase
+  phaseStartTime: Date
+  timeRemaining?: number
+  actionsAvailable: ActionType[]
+  mustDiscard: Map<PlayerId, number>
+  pendingActions: GameAction[]
+}
+
+export interface VictoryConditions {
+  targetPoints: number
+  currentLeader: PlayerId | null
+  pointBreakdown: Map<PlayerId, {
+    settlements: number
+    cities: number
+    longestRoad: number
+    largestArmy: number
+    victoryCards: number
+    total: number
+  }>
+}
+
 export interface DiceRoll {
   die1: number
   die2: number
@@ -215,12 +252,25 @@ export type ActionType =
   | 'stealResource'
   | 'discard'
   | 'endTurn'
+  // Setup phase actions (Phase 6)
+  | 'rollForOrder'
+  | 'placeInitialSettlement'
+  | 'placeInitialRoad'
+  | 'confirmSetupComplete'
 
 export interface GameAction {
   type: ActionType
   playerId: PlayerId
   data: any
 }
+
+// ============= Setup Actions (Phase 6) =============
+
+export type SetupAction = 
+  | { type: 'rollForOrder'; playerId: PlayerId }
+  | { type: 'placeInitialSettlement'; playerId: PlayerId; position: VertexPosition }
+  | { type: 'placeInitialRoad'; playerId: PlayerId; position: EdgePosition }
+  | { type: 'confirmSetupComplete'; playerId: PlayerId }
 
 // ============= Trading System =============
 
@@ -259,4 +309,23 @@ export interface VictoryCondition {
   description: string
   points: number
   achieved: boolean
+}
+
+// ============= Game Summary (Phase 7) =============
+
+export interface GameSummary {
+  gameId: string
+  winner: PlayerId
+  finalScores: Map<PlayerId, number>
+  gameDuration: number // in milliseconds
+  totalTurns: number
+  playerStats: Map<PlayerId, {
+    resourcesProduced: number
+    resourcesTraded: number
+    buildingsBuilt: number
+    cardsPlayed: number
+    longestRoadLength: number
+    knightsPlayed: number
+  }>
+  achievements: Map<PlayerId, string[]>
 } 

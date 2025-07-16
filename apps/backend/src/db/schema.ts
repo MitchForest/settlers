@@ -48,14 +48,34 @@ export const developmentCardTypeEnum = pgEnum('development_card_type', [
   'monopoly'
 ])
 
+// Trade status enum
+export const tradeStatusEnum = pgEnum('trade_status', [
+  'pending',
+  'accepted', 
+  'rejected',
+  'cancelled',
+  'expired'
+])
+
+// Trade type enum
+export const tradeTypeEnum = pgEnum('trade_type', [
+  'bank',
+  'port', 
+  'player'
+])
+
 // Games table
 export const games = pgTable('games', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   status: text('status').notNull().default('waiting'), // waiting, playing, ended
   phase: gamePhaseEnum('phase').notNull().default('setup1'),
-  currentPlayerIndex: integer('current_player_index').notNull().default(0),
+  currentPlayer: text('current_player').notNull(), // Changed from currentPlayerIndex to currentPlayer
   turn: integer('turn').notNull().default(0),
+  
+  // Game state data stored as JSON - flexible structure for complete GameState serialization
+  gameState: json('game_state').notNull().$type<any>(),
+  
   settings: json('settings').notNull().$type<{
     victoryPoints: number
     boardLayout: string
@@ -63,29 +83,9 @@ export const games = pgTable('games', {
     randomizeTerrain: boolean
     randomizeNumbers: boolean
   }>(),
-  board: json('board').notNull().$type<{
-    hexes: Array<{
-      id: string
-      position: { q: number, r: number, s: number }
-      terrain: 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null
-      numberToken: number | null
-      hasRobber: boolean
-    }>
-    ports: Array<{
-      id: string
-      position: { q: number, r: number, s: number }
-      type: 'generic' | 'resource'
-      ratio: number
-      resourceType?: 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep'
-    }>
-    robberPosition: { q: number, r: number, s: number }
-  }>(),
-  dice: json('dice').$type<{
-    die1: number
-    die2: number
-    sum: number
-  }>(),
+  
   winner: text('winner'),
+  startedAt: timestamp('started_at').notNull().defaultNow(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow()
 })
@@ -169,28 +169,33 @@ export const placedRoads = pgTable('placed_roads', {
   placedAt: timestamp('placed_at').notNull().defaultNow()
 })
 
-// Trades table
+// Enhanced trades table to support full trading system
 export const trades = pgTable('trades', {
   id: text('id').primaryKey(),
   gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
-  fromPlayerId: text('from_player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
-  toPlayerId: text('to_player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  type: tradeTypeEnum('type').notNull(), // Use proper enum
+  initiator: text('initiator').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  target: text('target').references(() => players.id, { onDelete: 'cascade' }), // null for bank/port trades
   offering: json('offering').notNull().$type<{
-    wood: number
-    brick: number
-    ore: number
-    wheat: number
-    sheep: number
+    wood?: number
+    brick?: number
+    ore?: number
+    wheat?: number
+    sheep?: number
   }>(),
   requesting: json('requesting').notNull().$type<{
-    wood: number
-    brick: number
-    ore: number
-    wheat: number
-    sheep: number
+    wood?: number
+    brick?: number
+    ore?: number
+    wheat?: number
+    sheep?: number
   }>(),
-  status: text('status').notNull().default('pending'), // pending, accepted, rejected
+  status: tradeStatusEnum('status').notNull().default('pending'), // Use proper enum
+  ratio: integer('ratio'), // For bank/port trades (2:1, 3:1, 4:1)
+  portType: text('port_type').$type<'generic' | 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep'>(), // For port trades
+  isOpenOffer: boolean('is_open_offer').default(false), // true if any player can accept
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at'), // For player trades with timers
   resolvedAt: timestamp('resolved_at')
 })
 

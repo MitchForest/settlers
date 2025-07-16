@@ -1,369 +1,372 @@
-// WebSocket server implementation using Bun's native WebSocket
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
-import { GameFlowManager, GameAction, ProcessResult } from '@settlers/core'
-import { games, players, gameEvents, db } from '../db'
+import { GameFlowManager, GameAction, ActionType, GameEvent } from '@settlers/core'
+import { games, gameEvents, db } from '../db'
 import { eq } from 'drizzle-orm'
-import { v4 as uuidv4 } from 'uuid'
+import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
 
 // WebSocket data context
 export interface WSData {
   sessionId: string
   gameId?: string
   playerId?: string
-  userId?: string
+  isSpectator?: boolean
 }
 
-// Game rooms management
-const gameRooms = new Map<string, GameFlowManager>()
+// Game room management with proper type safety
+const gameRooms = new Map<string, {
+  manager: GameFlowManager
+  sockets: Set<ServerWebSocket<WSData>>
+  lastUpdate: Date
+}>()
 
-// WebSocket upgrade handler
+// Player socket tracking
+const playerSockets = new Map<string, ServerWebSocket<WSData>>()
+
+/**
+ * WebSocket upgrade handler
+ */
 export function upgradeWebSocket(req: Request, server: any): Response | undefined {
-  // Extract session info from query params
   const url = new URL(req.url)
-  const sessionId = url.searchParams.get('sessionId') || uuidv4()
+  const sessionId = url.searchParams.get('sessionId') || crypto.randomUUID()
   const gameId = url.searchParams.get('gameId') || undefined
+  const playerId = url.searchParams.get('playerId') || undefined
   
-  // Upgrade the connection
   const success = server.upgrade(req, {
     data: {
       sessionId,
       gameId,
-      playerId: undefined,
-      userId: undefined
-    }
+      playerId,
+      isSpectator: !playerId
+    } satisfies WSData
   })
-  
-  if (success) {
-    return undefined // Return undefined on successful upgrade
-  }
-  
-  return new Response('WebSocket upgrade failed', { status: 400 })
+
+  return success ? undefined : new Response('WebSocket upgrade failed', { status: 400 })
 }
 
-// WebSocket handlers for Bun
-export const websocketHandlers: WebSocketHandler<WSData> = {
-  // Connection opened
-  open(ws) {
-    console.log(`WebSocket opened - Session: ${ws.data.sessionId}`)
+/**
+ * WebSocket message handlers
+ */
+export const websocketHandler: WebSocketHandler<WSData> = {
+  async open(ws) {
+    const { gameId, playerId, isSpectator } = ws.data
     
-    // If joining a game, subscribe to game room
-    if (ws.data.gameId) {
-      ws.subscribe(`game:${ws.data.gameId}`)
-      console.log(`Session ${ws.data.sessionId} subscribed to game:${ws.data.gameId}`)
-      
-      // Send current game state if available
-      const gameManager = gameRooms.get(ws.data.gameId)
-      if (gameManager) {
-        ws.send(JSON.stringify({
-          type: 'gameState',
-          data: gameManager.getState()
-        }))
-      }
+    console.log(`WebSocket connected: ${playerId || 'spectator'} to game ${gameId}`)
+    
+    if (gameId) {
+      await joinGameRoom(ws, gameId)
+    }
+    
+    if (playerId && !isSpectator) {
+      playerSockets.set(playerId, ws)
     }
   },
 
-  // Message received
   async message(ws, message) {
-    const { sessionId, gameId, playerId } = ws.data
-
     try {
       const data = JSON.parse(message.toString())
-      console.log(`Message from ${sessionId}:`, data.type)
-
-      switch (data.type) {
-        case 'createGame':
-          await handleCreateGame(ws, data.data)
-          break
-
-        case 'joinGame':
-          await handleJoinGame(ws, data.data)
-          break
-
-        case 'gameAction':
-          if (gameId && playerId) {
-            await handleGameAction(ws, gameId, playerId, data.data)
-          }
-          break
-
-        case 'ping':
-          ws.send(JSON.stringify({ type: 'pong' }))
-          break
-
-        default:
-          console.warn(`Unknown message type: ${data.type}`)
-      }
+      await handleWebSocketMessage(ws, data)
     } catch (error) {
-      console.error('Error processing message:', error)
+      console.error('Error handling WebSocket message:', error)
       ws.send(JSON.stringify({
         type: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Invalid message format'
       }))
     }
   },
 
-  // Connection closed
   async close(ws, code, reason) {
-    const { sessionId, gameId } = ws.data
-    console.log(`WebSocket closed - Session: ${sessionId}, Code: ${code}, Reason: ${reason}`)
-
-    // Update session status
-    try {
-      // TODO: Implement session cleanup
-      // await db
-      //   .update(sessions)
-      //   .set({
-      //     isActive: false,
-      //     disconnectedAt: new Date()
-      //   })
-      //   .where(eq(sessions.socketId, sessionId))
-    } catch (error) {
-      console.error('Error updating session on close:', error)
+    const { gameId, playerId } = ws.data
+    
+    console.log(`WebSocket disconnected: ${playerId || 'spectator'} from game ${gameId}`)
+    
+    if (gameId) {
+      await leaveGameRoom(ws, gameId)
     }
-  },
-
-  // Configure compression
-  perMessageDeflate: true,
-  
-  // Configure limits
-  maxPayloadLength: 16 * 1024 * 1024, // 16 MB
-  idleTimeout: 120, // 120 seconds
-  backpressureLimit: 1024 * 1024, // 1 MB
-}
-
-// Handler functions
-async function handleCreateGame(ws: ServerWebSocket<WSData>, data: any) {
-  try {
-    const { playerNames, settings } = data
     
-    // Create game using GameFlowManager - only pass supported options
-    const gameManager = GameFlowManager.createGame({
-      playerNames,
-      randomizePlayerOrder: settings?.randomizePlayerOrder ?? true
-    })
-    
-    const gameState = gameManager.getState()
-    const gameId = gameState.id
-    
-    // Store game manager
-    gameRooms.set(gameId, gameManager)
-    
-    // Get current player index for database
-    const playerIds = Array.from(gameState.players.keys())
-    const currentPlayerIndex = playerIds.indexOf(gameState.currentPlayer)
-    
-    // Save to database - align with schema
-    await db.insert(games).values({
-      id: gameId,
-      name: `Game ${gameId.slice(-8)}`, // Generate a simple name
-      status: 'waiting',
-      phase: gameState.phase,
-      turn: gameState.turn,
-      currentPlayerIndex: currentPlayerIndex,
-      settings: settings || {
-        victoryPoints: 10,
-        boardLayout: 'classic',
-        randomizePlayerOrder: true,
-        randomizeTerrain: false,
-        randomizeNumbers: false
-      },
-      board: {
-        hexes: Array.from(gameState.board.hexes.values()).map(hex => ({
-          id: hex.id,
-          position: hex.position,
-          terrain: hex.terrain === 'sea' ? null : hex.terrain as 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null,
-          numberToken: hex.numberToken,
-          hasRobber: hex.hasRobber
-        })),
-        ports: gameState.board.ports.map(port => ({
-          id: port.id,
-          position: { q: 0, r: 0, s: 0 }, // Simplified position for now
-          type: port.type === 'generic' ? 'generic' as const : 'resource' as const,
-          ratio: port.ratio,
-          resourceType: port.type !== 'generic' ? port.type as 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep' : undefined
-        })),
-        robberPosition: gameState.board.robberPosition || { q: 0, r: 0, s: 0 }
-      },
-      dice: gameState.dice || null,
-      winner: gameState.winner
-    })
-    
-    // Get first player ID for the creator
-    const firstPlayerId = playerIds[0]
-    
-    // Update WebSocket data
-    ws.data.gameId = gameId
-    ws.data.playerId = firstPlayerId
-    
-    // Subscribe to game room
-    ws.subscribe(`game:${gameId}`)
-    
-    // Send success response
-    ws.send(JSON.stringify({
-      type: 'gameCreated',
-      data: {
-        gameId,
-        playerId: firstPlayerId,
-        state: gameState
-      }
-    }))
-  } catch (error) {
-    console.error('Error creating game:', error)
-    ws.send(JSON.stringify({
-      type: 'error',
-      error: error instanceof Error ? error.message : 'Failed to create game'
-    }))
+    if (playerId) {
+      playerSockets.delete(playerId)
+    }
   }
 }
 
-async function handleJoinGame(ws: ServerWebSocket<WSData>, data: any) {
+/**
+ * Handle incoming WebSocket messages
+ */
+async function handleWebSocketMessage(ws: ServerWebSocket<WSData>, data: any) {
+  const { type, ...payload } = data
+  
+  switch (type) {
+    case 'joinGame':
+      await handleJoinGame(ws, payload)
+      break
+      
+    case 'gameAction':
+      await handleGameAction(ws, payload)
+      break
+      
+    case 'ping':
+      ws.send(JSON.stringify({ type: 'pong' }))
+      break
+      
+    default:
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: `Unknown message type: ${type}`
+      }))
+  }
+}
+
+/**
+ * Handle player joining a game
+ */
+async function handleJoinGame(ws: ServerWebSocket<WSData>, payload: { gameId: string; playerId?: string }) {
+  const { gameId, playerId } = payload
+  
   try {
-    const { gameId, playerName } = data
-    
-    // Get game manager
-    const gameManager = gameRooms.get(gameId)
-    if (!gameManager) {
-      throw new Error('Game not found')
-    }
-    
-    // Find available player slot
-    const gameState = gameManager.getState()
-    const players = Array.from(gameState.players.values())
-    const availablePlayer = players.find(p => !p.isConnected)
-    
-    if (!availablePlayer) {
-      throw new Error('Game is full')
-    }
-    
     // Update WebSocket data
     ws.data.gameId = gameId
-    ws.data.playerId = availablePlayer.id
+    if (playerId) {
+      ws.data.playerId = playerId
+      ws.data.isSpectator = false
+      playerSockets.set(playerId, ws)
+    }
     
-    // Subscribe to game room
-    ws.subscribe(`game:${gameId}`)
+    await joinGameRoom(ws, gameId)
     
-    // Mark player as connected
-    availablePlayer.isConnected = true
-    
-    // Send success response
     ws.send(JSON.stringify({
-      type: 'gameJoined',
-      data: {
-        gameId,
-        playerId: availablePlayer.id,
-        state: gameState
-      }
-    }))
-    
-    // Broadcast player joined to other players
-    ws.publish(`game:${gameId}`, JSON.stringify({
-      type: 'playerJoined',
-      data: {
-        playerId: availablePlayer.id,
-        playerName: availablePlayer.name
-      }
+      type: 'joinedGame',
+      gameId,
+      playerId
     }))
   } catch (error) {
     console.error('Error joining game:', error)
     ws.send(JSON.stringify({
       type: 'error',
-      error: error instanceof Error ? error.message : 'Failed to join game'
+      error: 'Failed to join game'
     }))
   }
 }
 
-async function handleGameAction(
-  ws: ServerWebSocket<WSData>,
-  gameId: string,
-  playerId: string,
-  action: GameAction
-) {
+/**
+ * Handle game actions from players
+ */
+async function handleGameAction(ws: ServerWebSocket<WSData>, payload: any) {
+  const { gameId, playerId } = ws.data
+  
+  if (!gameId || !playerId) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Not connected to a game'
+    }))
+    return
+  }
+  
   try {
-    // Get game manager
-    const gameManager = gameRooms.get(gameId)
-    if (!gameManager) {
-      throw new Error('Game not found')
+    const gameRoom = gameRooms.get(gameId)
+    if (!gameRoom) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Game room not found'
+      }))
+      return
     }
     
-    // Process action
-    const result = gameManager.processAction(action)
+    // Create the action
+    const action: GameAction = {
+      type: payload.type as ActionType,
+      playerId,
+      ...payload.data
+    }
+    
+    // Process the action
+    const result = gameRoom.manager.processAction(action)
     
     if (!result.success) {
-      // Send error to player
       ws.send(JSON.stringify({
-        type: 'actionError',
+        type: 'actionFailed',
         error: result.error
       }))
       return
     }
     
-    // Save events to database
-    const gameState = gameManager.getState()
-    for (const event of result.events) {
-      await db.insert(gameEvents).values({
-        id: event.id,
-        gameId,
-        playerId: event.playerId || null,
-        type: event.type,
-        data: event.data
-      })
-    }
+    // Save updated game state to database
+    const updatedGameState = gameRoom.manager.getState()
+    const gameData = prepareGameStateForDB(updatedGameState)
     
-    // Get current player index for database update
-    const playerIds = Array.from(gameState.players.keys())
-    const currentPlayerIndex = playerIds.indexOf(gameState.currentPlayer)
-    
-    // Update game state in database
     await db
       .update(games)
-      .set({
-        phase: gameState.phase,
-        turn: gameState.turn,
-        currentPlayerIndex: currentPlayerIndex,
-              board: {
-        hexes: Array.from(gameState.board.hexes.values()).map(hex => ({
-          id: hex.id,
-          position: hex.position,
-          terrain: hex.terrain === 'sea' ? null : hex.terrain as 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null,
-          numberToken: hex.numberToken,
-          hasRobber: hex.hasRobber
-        })),
-        ports: gameState.board.ports.map(port => ({
-          id: port.id,
-          position: { q: 0, r: 0, s: 0 }, // Simplified position for now
-          type: port.type === 'generic' ? 'generic' as const : 'resource' as const,
-          ratio: port.ratio,
-          resourceType: port.type !== 'generic' ? port.type as 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep' : undefined
-        })),
-        robberPosition: gameState.board.robberPosition || { q: 0, r: 0, s: 0 }
-      },
-        dice: gameState.dice,
-        winner: gameState.winner,
-        updatedAt: new Date()
-      })
+      .set(gameData)
       .where(eq(games.id, gameId))
     
-    // Broadcast state update to all players
-    ws.publish(`game:${gameId}`, JSON.stringify({
-      type: 'gameUpdate',
-      data: {
-        state: gameState,
-        events: result.events
-      }
-    }))
+    // Log the action
+    await db.insert(gameEvents).values({
+      id: crypto.randomUUID(),
+      gameId,
+      playerId,
+      type: payload.type,
+      data: payload.data || {},
+      timestamp: new Date()
+    })
     
-    // Also send to the acting player
+    // Update room metadata
+    gameRoom.lastUpdate = new Date()
+    
+    // Broadcast the updated game state to all players
+    broadcastToGameRoom(gameId, {
+      type: 'gameStateUpdate',
+      gameState: updatedGameState,
+      events: result.events || []
+    })
+    
+    // Send success confirmation to the acting player
     ws.send(JSON.stringify({
       type: 'actionSuccess',
-      data: {
-        state: gameState,
-        events: result.events
-      }
+      action: action,
+      events: result.events || []
     }))
+    
   } catch (error) {
     console.error('Error processing game action:', error)
     ws.send(JSON.stringify({
       type: 'error',
-      error: error instanceof Error ? error.message : 'Failed to process action'
+      error: 'Failed to process action'
     }))
+  }
+}
+
+/**
+ * Join a game room, loading game state if needed
+ */
+async function joinGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
+  let gameRoom = gameRooms.get(gameId)
+  
+  if (!gameRoom) {
+    // Load game from database
+    const gameRecord = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1)
+    
+    if (gameRecord.length === 0) {
+      throw new Error('Game not found')
+    }
+    
+    const gameState = await loadGameStateFromDB(gameRecord[0])
+    const gameManager = new GameFlowManager(gameState)
+    
+    gameRoom = {
+      manager: gameManager,
+      sockets: new Set(),
+      lastUpdate: new Date()
+    }
+    
+    gameRooms.set(gameId, gameRoom)
+  }
+  
+  // Add socket to room
+  gameRoom.sockets.add(ws)
+  
+  // Send current game state to the joining player/spectator
+  const currentGameState = gameRoom.manager.getState()
+  ws.send(JSON.stringify({
+    type: 'gameStateUpdate',
+    gameState: currentGameState
+  }))
+  
+  // Notify other players of the connection
+  broadcastToGameRoom(gameId, {
+    type: 'playerConnected',
+    playerId: ws.data.playerId,
+    isSpectator: ws.data.isSpectator
+  }, ws)
+}
+
+/**
+ * Leave a game room
+ */
+async function leaveGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
+  const gameRoom = gameRooms.get(gameId)
+  if (!gameRoom) return
+  
+  // Remove socket from room
+  gameRoom.sockets.delete(ws)
+  
+  // Notify other players of the disconnection
+  broadcastToGameRoom(gameId, {
+    type: 'playerDisconnected',
+    playerId: ws.data.playerId,
+    isSpectator: ws.data.isSpectator
+  })
+  
+  // Clean up empty rooms
+  if (gameRoom.sockets.size === 0) {
+    gameRooms.delete(gameId)
+    console.log(`Cleaned up empty game room: ${gameId}`)
+  }
+}
+
+/**
+ * Broadcast message to all sockets in a game room
+ */
+function broadcastToGameRoom(gameId: string, message: any, excludeSocket?: ServerWebSocket<WSData>) {
+  const gameRoom = gameRooms.get(gameId)
+  if (!gameRoom) return
+  
+  const messageStr = JSON.stringify(message)
+  
+  for (const socket of gameRoom.sockets) {
+    if (socket !== excludeSocket && socket.readyState === 1) {
+      try {
+        socket.send(messageStr)
+      } catch (error) {
+        console.error('Error broadcasting to socket:', error)
+        // Remove broken socket
+        gameRoom.sockets.delete(socket)
+      }
+    }
+  }
+}
+
+/**
+ * Send message to specific player
+ */
+export function sendToPlayer(playerId: string, message: any) {
+  const socket = playerSockets.get(playerId)
+  if (socket && socket.readyState === 1) {
+    try {
+      socket.send(JSON.stringify(message))
+    } catch (error) {
+      console.error('Error sending to player:', error)
+      playerSockets.delete(playerId)
+    }
+  }
+}
+
+/**
+ * Get active game rooms count
+ */
+export function getActiveRoomsCount(): number {
+  return gameRooms.size
+}
+
+/**
+ * Get connected players count
+ */
+export function getConnectedPlayersCount(): number {
+  return playerSockets.size
+}
+
+/**
+ * Cleanup inactive game rooms (optional maintenance)
+ */
+export function cleanupInactiveRooms(maxAgeMinutes: number = 60) {
+  const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000)
+  
+  for (const [gameId, room] of gameRooms.entries()) {
+    if (room.lastUpdate < cutoffTime && room.sockets.size === 0) {
+      gameRooms.delete(gameId)
+      console.log(`Cleaned up inactive game room: ${gameId}`)
+    }
   }
 } 

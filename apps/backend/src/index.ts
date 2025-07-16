@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm'
 import { db } from './db'
 
 // Import modules that depend on db after db is imported
-import { websocketHandlers, upgradeWebSocket } from './websocket/server'
+import { websocketHandler, upgradeWebSocket } from './websocket/server'
 import gameRoutes from './routes/games'
 
 /**
@@ -98,7 +98,7 @@ const server = Bun.serve({
     // Handle regular HTTP requests with Hono
     return app.fetch(req, server)
   },
-  websocket: websocketHandlers
+  websocket: websocketHandler
 })
 
 console.log(`🚀 Starting Settlers backend server on port ${PORT}`)
