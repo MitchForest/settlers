@@ -127,96 +127,73 @@ export function GameInterface({
       />
 
       {/* Left Sidebar - Wider for content */}
-      <div className="absolute left-4 w-80 top-24 z-10 pointer-events-auto" style={{ bottom: 'calc(16px + var(--bottom-bar-height, 60px) + 16px)' }}>
+      <div className="absolute left-4 w-80 top-24 z-10 pointer-events-auto" style={{ bottom: 'calc(16px + 48px + 16px)' }}>
         <PlayerSidebar
           gameState={gameState}
           localPlayer={localPlayer}
           isMyTurn={isMyTurn()}
           onAction={handleGameAction}
+          timeRemaining={timeRemaining}
         />
       </div>
 
-      {/* Floating Action Bar - Same width as sidebar */}
+      {/* Floating Action Buttons - Below sidebar */}
       <div className="absolute left-4 w-80 bottom-4 z-10 pointer-events-auto">
-        <div className="flex items-center justify-between bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-2">
-          {/* Turn Timer */}
-          <div className="flex items-center space-x-2 px-2 py-1">
-            <div className="text-right">
-              <div className="text-xs text-white/60">Turn {gameState?.turn || 0}</div>
-              <div className="text-sm font-mono text-white">
-                {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
-              </div>
-            </div>
-            
-            {/* Timer Progress Bar */}
-            <div className="w-8 h-1.5 bg-white/20 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-1000 ${
-                  timeRemaining / 120 > 0.5 ? 'bg-green-500' : 
-                  timeRemaining / 120 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
-                }`}
-                style={{ width: `${(timeRemaining / 120) * 100}%` }}
-              />
-            </div>
-          </div>
+        <div className="flex flex-row justify-between">
+          {/* Regenerate/Restart Button */}
+          <Button
+            size="icon"
+            onClick={() => setShowRestartDialog(true)}
+            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+            title={gameState?.turn === 0 ? 'Regenerate Board' : 'Restart Game'}
+          >
+            <RotateCcw className="h-6 w-6" />
+          </Button>
           
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-0.5">
-            {/* Regenerate/Restart Button */}
-            <Button
-              size="icon"
-              onClick={() => setShowRestartDialog(true)}
-              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
-              title={gameState?.turn === 0 ? 'Regenerate Board' : 'Restart Game'}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            
-            {/* Theme Toggle Button */}
-            <Button
-              size="icon"
-              onClick={() => {
-                // TODO: Implement theme toggle (PNG vs plain backgrounds)
-                // Toggle theme assets
-              }}
-              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
-              title="Toggle Theme Assets"
-            >
-              <Palette className="h-4 w-4" />
-            </Button>
-            
-            {/* Auto Mode Button */}
-            <Button
-              size="icon"
-              onClick={handleAuto}
-              disabled
-              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
-              title="Auto Mode (Coming Soon)"
-            >
-              <Play className="h-4 w-4" />
-            </Button>
-            
-            {/* Exit Button */}
-            <Button
-              size="icon"
-              onClick={handleExit}
-              disabled
-              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
-              title="Exit Game (Coming Soon)"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-            
-            {/* Info Button */}
-            <Button
-              size="icon"
-              onClick={handleInfo}
-              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
-              title="Game Information"
-            >
-              <Info className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* Theme Toggle Button */}
+          <Button
+            size="icon"
+            onClick={() => {
+              // TODO: Implement theme toggle (PNG vs plain backgrounds)
+              // Toggle theme assets
+            }}
+            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+            title="Toggle Theme Assets"
+          >
+            <Palette className="h-6 w-6" />
+          </Button>
+          
+          {/* Auto Mode Button */}
+          <Button
+            size="icon"
+            onClick={handleAuto}
+            disabled
+            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
+            title="Auto Mode (Coming Soon)"
+          >
+            <Play className="h-6 w-6" />
+          </Button>
+          
+          {/* Exit Button */}
+          <Button
+            size="icon"
+            onClick={handleExit}
+            disabled
+            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
+            title="Exit Game (Coming Soon)"
+          >
+            <LogOut className="h-6 w-6" />
+          </Button>
+          
+          {/* Info Button */}
+          <Button
+            size="icon"
+            onClick={handleInfo}
+            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+            title="Game Information"
+          >
+            <Info className="h-6 w-6" />
+          </Button>
         </div>
       </div>
 
@@ -298,7 +275,7 @@ export function GameInterface({
                 <div className="flex justify-between items-center">
                   <span>🏙️ City</span>
                   <div className="flex space-x-1">
-                    <span>🌾🌾</span><span>⛏️⛏️⛏️</span>
+                    <span>🌾🌾</span><span>🪨🪨🪨</span>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
@@ -310,7 +287,7 @@ export function GameInterface({
                 <div className="flex justify-between items-center">
                   <span>📜 Development Card</span>
                   <div className="flex space-x-1">
-                    <span>🌾</span><span>🐑</span><span>⛏️</span>
+                    <span>🌾</span><span>🐑</span><span>🪨</span>
                   </div>
                 </div>
               </div>
@@ -345,7 +322,7 @@ export function GameInterface({
               <div className="grid grid-cols-2 gap-2 text-white/80">
                 <div>🌲 Wood (Forest)</div>
                 <div>🧱 Brick (Hills)</div>
-                <div>⛏️ Ore (Mountains)</div>
+                <div>🪨 Ore (Mountains)</div>
                 <div>🌾 Wheat (Fields)</div>
                 <div>🐑 Sheep (Pasture)</div>
               </div>

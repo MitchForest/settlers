@@ -208,7 +208,7 @@ function getResourceEmoji(type: keyof ResourceCards): string {
   const emojis = {
     wood: '🌲',
     brick: '🧱',
-    ore: '⛏️',
+    ore: '🪨',
     wheat: '🌾',
     sheep: '🐑'
   }

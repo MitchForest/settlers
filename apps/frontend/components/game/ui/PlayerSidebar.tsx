@@ -8,13 +8,14 @@ interface PlayerSidebarProps {
   localPlayer: Player
   isMyTurn: boolean
   onAction: (action: GameAction) => void
+  timeRemaining?: number
 }
 
 // Resource emojis mapping
 const RESOURCE_EMOJIS = {
   wood: '🌲',
   brick: '🧱', 
-  ore: '⛏️',
+  ore: '🪨',
   wheat: '🌾',
   sheep: '🐑'
 } as const
@@ -48,7 +49,7 @@ const DEV_CARD_INFO = {
   }
 } as const
 
-export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: PlayerSidebarProps) {
+export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, timeRemaining = 120 }: PlayerSidebarProps) {
   const canBuildSettlement = hasResources(localPlayer.resources, BUILDING_COSTS.settlement) && localPlayer.buildings.settlements > 0
   const canBuildCity = hasResources(localPlayer.resources, BUILDING_COSTS.city) && localPlayer.buildings.cities > 0
   const canBuildRoad = hasResources(localPlayer.resources, BUILDING_COSTS.road) && localPlayer.buildings.roads > 0
@@ -71,6 +72,29 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
 
   return (
     <div className="h-full flex flex-col bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg">
+      {/* Timer Section */}
+      <div className="p-4 border-b border-white/20">
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-white/80">Turn {gameState?.turn || 0}:</div>
+            <div className="text-lg font-mono text-white">
+              {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+            </div>
+          </div>
+          
+          {/* Timer Progress Bar */}
+          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-1000 ${
+                timeRemaining / 120 > 0.5 ? 'bg-green-500' : 
+                timeRemaining / 120 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${(timeRemaining / 120) * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Resources Section - Horizontal layout */}
       <div className="p-4 border-b border-white/20">
         <h3 className="text-sm font-semibold text-white mb-2 text-left">Resources</h3>
@@ -128,7 +152,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     <div className="flex items-center justify-between w-full">
                       <span>🏙️ Build City</span>
                       <div className="flex items-center space-x-1 text-xs">
-                        <span>🌾🌾</span><span>⛏️⛏️⛏️</span>
+                        <span>🌾🌾</span><span>🪨🪨🪨</span>
                       </div>
                     </div>
                   </Button>
@@ -156,7 +180,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     <div className="flex items-center justify-between w-full">
                       <span>📜 Buy Development Card</span>
                       <div className="flex items-center space-x-1 text-xs">
-                        <span>🌾</span><span>🐑</span><span>⛏️</span>
+                        <span>🌾</span><span>🐑</span><span>🪨</span>
                       </div>
                     </div>
                   </Button>

@@ -3,8 +3,8 @@
 import { HexGridLayer } from './layers/HexGridLayer'
 import { ConnectionLayer } from './layers/ConnectionLayer'
 import { InteractionLayer } from './layers/InteractionLayer'
-
 import { PieceLayer } from './layers/PieceLayer'
+import { PortLayer } from './layers/PortLayer'
 
 import { useGameStore } from '@/stores/gameStore'
 import { useGameTheme } from '@/components/theme-provider'
@@ -45,7 +45,20 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
   const board = propBoard || gameState?.board
   
   // === UNIFIED INTERACTION SYSTEM ===
-  const zoomPanControls = useZoomPan()
+  const zoomPanControls = useZoomPan({
+    viewportOffsets: {
+      left: 400,       // Increased to shift board more to the right
+      top: 96,         // Top bar height (estimated with padding)
+      right: 0,        // No right UI elements
+      bottom: 64       // Bottom button area height (h-12 + spacing)
+    },
+    initialViewBox: {
+      x: -250,    // Zoomed in more (was -300)
+      y: -250,    // Zoomed in more (was -300)
+      width: 500, // Smaller view area for more zoom (was 600)
+      height: 500 // Smaller view area for more zoom (was 600)
+    }
+  })
   const interactions = useInteractionSystem({
     viewBoxControls: zoomPanControls,
     containerRef
@@ -148,9 +161,16 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
             <PieceLayer 
               board={board} 
               gameState={gameState}
+              hexSize={32}
               onSettlementClick={(_vertexId: string) => {/* Handle settlement click */}}
               onCityClick={(_vertexId: string) => {/* Handle city click */}}
               onRoadClick={(_edgeId: string) => {/* Handle road click */}}
+            />
+            
+            {/* Render ports */}
+            <PortLayer 
+              board={board}
+              hexSize={32}
             />
           </svg>
         </div>

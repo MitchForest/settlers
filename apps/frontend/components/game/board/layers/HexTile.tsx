@@ -2,6 +2,7 @@ import React from 'react'
 import { defineHex, Orientation } from 'honeycomb-grid'
 import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
 import { HEX_RADIUS } from '@/lib/board-utils'
+import { TOKEN_DESIGN, PROBABILITY_DOTS } from '@/lib/game-constants'
 
 // Generate hexagon path points for SVG using honeycomb-grid
 function getHexPath(radius: number): string {
@@ -146,14 +147,14 @@ export function HexTile({
       {/* Number Token */}
       {numberToken && !isEmpty && (
         <g>
-          {/* Number token background */}
+          {/* Number token background - standardized design */}
           <circle
             cx="0"
             cy="0"
-            r="14"
-            fill={theme?.ui?.numberTokenBackground || '#FFFFFF'}
-            stroke={theme?.ui?.numberTokenBorder || '#000000'}
-            strokeWidth="2"
+            r={TOKEN_DESIGN.radius}
+            fill={TOKEN_DESIGN.backgroundColor}
+            stroke={TOKEN_DESIGN.borderColor}
+            strokeWidth={TOKEN_DESIGN.borderWidth}
           />
           
           {/* Number text */}
@@ -162,9 +163,9 @@ export function HexTile({
             y="-2"
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize="12"
+            fontSize={TOKEN_DESIGN.fontSize.number}
             fontWeight="bold"
-            fill={theme?.ui?.numberTokenText || '#000000'}
+            fill={numberToken === 6 || numberToken === 8 ? TOKEN_DESIGN.redTextColor : TOKEN_DESIGN.textColor}
           >
             {numberToken}
           </text>
@@ -173,10 +174,10 @@ export function HexTile({
           {Array.from({ length: getProbabilityDots(numberToken) }, (_, i) => (
             <circle
               key={i}
-              cx={-8 + (i * 4)}
-              cy="12"
-              r="1.5"
-              fill={theme?.ui?.numberTokenText || '#000000'}
+              cx={-((getProbabilityDots(numberToken) - 1) * PROBABILITY_DOTS.dotSpacing) / 2 + (i * PROBABILITY_DOTS.dotSpacing)}
+              cy={PROBABILITY_DOTS.yOffset}
+              r={PROBABILITY_DOTS.dotRadius}
+              fill={numberToken === 6 || numberToken === 8 ? PROBABILITY_DOTS.redColor : PROBABILITY_DOTS.color}
             />
           ))}
         </g>

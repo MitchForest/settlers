@@ -9,6 +9,7 @@ import type { Board } from '@settlers/core'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { useGameStore } from '@/stores/gameStore'
 
 interface GamePageProps {
   params: Promise<{ gameId: string }>
@@ -22,9 +23,10 @@ export default function GamePage({ params }: GamePageProps) {
   const [board, setBoard] = useState<Board | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   
-  // Game state management
+  // Game state management - USE GAME STORE as single source of truth
   const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
-  const [gameState, setGameState] = useState<GameState | null>(null)
+  const gameState = useGameStore(state => state.gameState) // Read from store
+  const updateGameState = useGameStore(state => state.updateGameState) // Store updater
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null)
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, { avatar: string; name: string }>>({})
 
@@ -111,7 +113,7 @@ export default function GamePage({ params }: GamePageProps) {
         }
         
         setGameManager(manager)
-        setGameState(modifiedState)
+        updateGameState(modifiedState)
         setPlayerAvatars(avatars)
         
         // Set local player as the first player
@@ -146,7 +148,7 @@ export default function GamePage({ params }: GamePageProps) {
       case 'roll':
         const result = gameManager.processAction(action)
         if (result.success) {
-          setGameState(result.newState)
+          updateGameState(result.newState)
           toast.success(result.message || 'Dice rolled!')
         } else {
           toast.error(result.error || 'Failed to roll dice')

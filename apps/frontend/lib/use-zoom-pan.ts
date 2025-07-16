@@ -37,6 +37,12 @@ interface UseZoomPanOptions {
     minY: number
     maxY: number
   }
+  viewportOffsets?: {
+    left: number   // Sidebar width + margin
+    top: number    // Top bar height  
+    right: number  // Usually 0
+    bottom: number // Bottom bar height
+  }
 }
 
 const DEFAULT_VIEW_BOX: ViewBoxState = {
@@ -46,15 +52,37 @@ const DEFAULT_VIEW_BOX: ViewBoxState = {
   height: 400
 }
 
+function calculateCenteredViewBox(
+  baseViewBox: ViewBoxState, 
+  offsets?: { left: number; top: number; right: number; bottom: number }
+): ViewBoxState {
+  if (!offsets) return baseViewBox
+  
+  // Calculate the offset needed to center in the available viewing area
+  // We need to shift the view AWAY from the UI elements, not toward them
+  const horizontalOffset = -(offsets.left - offsets.right) / 2
+  const verticalOffset = -(offsets.top - offsets.bottom) / 2
+  
+  return {
+    ...baseViewBox,
+    x: baseViewBox.x + horizontalOffset,
+    y: baseViewBox.y + verticalOffset
+  }
+}
+
 export function useZoomPan({
-  initialViewBox = DEFAULT_VIEW_BOX,
+  initialViewBox,
   minZoom = 0.5,
   maxZoom = 3.0,
   zoomStep = 0.2,
-  panBounds
+  panBounds,
+  viewportOffsets
 }: UseZoomPanOptions = {}): ZoomPanControls {
   
-  const [viewBox, setViewBox] = useState<ViewBoxState>(initialViewBox)
+  // Calculate centered viewbox if offsets are provided
+  const centeredViewBox = initialViewBox || calculateCenteredViewBox(DEFAULT_VIEW_BOX, viewportOffsets)
+  
+  const [viewBox, setViewBox] = useState<ViewBoxState>(centeredViewBox)
   const [zoom, setZoomLevel] = useState(1.0)
   const animationFrameRef = useRef<number | null>(null)
   
@@ -68,8 +96,8 @@ export function useZoomPan({
     
     // Update viewBox based on zoom level
     // Zoom affects the visible area size, centered on current view
-    const baseWidth = initialViewBox.width
-    const baseHeight = initialViewBox.height
+    const baseWidth = centeredViewBox.width
+    const baseHeight = centeredViewBox.height
     const newWidth = baseWidth / clampedZoom
     const newHeight = baseHeight / clampedZoom
     
@@ -79,7 +107,7 @@ export function useZoomPan({
       width: newWidth,
       height: newHeight
     }))
-  }, [minZoom, maxZoom, initialViewBox])
+  }, [minZoom, maxZoom, centeredViewBox])
 
   const zoomIn = useCallback(() => {
     if (canZoomIn) {
@@ -157,9 +185,9 @@ export function useZoomPan({
       animationFrameRef.current = null
     }
 
-    setViewBox(initialViewBox)
+    setViewBox(centeredViewBox)
     setZoomLevel(1.0)
-  }, [initialViewBox])
+  }, [centeredViewBox])
 
   const getViewBoxString = useCallback(() => {
     return `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`

@@ -70,25 +70,48 @@ export const useGameStore = create<GameStore>()(
       setFlowInstance: (instance) => set({ flowInstance: instance }),
       
       connect: async (gameId, playerId) => {
+        // Close existing connection if any
+        const existingWs = get().ws
+        if (existingWs) {
+          existingWs.close()
+        }
+
         const ws = new WebSocket(`ws://localhost:4000/ws?gameId=${gameId}&playerId=${playerId}`)
         
         ws.onopen = () => {
+          console.log('🔌 WebSocket connected')
           set({ connectionStatus: 'connected', ws })
         }
         
         ws.onmessage = (event) => {
-          const data = JSON.parse(event.data)
-          if (data.type === 'gameState') {
-            get().updateGameState(data.state)
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'gameState' && data.state) {
+              get().updateGameState(data.state)
+            }
+          } catch (error) {
+            console.error('❌ Failed to parse WebSocket message:', error, event.data)
           }
         }
         
-        ws.onerror = () => {
+        ws.onerror = (error) => {
+          console.error('❌ WebSocket error:', error)
           set({ connectionStatus: 'error' })
         }
         
-        ws.onclose = () => {
+        ws.onclose = (event) => {
+          console.log('🔌 WebSocket closed:', event.code, event.reason)
           set({ connectionStatus: 'disconnected', ws: null })
+          
+          // Auto-reconnect after 5 seconds if not a clean close
+          if (event.code !== 1000 && event.code !== 1001) {
+            console.log('🔄 Attempting to reconnect in 5 seconds...')
+            setTimeout(() => {
+              if (get().connectionStatus === 'disconnected') {
+                get().connect(gameId, playerId)
+              }
+            }, 5000)
+          }
         }
         
         set({ ws, connectionStatus: 'connecting', localPlayerId: playerId })
@@ -105,7 +128,14 @@ export const useGameStore = create<GameStore>()(
       sendAction: (action) => {
         const ws = get().ws
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'action', action }))
+          try {
+            ws.send(JSON.stringify({ type: 'action', action }))
+          } catch (error) {
+            console.error('❌ Failed to send action:', error)
+            set({ connectionStatus: 'error' })
+          }
+        } else {
+          console.warn('⚠️ Cannot send action: WebSocket not connected')
         }
       },
       
@@ -122,23 +152,38 @@ export const useGameStore = create<GameStore>()(
       
       // Computed
       currentPlayer: () => {
-        const state = get().gameState
-        if (!state) return null
-        return state.players.get(state.currentPlayer) || null
+        try {
+          const state = get().gameState
+          if (!state || !state.players || !state.currentPlayer) return null
+          return state.players.get(state.currentPlayer) || null
+        } catch (error) {
+          console.error('❌ Error getting current player:', error)
+          return null
+        }
       },
       
       isMyTurn: () => {
-        const state = get().gameState
-        const localId = get().localPlayerId
-        if (!state || !localId) return false
-        return state.currentPlayer === localId
+        try {
+          const state = get().gameState
+          const localId = get().localPlayerId
+          if (!state || !localId || !state.currentPlayer) return false
+          return state.currentPlayer === localId
+        } catch (error) {
+          console.error('❌ Error checking if my turn:', error)
+          return false
+        }
       },
       
       myPlayer: () => {
-        const state = get().gameState
-        const localId = get().localPlayerId
-        if (!state || !localId) return null
-        return state.players.get(localId) || null
+        try {
+          const state = get().gameState
+          const localId = get().localPlayerId
+          if (!state || !localId || !state.players) return null
+          return state.players.get(localId) || null
+        } catch (error) {
+          console.error('❌ Error getting my player:', error)
+          return null
+        }
       }
     }))
   )

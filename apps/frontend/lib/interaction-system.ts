@@ -91,7 +91,7 @@ export function useInteractionSystem({
   // === HEX INTERACTION HANDLERS ===
   
   const handleHexHover = useCallback((hexId: string | null) => {
-    console.log('🎯 HOVER:', hexId)
+          // console.log('🎯 HOVER:', hexId)
     updateHoveredHex(hexId)
   }, [updateHoveredHex])
   

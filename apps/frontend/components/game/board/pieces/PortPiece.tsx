@@ -2,51 +2,52 @@
 
 import { Port, ResourceType } from '@settlers/core'
 import { useGameTheme } from '@/components/theme-provider'
+import { TOKEN_DESIGN, PIECE_EMOJIS } from '../../../../lib/game-constants'
 
 interface PortPieceProps {
   port: Port
   position: { x: number; y: number }
-  size?: number
 }
 
 // Resource type to emoji mapping
 const RESOURCE_EMOJIS: Record<ResourceType, string> = {
   wood: '🌲',
   brick: '🧱', 
-  ore: '⛏️',
+  ore: '🪨',   // Rock emoji for ore ports
   wheat: '🌾',
   sheep: '🐑'
 }
 
-export function PortPiece({ port, position, size = 40 }: PortPieceProps) {
+export function PortPiece({ port, position }: PortPieceProps) {
   const { theme } = useGameTheme()
   
   // Determine display content
   const isGeneric = port.type === 'generic'
-  const emoji = isGeneric ? '❓' : RESOURCE_EMOJIS[port.type as ResourceType]
+  const emoji = isGeneric ? PIECE_EMOJIS.port : RESOURCE_EMOJIS[port.type as ResourceType]
   const ratio = `${port.ratio}:1`
   
-  // Get port color
+  // Get port color for accent
   const portColor = isGeneric 
-    ? 'rgb(107, 114, 128)' // gray-500
-    : theme?.resourceMapping?.[port.type as ResourceType]?.color || 'rgb(107, 114, 128)'
+    ? TOKEN_DESIGN.borderColor // Use standard border color
+    : theme?.resourceMapping?.[port.type as ResourceType]?.color || TOKEN_DESIGN.borderColor
 
   return (
     <g transform={`translate(${position.x}, ${position.y})`}>
-      {/* Port circle background */}
+      {/* Port circle background - standardized design */}
       <circle
-        r={size / 2}
-        fill="white"
+        r={TOKEN_DESIGN.radius}
+        fill={TOKEN_DESIGN.backgroundColor}
         stroke={portColor}
-        strokeWidth="3"
+        strokeWidth={TOKEN_DESIGN.borderWidth}
         className="drop-shadow-md"
       />
       
       {/* Resource emoji */}
       <text
-        y="-8"
+        y="-6"
         textAnchor="middle"
-        fontSize="16"
+        fontSize={TOKEN_DESIGN.fontSize.emoji}
+        fill={TOKEN_DESIGN.textColor}
         className="select-none pointer-events-none"
       >
         {emoji}
@@ -54,11 +55,11 @@ export function PortPiece({ port, position, size = 40 }: PortPieceProps) {
       
       {/* Ratio text */}
       <text
-        y="8"
+        y="6"
         textAnchor="middle"
-        fontSize="12"
+        fontSize={TOKEN_DESIGN.fontSize.ratio}
         fontWeight="600"
-        fill={portColor}
+        fill={TOKEN_DESIGN.textColor}
         className="select-none pointer-events-none"
       >
         {ratio}

@@ -317,6 +317,17 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
       }
     }
   }
+
+  // Debug: Check what was actually added (keeping this for now)
+  const settlementsAdded = Array.from(vertices.values()).filter(v => v.building?.type === 'settlement').length
+  const citiesAdded = Array.from(vertices.values()).filter(v => v.building?.type === 'city').length
+  const roadsAdded = Array.from(edges.values()).filter(e => e.connection?.type === 'road').length
+  
+  console.log('Demo pieces added:', {
+    settlements: settlementsAdded,
+    cities: citiesAdded,
+    roads: roadsAdded
+  })
 }
 
 // Generate standard Catan ports

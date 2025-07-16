@@ -47,7 +47,6 @@ export function PortLayer({ board, hexSize = 60 }: PortLayerProps) {
             key={port.id}
             port={port}
             position={position}
-            size={36}
           />
         )
       })}

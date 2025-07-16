@@ -22,9 +22,8 @@ export function PlayersPanel({
 
   return (
     <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
-      <div className="flex items-center justify-between px-2">
-        {/* Players List - Evenly spaced with balanced edge spacing */}
-        <div className="flex items-center justify-evenly w-full px-4">
+      {/* Players List - Edge to edge spacing */}
+      <div className="flex items-center justify-between w-full">
           {sortedPlayers.map(([playerId, player]) => {
             const isCurrentTurn = gameState.currentPlayer === playerId
             const playerInfo = playerAvatars[playerId] || { 
@@ -42,7 +41,6 @@ export function PlayersPanel({
               />
             )
           })}
-        </div>
       </div>
     </div>
   )
