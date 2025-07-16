@@ -9,7 +9,7 @@ import { useGameTheme } from '@/components/theme-provider'
 import { getAssetResolver } from '@/lib/theme-loader'
 import { cn } from '@/lib/utils'
 import { Board } from '@settlers/core'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AssetResolver } from '@/lib/theme-types'
 
 interface TestPiece {
@@ -22,9 +22,11 @@ interface TestPiece {
 interface GameBoardProps {
   board?: Board
   testPieces?: TestPiece[]
+  onBoardClear?: (callback: () => void) => void
+  disableTransitions?: boolean
 }
 
-export function GameBoard({ board: propBoard, testPieces = [] }: GameBoardProps = {}) {
+export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, disableTransitions = false }: GameBoardProps = {}) {
   const gameState = useGameStore(state => state.gameState)
   const placementMode = useGameStore(state => state.placementMode)
   const { theme, loading } = useGameTheme()
@@ -52,6 +54,18 @@ export function GameBoard({ board: propBoard, testPieces = [] }: GameBoardProps 
     }
     initResolver()
   }, [theme])
+
+  // Memoize the clear function to prevent infinite loops
+  const clearSelection = useCallback(() => {
+    setSelectedHexId(undefined)
+  }, [])
+
+  // Register the clear selection function with parent
+  useEffect(() => {
+    if (onBoardClear) {
+      onBoardClear(clearSelection)
+    }
+  }, [onBoardClear, clearSelection])
   
   console.log('GameBoard render:', { board: !!board, loading, theme: !!theme, assetResolver: !!assetResolver })
   
@@ -87,6 +101,7 @@ export function GameBoard({ board: propBoard, testPieces = [] }: GameBoardProps 
         board={board} 
         theme={theme} // Can be null - component handles fallbacks
         selectedHexId={selectedHexId}
+        disableTransitions={disableTransitions}
         onHexSelect={(hexId) => {
           console.log('Hex selected:', hexId)
           setSelectedHexId(hexId === selectedHexId ? undefined : hexId) // Toggle selection

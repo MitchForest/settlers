@@ -15,6 +15,14 @@ export const BOARD_SIZE = {
 
 // Standard board terrain distribution
 export const TERRAIN_COUNTS: Record<TerrainType, number> = {
+  // New theme-agnostic types
+  'tile-type-1': 4,  // Resource type 1
+  'tile-type-2': 4,  // Resource type 2  
+  'tile-type-3': 4,  // Resource type 3
+  'tile-type-4': 3,  // Resource type 4
+  'tile-type-5': 3,  // Resource type 5
+  'tile-type-6': 1,  // Non-producing tile
+  // Legacy support
   terrain1: 4,  // Forest (Lumber)
   terrain2: 4,  // Pasture (Wool)
   terrain3: 4,  // Fields (Grain)

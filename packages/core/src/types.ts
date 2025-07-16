@@ -59,7 +59,7 @@ export interface NumberAssignment {
 export interface Hex {
   id: string
   position: HexCoordinate
-  terrain: TerrainType
+  terrain: TerrainType | null
   numberToken: number | null
   hasBlocker: boolean
 }

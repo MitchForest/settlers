@@ -92,7 +92,7 @@ export type AssetResolver = (assetPath: string, fallbackPath?: string) => Promis
 
 // Utility types for component props
 export interface HexTileProps {
-  terrain: string
+  terrain: string | null
   numberToken: number | null
   position: { x: number, y: number }
   theme: GameTheme | null
@@ -100,6 +100,7 @@ export interface HexTileProps {
   isHovered?: boolean
   isSelected?: boolean
   isEmpty?: boolean
+  disableTransitions?: boolean
 }
 
 export interface GamePieceProps {

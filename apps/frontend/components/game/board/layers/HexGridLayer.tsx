@@ -7,32 +7,22 @@ import { getAssetResolver } from '@/lib/theme-loader'
 import { hexToPixel } from '@/lib/board-utils'
 import type { Board, Hex } from '@settlers/core'
 
-// Generate hexagon path points for SVG (copied from HexTile for consistency)
-function getHexPath(x: number, y: number, radius: number): string {
-  // Use pre-calculated points for pointy-top hexagon (like Catan)
-  const points: [number, number][] = [
-    [x, y - radius], // Top (270°)
-    [x + radius * 0.866025403784, y - radius * 0.5], // Top-right (330°)
-    [x + radius * 0.866025403784, y + radius * 0.5], // Bottom-right (30°)
-    [x, y + radius], // Bottom (90°)
-    [x - radius * 0.866025403784, y + radius * 0.5], // Bottom-left (150°)
-    [x - radius * 0.866025403784, y - radius * 0.5], // Top-left (210°)
-  ]
-  return `M ${points.map(p => p.join(',')).join(' L ')} Z`
-}
+
 
 interface HexGridLayerProps {
   board: Board
   theme: GameTheme | null
   onHexSelect?: (hexId: string) => void
   selectedHexId?: string
+  disableTransitions?: boolean
 }
 
 export const HexGridLayer: React.FC<HexGridLayerProps> = ({ 
   board, 
   theme, 
   onHexSelect,
-  selectedHexId
+  selectedHexId,
+  disableTransitions = false
 }) => {
   const [hoveredHexId, setHoveredHexId] = useState<string | null>(null)
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
@@ -136,7 +126,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         {/* Hex tiles - render with geometric fallbacks if no theme/assetResolver */}
         {sortedHexes.map(hex => {
           const isEmptySlot = hex.terrain === null || hex.terrain === undefined
-          const isNonProducing = hex.terrain === 'tile-type-6' || hex.terrain === 'desert'
           const isHovered = hoveredHexId === hex.id
           const isSelected = selectedHexId === hex.id
           
@@ -159,6 +148,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
                 isHovered={isHovered}
                 isSelected={isSelected}
                 isEmpty={isEmptySlot}
+                disableTransitions={disableTransitions}
               />
             </g>
           )

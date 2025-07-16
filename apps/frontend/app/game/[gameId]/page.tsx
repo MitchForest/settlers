@@ -22,7 +22,7 @@ function generateEmptyBoard(): Board {
   hexes.push({ 
     id: '0,0,0',
     position: { q: 0, r: 0, s: 0 },
-    terrain: null as any, // Truly empty - no terrain assigned yet
+    terrain: null as TerrainType | null, // Truly empty - no terrain assigned yet
     numberToken: null,
     hasBlocker: false
   })
@@ -36,7 +36,7 @@ function generateEmptyBoard(): Board {
     hexes.push({
       id: `${pos.q},${pos.r},${pos.s}`,
       position: pos,
-      terrain: null as any, // Truly empty - no terrain assigned yet
+      terrain: null, // Truly empty - no terrain assigned yet
       numberToken: null,
       hasBlocker: false
     })
@@ -53,7 +53,7 @@ function generateEmptyBoard(): Board {
     hexes.push({
       id: `${pos.q},${pos.r},${pos.s}`,
       position: pos,
-      terrain: null as any, // Truly empty - no terrain assigned yet
+      terrain: null, // Truly empty - no terrain assigned yet
       numberToken: null,
       hasBlocker: false
     })
@@ -154,10 +154,16 @@ function fixNumbersAfterTerrainShuffle(board: Board): Board {
 export default function GamePage() {
   const [board, setBoard] = useState<Board>(generateEmptyBoard())
   const [step, setStep] = useState<'empty' | 'terrain' | 'numbers'>('empty')
+  const [boardClearCallback, setBoardClearCallback] = useState<(() => void) | null>(null)
+  const [isShuffling, setIsShuffling] = useState(false)
 
   const handleGenerateEmpty = () => {
     setBoard(generateEmptyBoard())
     setStep('empty')
+    // Clear any selected hexes when board is cleared
+    if (boardClearCallback) {
+      boardClearCallback()
+    }
   }
 
   const handleAddTerrains = () => {
@@ -170,8 +176,13 @@ export default function GamePage() {
     setStep('numbers')
   }
 
-  const handleShuffleTerrains = () => {
+  const handleShuffleTerrains = async () => {
     if (step !== 'empty') {
+      setIsShuffling(true)
+      
+      // Disable transitions, update immediately
+      await new Promise(resolve => setTimeout(resolve, 0))
+      
       // If we have numbers, we need to be careful about the non-producing tile
       const newBoard = addTerrainsToBoard(board)
       
@@ -182,12 +193,22 @@ export default function GamePage() {
       } else {
         setBoard(newBoard)
       }
+      
+      // Re-enable transitions after a brief delay
+      setTimeout(() => setIsShuffling(false), 50)
     }
   }
 
-  const handleShuffleNumbers = () => {
+  const handleShuffleNumbers = async () => {
     if (step === 'numbers') {
+      setIsShuffling(true)
+      
+      // Disable transitions, update immediately
+      await new Promise(resolve => setTimeout(resolve, 0))
       setBoard(addNumbersToBoard(board))
+      
+      // Re-enable transitions after a brief delay
+      setTimeout(() => setIsShuffling(false), 50)
     }
   }
 
@@ -260,7 +281,12 @@ export default function GamePage() {
       </div>
 
       {/* Game Board */}
-      <GameBoard board={board} testPieces={TEST_PIECES} />
+      <GameBoard 
+        board={board} 
+        testPieces={TEST_PIECES}
+        onBoardClear={(callback) => setBoardClearCallback(() => callback)}
+        disableTransitions={isShuffling}
+      />
     </div>
   )
 } 

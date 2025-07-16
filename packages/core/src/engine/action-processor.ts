@@ -672,7 +672,7 @@ function calculateResourceDistribution(
       // Find all buildings adjacent to this hex
       // (Simplified - would need proper adjacency check)
       state.board.vertices.forEach(vertex => {
-        if (vertex.building) {
+        if (vertex.building && hex.terrain) {
           const playerId = vertex.building.owner
           const resourceType = getResourceForTerrain(hex.terrain)
           
@@ -725,9 +725,11 @@ function collectSetupResources(state: GameState, vertexId: string): Partial<Reso
   // Find hexes adjacent to this vertex
   // (Simplified - would need proper adjacency check)
   state.board.hexes.forEach(hex => {
-    const resourceType = getResourceForTerrain(hex.terrain)
-    if (resourceType) {
-      resources[resourceType] = (resources[resourceType] || 0) + 1
+    if (hex.terrain) {
+      const resourceType = getResourceForTerrain(hex.terrain)
+      if (resourceType) {
+        resources[resourceType] = (resources[resourceType] || 0) + 1
+      }
     }
   })
   

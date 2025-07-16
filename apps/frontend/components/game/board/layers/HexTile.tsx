@@ -64,7 +64,8 @@ export const HexTile: React.FC<HexTileProps> = ({
   assetResolver,
   isHovered = false,
   isSelected = false,
-  isEmpty = false
+  isEmpty = false,
+  disableTransitions = false
 }) => {
   const [resolvedAsset, setResolvedAsset] = useState<string | null>(null)
   const [assetType, setAssetType] = useState<'png' | 'svg' | 'unknown'>('unknown')
@@ -73,7 +74,7 @@ export const HexTile: React.FC<HexTileProps> = ({
   const isEmptyTile = terrain === null || terrain === undefined || isEmpty
   const resource = terrain && theme?.resources.find(r => r.id === terrain)
   const hexPath = getHexPath(0, 0, HEX_RADIUS) // Centered at origin
-  const glowHexPath = getHexPath(0, 0, HEX_RADIUS + 2) // Just slightly larger for glow
+
   const fallbackColor = terrain ? getTerrainColor(terrain, theme?.resources || []) : '#F4E4BC' // Sand color for unassigned
   const probabilityDots = numberToken ? getProbabilityDots(numberToken) : 0
   
@@ -128,7 +129,7 @@ export const HexTile: React.FC<HexTileProps> = ({
   return (
     <g 
       transform={`translate(${position.x}, ${position.y}) ${getScaleTransform()}`}
-      className={`hex-tile ${isEmptyTile ? '' : 'cursor-pointer'} transition-all duration-200 ease-out`}
+      className={`hex-tile ${isEmptyTile ? '' : 'cursor-pointer'} ${disableTransitions ? '' : 'transition-all duration-200 ease-out'}`}
       style={{ 
         filter: (isHovered || isSelected) && !isEmptyTile ? `drop-shadow(0 ${isSelected ? '6px 12px' : '4px 8px'} rgba(0,0,0,0.${isSelected ? '3' : '2'}))` : 'none'
       }}
@@ -158,7 +159,7 @@ export const HexTile: React.FC<HexTileProps> = ({
                 fill="none"
                 stroke={isEmpty ? "#94a3b8" : "#374151"}
                 strokeWidth={isEmpty ? 1 : 2}
-                strokeDasharray={isEmpty ? "4,4" : "none"}
+                strokeDasharray="none"
               />
             </>
           ) : (
@@ -170,7 +171,7 @@ export const HexTile: React.FC<HexTileProps> = ({
                 fill={fallbackColor}
                 stroke={isEmpty ? "#94a3b8" : "#374151"}
                 strokeWidth={isEmpty ? 1 : 2}
-                strokeDasharray={isEmpty ? "4,4" : "none"}
+                strokeDasharray="none"
               />
               
               {/* SVG asset overlay */}
@@ -193,11 +194,12 @@ export const HexTile: React.FC<HexTileProps> = ({
         /* Default: Simple Colored Hex or Empty Board Slot */
         <path
           d={hexPath}
-          fill={isEmptyTile ? "transparent" : fallbackColor}
-          stroke={isEmptyTile ? "#94a3b8" : "#374151"}
+          fill={isEmptyTile ? (isHovered ? "rgba(148, 163, 184, 0.4)" : "rgba(255, 255, 255, 0.1)") : fallbackColor}
+          stroke={isEmptyTile ? (isHovered ? "rgba(148, 163, 184, 0.8)" : "#94a3b8") : (isSelected ? "#10b981" : (isHovered ? "#8b5cf6" : "#374151"))}
           strokeWidth={isEmptyTile ? 1 : 2}
-          strokeDasharray={isEmptyTile ? "4,4" : "none"}
+          strokeDasharray="none"
           opacity={1}
+          style={{ pointerEvents: 'all' }}
         />
       )}
       
@@ -215,23 +217,11 @@ export const HexTile: React.FC<HexTileProps> = ({
         </text>
       )}
       
-      {/* Glow effect for hover/selected */}
-      {((isHovered && !isEmptyTile) || (isHovered && isEmptyTile) || isSelected) && getGlowOpacity() > 0 && (
-        <path
-          d={hexPath}
-          fill="none"
-          stroke={getGlowColor()}
-          strokeWidth="2"
-          opacity={getGlowOpacity()}
-          style={{
-            pointerEvents: 'none'
-          }}
-        />
-      )}
+
       
       {/* Number token - cohesive unit with proper colors */}
       {numberToken && !isEmptyTile && (
-        <g className="number-token transition-all duration-200">
+        <g className={`number-token ${disableTransitions ? '' : 'transition-all duration-200'}`}>
           {/* Token background - 5% off white */}
           <circle
             cx={0}
