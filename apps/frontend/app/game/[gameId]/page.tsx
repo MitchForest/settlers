@@ -219,7 +219,7 @@ export default function GamePage({ params }: GamePageProps) {
           ...state,
           players: updatedPlayers,
           turn: 1,
-          phase: 'actions' as const, // Start in actions phase for testing
+          phase: 'roll' as const, // Start with rolling dice
           board: board || state.board // Use local board if available
         }
         
@@ -254,30 +254,79 @@ export default function GamePage({ params }: GamePageProps) {
       return
     }
 
-    // For now, just handle some basic actions
-    switch (action.type) {
-      case 'roll':
-        const result = gameManager.processAction(action)
-        if (result.success) {
-          updateGameState(result.newState)
-          toast.success(result.message || 'Dice rolled!')
-        } else {
-          toast.error(result.error || 'Failed to roll dice')
-        }
-        break
-        
-      case 'endTurn':
-        const endResult = gameManager.processAction(action)
-        if (endResult.success) {
-          updateGameState(endResult.newState)
-          toast.success('Turn ended')
-        } else {
-          toast.error(endResult.error || 'Failed to end turn')
-        }
-        break
-        
-      default:
-        toast.info(`${action.type} action not implemented yet`)
+    console.log('Processing action:', action)
+
+    // Process the action through the game manager
+    const result = gameManager.processAction(action)
+    
+    if (result.success) {
+      // Update the game state
+      updateGameState(result.newState)
+      
+      // Handle specific action types
+      switch (action.type) {
+        case 'roll':
+          const dice = result.newState.dice
+          if (dice) {
+            if (dice.sum === 7) {
+              toast.warning(`Rolled ${dice.sum}! Robber activated!`)
+            } else {
+              toast.success(`Rolled ${dice.die1} + ${dice.die2} = ${dice.sum}`)
+              
+              // Show resource distribution if any
+              const resourceEvent = result.events.find(e => e.type === 'resourcesDistributed')
+              if (resourceEvent) {
+                const distribution = resourceEvent.data.distribution
+                let totalGained = 0
+                Object.values(distribution).forEach((playerResources: any) => {
+                  Object.values(playerResources).forEach((amount: any) => {
+                    totalGained += amount
+                  })
+                })
+                if (totalGained > 0) {
+                  toast.info(`${totalGained} resources distributed to players`)
+                }
+              }
+            }
+          }
+          break
+          
+        case 'build':
+          // Check if this started placement mode
+          const placementEvent = result.events.find(e => e.type === 'placementModeStarted')
+          if (placementEvent) {
+            toast.info(`Click on the board to place your ${placementEvent.data.buildingType}`)
+          }
+          break
+          
+        case 'buyCard':
+          const cardEvent = result.events.find(e => e.type === 'developmentCardPurchased')
+          if (cardEvent) {
+            toast.success(`Development card purchased!`)
+          }
+          break
+          
+        case 'endTurn':
+          toast.info('Turn ended')
+          break
+          
+        default:
+          // Show generic success for other actions
+          if (result.message) {
+            toast.success(result.message)
+          } else {
+            toast.success('Action completed')
+          }
+      }
+      
+      // Log events for debugging
+      if (result.events.length > 0) {
+        console.log('Game events:', result.events)
+      }
+    } else {
+      // Show error message
+      toast.error(result.error || 'Action failed')
+      console.error('Action failed:', result.error, action)
     }
   }
 

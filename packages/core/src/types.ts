@@ -187,6 +187,10 @@ export interface GameState {
   developmentDeck: DevelopmentCard[]
   discardPile: DevelopmentCard[]
   winner: PlayerId | null
+  pendingRoadBuilding?: {
+    playerId: PlayerId
+    roadsRemaining: number
+  }
   startedAt: Date
   updatedAt: Date
 }

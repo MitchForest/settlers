@@ -1,6 +1,6 @@
 'use client'
 
-import { GameState, GameAction } from '@settlers/core'
+import { GameState, GameAction, PlayerId } from '@settlers/core'
 import { PlayersPanel } from './PlayersPanel'
 import { PlayerSidebar } from './PlayerSidebar'
 import { DiceRoller } from './DiceRoller'
@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LogOut, Info, RotateCcw, Palette, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
-
-
+import { toast } from 'sonner'
 
 interface GameInterfaceProps {
   gameState: GameState | null
@@ -33,6 +32,14 @@ export function GameInterface({
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState(120)
 
+  // Get current player and determine if it's their turn
+  const currentPlayer = gameState?.players.get(gameState.currentPlayer)
+  const isMyTurn = localPlayerId === gameState?.currentPlayer
+  const myPlayer = localPlayerId ? gameState?.players.get(localPlayerId) : null
+
+  // Determine if player can roll dice
+  const canRoll = isMyTurn && gameState?.phase === 'roll'
+
   // Timer countdown
   useEffect(() => {
     if (!gameState?.currentPlayer) return
@@ -51,285 +58,253 @@ export function GameInterface({
     return () => clearInterval(timer)
   }, [gameState?.currentPlayer, gameState?.turn])
 
-  // Handle timeout separately to avoid setState during render
+  // Handle timeout
   useEffect(() => {
-    if (timeRemaining === 0 && gameState?.currentPlayer) {
-      onTurnTimeout?.()
-      setTimeRemaining(120) // Reset after timeout is handled
+    if (timeRemaining === 0 && onTurnTimeout) {
+      onTurnTimeout()
     }
-  }, [timeRemaining, gameState?.currentPlayer, onTurnTimeout])
+  }, [timeRemaining, onTurnTimeout])
 
-  const handleGameAction = (action: GameAction) => {
-    // Call external handler
-    if (onAction) {
-      onAction(action)
+  // Format time display
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Handle game actions
+  const handleAction = (action: GameAction) => {
+    if (!localPlayerId || !onAction) {
+      toast.error('Cannot perform action: Not connected to game')
+      return
     }
+
+    // Set the player ID for the action
+    const actionWithPlayer = {
+      ...action,
+      playerId: localPlayerId
+    }
+
+    console.log('Sending game action:', actionWithPlayer)
+    onAction(actionWithPlayer)
   }
 
-  const handleAuto = () => {
-    // AI play functionality - to be implemented later
-            // Handle auto play
+  // Handle dice roll
+  const handleDiceRoll = (action: GameAction) => {
+    if (!canRoll) {
+      toast.error('You cannot roll dice right now')
+      return
+    }
+    handleAction(action)
   }
 
-  const handleExit = () => {
-    // Exit game functionality
-            // Handle exit game
+  // Handle end turn
+  const handleEndTurn = () => {
+    if (!isMyTurn) {
+      toast.error('Not your turn')
+      return
+    }
+
+    const endTurnAction: GameAction = {
+      type: 'endTurn',
+      playerId: localPlayerId!,
+      data: {}
+    }
+    handleAction(endTurnAction)
   }
 
-  const handleInfo = () => {
-    setShowInfoDialog(true)
-  }
-
-
-  const getLocalPlayer = () => {
-    if (!gameState || !localPlayerId) return null
-    return gameState.players.get(localPlayerId) || null
-  }
-
-  const isMyTurn = () => {
-    return gameState?.currentPlayer === localPlayerId
-  }
-
-  if (!gameState || !localPlayerId) {
+  // Don't render if no game state
+  if (!gameState) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-white">Loading game...</div>
+      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center bg-black/50">
+        <div className="text-white text-xl">Loading game...</div>
       </div>
     )
   }
 
-  const localPlayer = getLocalPlayer()
-  if (!localPlayer) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-white">Player not found</div>
-      </div>
-    )
-  }
+  return (
+    <div className="absolute inset-0 w-full h-full pointer-events-none">
+      {/* Game Header */}
+      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
+        <div className="flex items-center justify-between bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+          {/* Left side - Game info */}
+          <div className="flex items-center space-x-4">
+            <div className="text-white">
+              <div className="font-semibold">Turn {gameState.turn}</div>
+              <div className="text-sm text-white/70">
+                Phase: {gameState.phase} | {currentPlayer ? `${currentPlayer.name}'s turn` : 'Waiting...'}
+              </div>
+            </div>
+            
+            {/* Turn Timer */}
+            <div className="text-white bg-black/30 px-3 py-1 rounded-md">
+              <div className="text-sm font-mono">{formatTime(timeRemaining)}</div>
+            </div>
+          </div>
 
-      return (
-      <div className="relative w-full h-screen flex flex-col pointer-events-none">
-      {/* 
-        CONSISTENT SPACING CALCULATION - FINAL:
-        - Top edge: 16px margin (top-4 = 16px)
-        - Top bar: 80px height (h-20 = 80px) → ends at 96px from top
-        - Gap: 16px (top-28 = 112px, so 112px - 96px = 16px gap)
-        - Sidebar: fills space (top-28 to bottom: 112px) → ends at 112px from bottom
-        - Gap: 16px (bottom bar starts at 96px from bottom: 112px - 96px = 16px gap)
-        - Bottom bar: 80px height (bottom: 16px, height: 80px) → 16px-96px from bottom
-        - Bottom edge: 16px margin
-        Perfect 16px spacing everywhere!
-      */}
-      {/* Top Players Panel - FULL WIDTH FOR TESTING */}
-      <PlayersPanel
-        gameState={gameState}
-        playerAvatars={playerAvatars}
-      />
-
-      {/* Left Sidebar - Wider for content */}
-      <div className="absolute left-4 w-80 top-24 z-10 pointer-events-auto" style={{ bottom: 'calc(16px + 48px + 16px)' }}>
-        <PlayerSidebar
-          gameState={gameState}
-          localPlayer={localPlayer}
-          isMyTurn={isMyTurn()}
-          onAction={handleGameAction}
-          timeRemaining={timeRemaining}
-        />
-      </div>
-
-      {/* Floating Action Buttons - Below sidebar */}
-      <div className="absolute left-4 w-80 bottom-4 z-10 pointer-events-auto">
-        <div className="flex flex-row justify-between">
-          {/* Regenerate/Restart Button */}
-          <Button
-            size="icon"
-            onClick={() => setShowRestartDialog(true)}
-            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
-            title={gameState?.turn === 0 ? 'Regenerate Board' : 'Restart Game'}
-          >
-            <RotateCcw className="h-6 w-6" />
-          </Button>
-          
-          {/* Theme Toggle Button */}
-          <Button
-            size="icon"
-            onClick={() => {
-              // TODO: Implement theme toggle (PNG vs plain backgrounds)
-              // Toggle theme assets
-            }}
-            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
-            title="Toggle Theme Assets"
-          >
-            <Palette className="h-6 w-6" />
-          </Button>
-          
-          {/* Auto Mode Button */}
-          <Button
-            size="icon"
-            onClick={handleAuto}
-            disabled
-            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
-            title="Auto Mode (Coming Soon)"
-          >
-            <Play className="h-6 w-6" />
-          </Button>
-          
-          {/* Exit Button */}
-          <Button
-            size="icon"
-            onClick={handleExit}
-            disabled
-            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
-            title="Exit Game (Coming Soon)"
-          >
-            <LogOut className="h-6 w-6" />
-          </Button>
-          
-          {/* Info Button */}
-          <Button
-            size="icon"
-            onClick={handleInfo}
-            className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
-            title="Game Information"
-          >
-            <Info className="h-6 w-6" />
-          </Button>
+          {/* Right side - Action buttons */}
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowInfoDialog(true)}
+            >
+              <Info className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={onRegenerateBoard}
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={() => setShowRestartDialog(true)}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Dice Roller (center-bottom when needed) */}
-      {gameState.phase === 'roll' && isMyTurn() && (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10">
+             {/* Left Sidebar - My Player Info */}
+       {myPlayer && (
+         <div className="absolute left-4 top-24 bottom-4 z-20 pointer-events-auto w-80">
+           <PlayerSidebar 
+             gameState={gameState}
+             localPlayer={myPlayer}
+             isMyTurn={isMyTurn}
+             onAction={handleAction}
+             timeRemaining={timeRemaining}
+           />
+         </div>
+       )}
+
+       {/* Right Sidebar - Other Players */}
+       <div className="absolute right-4 top-24 bottom-4 z-20 pointer-events-auto w-80">
+         <PlayersPanel 
+           gameState={gameState}
+           playerAvatars={playerAvatars}
+         />
+       </div>
+
+      {/* Bottom Center - Game Actions */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 pointer-events-auto">
+        <div className="flex items-center space-x-4">
+          {/* Dice Roller */}
           <DiceRoller
-            onRoll={() => {
-              handleGameAction({
-                type: 'roll',
-                playerId: localPlayerId,
-                data: {}
-              })
-            }}
-            disabled={false}
+            onRoll={handleDiceRoll}
+            disabled={!isMyTurn}
+            canRoll={canRoll}
+            currentRoll={gameState.dice}
           />
+
+          {/* End Turn Button */}
+          {isMyTurn && gameState.phase === 'actions' && (
+            <Button
+              onClick={handleEndTurn}
+              size="lg"
+              variant="secondary"
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              End Turn
+            </Button>
+          )}
+
+          {/* Phase-specific instructions */}
+          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/20 text-white text-center max-w-md">
+            <div className="text-sm">
+              {getPhaseInstructions(gameState.phase, isMyTurn)}
+            </div>
+          </div>
         </div>
-      )}
-      
-      {/* Restart/Regenerate Confirmation Dialog */}
+      </div>
+
+      {/* Dialogs */}
       <Dialog open={showRestartDialog} onOpenChange={setShowRestartDialog}>
-        <DialogContent className="bg-black/60 backdrop-blur-md border border-white/20 text-white">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Game Actions</DialogTitle>
-            <DialogDescription className="text-white/80">
-              Choose an action below. These changes cannot be undone.
+            <DialogTitle>Restart Game?</DialogTitle>
+            <DialogDescription>
+              This will end the current game and return you to the main menu. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-            <Button 
-              onClick={() => {
-                setShowRestartDialog(false)
-                // Call the regenerate function from parent
-                onRegenerateBoard?.()
-              }}
-              className="bg-blue-600/80 hover:bg-blue-700/90 text-white border-0"
-            >
-              Regenerate Board
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowRestartDialog(false)
-                // TODO: Implement restart functionality
-                // Handle game restart
-              }}
-              className="bg-orange-600/80 hover:bg-orange-700/90 text-white border-0"
-            >
-              Restart Game
-            </Button>
-            <Button 
-              onClick={() => setShowRestartDialog(false)}
-              variant="outline"
-              className="bg-transparent border-white/40 text-white hover:bg-white/10"
-            >
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRestartDialog(false)}>
               Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => window.location.href = '/'}>
+              Restart Game
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Info Dialog */}
       <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
-        <DialogContent className="bg-black/60 backdrop-blur-md border border-white/20 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Game Information</DialogTitle>
           </DialogHeader>
-          
-          <div className="space-y-6 text-sm">
-            {/* Building Costs */}
+          <div className="space-y-4">
             <div>
-              <h3 className="font-semibold text-white mb-3">Building Costs</h3>
-              <div className="space-y-2 bg-white/10 rounded p-3">
-                <div className="flex justify-between items-center">
-                  <span>🏠 Settlement</span>
-                  <div className="flex space-x-1">
-                    <span>🌲</span><span>🧱</span><span>🌾</span><span>🐑</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>🏙️ City</span>
-                  <div className="flex space-x-1">
-                    <span>🌾🌾</span><span>🪨🪨🪨</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>🛤️ Road</span>
-                  <div className="flex space-x-1">
-                    <span>🌲</span><span>🧱</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>📜 Development Card</span>
-                  <div className="flex space-x-1">
-                    <span>🌾</span><span>🐑</span><span>🪨</span>
-                  </div>
-                </div>
+              <h4 className="font-semibold mb-2">Current Game State</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>Turn: {gameState.turn}</div>
+                <div>Phase: {gameState.phase}</div>
+                <div>Players: {gameState.players.size}</div>
+                <div>Current Player: {currentPlayer?.name || 'Unknown'}</div>
               </div>
             </div>
-
-            {/* How to Play */}
-            <div>
-              <h3 className="font-semibold text-white mb-3">How to Play</h3>
-              <div className="space-y-2 text-white/80">
-                <p><strong>Goal:</strong> Be the first to reach 10 victory points</p>
-                <p><strong>Turn Structure:</strong></p>
-                <ul className="list-disc ml-4 space-y-1">
-                  <li>Roll dice to produce resources</li>
-                  <li>Trade resources with other players or the bank</li>
-                  <li>Build roads, settlements, cities, or buy development cards</li>
-                  <li>End your turn</li>
-                </ul>
-                <p><strong>Victory Points:</strong></p>
-                <ul className="list-disc ml-4 space-y-1">
-                  <li>Settlement = 1 point</li>
-                  <li>City = 2 points</li>
-                  <li>Longest Road = 2 points (5+ roads)</li>
-                  <li>Largest Army = 2 points (3+ knights)</li>
-                  <li>Victory Point development cards = 1 point each</li>
-                </ul>
+            
+            {gameState.dice && (
+              <div>
+                <h4 className="font-semibold mb-2">Last Roll</h4>
+                <div className="text-sm">
+                  {gameState.dice.die1} + {gameState.dice.die2} = {gameState.dice.sum}
+                </div>
               </div>
-            </div>
-
-            {/* Resources */}
+            )}
+            
             <div>
-              <h3 className="font-semibold text-white mb-3">Resources</h3>
-              <div className="grid grid-cols-2 gap-2 text-white/80">
-                <div>🌲 Wood (Forest)</div>
-                <div>🧱 Brick (Hills)</div>
-                <div>🪨 Ore (Mountains)</div>
-                <div>🌾 Wheat (Fields)</div>
-                <div>🐑 Sheep (Pasture)</div>
+              <h4 className="font-semibold mb-2">Victory Conditions</h4>
+              <div className="text-sm text-muted-foreground">
+                First player to reach 10 victory points wins!
               </div>
             </div>
           </div>
+          <DialogFooter>
+            <Button onClick={() => setShowInfoDialog(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
+}
+
+// Helper function to get phase-specific instructions
+function getPhaseInstructions(phase: string, isMyTurn: boolean): string {
+  if (!isMyTurn) return "Waiting for other player..."
+  
+  switch (phase) {
+    case 'setup1':
+      return "Place your first settlement and road"
+    case 'setup2':
+      return "Place your second settlement and road"
+    case 'roll':
+      return "Roll the dice to start your turn"
+    case 'actions':
+      return "Build, trade, or play development cards"
+    case 'discard':
+      return "Discard half your cards (7+ cards)"
+    case 'moveRobber':
+      return "Move the robber to a new hex"
+    case 'steal':
+      return "Choose a player to steal from"
+    case 'ended':
+      return "Game Over!"
+    default:
+      return "Your turn"
+  }
 } 

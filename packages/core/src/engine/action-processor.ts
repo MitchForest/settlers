@@ -29,7 +29,8 @@ import {
   getTotalResourceCount,
   calculateDiscardCount,
   randomChoice,
-  shuffleArray
+  shuffleArray,
+  hasResources
 } from '../calculations'
 import * as validator from './state-validator'
 
@@ -72,6 +73,8 @@ export function processAction(
       return processTradeAction(state, action)
     case 'playCard':
       return processPlayCard(state, action)
+    case 'buyCard':
+      return processBuyCard(state, action)
     case 'moveRobber':
       return processMoveRobber(state, action)
     case 'stealResource':
@@ -277,7 +280,19 @@ function processPlaceRoad(state: GameState, action: GameAction): ProcessResult {
 function processBuildAction(state: GameState, action: GameAction): ProcessResult {
   const { buildingType, position } = action.data
   
-  // Route to specific building placement handlers
+  // If no position specified, this is entering "placement mode"
+  if (!position) {
+    // For now, just return a message indicating placement mode started
+    // The UI will handle the placement interaction
+    return {
+      success: true,
+      newState: state,
+      events: [createEvent(state, 'placementModeStarted', action.playerId, { buildingType })],
+      message: `Select where to place your ${buildingType}`
+    }
+  }
+  
+  // Route to specific building placement handlers with position
   if (buildingType === 'settlement' || buildingType === 'city') {
     return processBuilding(state, {
       ...action,
@@ -310,6 +325,58 @@ function processTradeAction(state: GameState, action: GameAction): ProcessResult
   }
 }
 
+// ============= Buy Development Card =============
+
+function processBuyCard(state: GameState, action: GameAction): ProcessResult {
+  const player = state.players.get(action.playerId)!
+  const events: GameEvent[] = []
+  
+  // Validate player has resources
+  if (!hasResources(player.resources, BUILDING_COSTS.developmentCard)) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'Insufficient resources to buy development card'
+    }
+  }
+  
+  // Check if deck has cards
+  if (state.developmentDeck.length === 0) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: 'No development cards left in deck'
+    }
+  }
+  
+  let newState = deepCloneState(state)
+  const newPlayer = { ...player }
+  
+  // Deduct resources
+  newPlayer.resources = subtractResources(player.resources, BUILDING_COSTS.developmentCard)
+  
+  // Draw card from deck
+  const card = newState.developmentDeck.pop()!
+  card.purchasedTurn = state.turn
+  newPlayer.developmentCards.push(card)
+  
+  newState.players.set(action.playerId, newPlayer)
+  
+  events.push(createEvent(state, 'developmentCardPurchased', action.playerId, { 
+    cardType: card.type,
+    cardId: card.id
+  }))
+  
+  return {
+    success: true,
+    newState,
+    events,
+    message: 'Development card purchased!'
+  }
+}
+
 // ============= Play Development Card =============
 
 function processPlayCard(state: GameState, action: GameAction): ProcessResult {
@@ -334,18 +401,83 @@ function processPlayCard(state: GameState, action: GameAction): ProcessResult {
       newPlayer.knightsPlayed += 1
       newState.phase = 'moveRobber'
       newState = updateLargestArmy(newState)
+      events.push(createEvent(state, 'knightPlayed', action.playerId, { 
+        knightsPlayed: newPlayer.knightsPlayed 
+      }))
       break
       
     case 'roadBuilding':
-      // Would need UI to select where to build 2 roads
+      // Set a flag to allow building 2 free roads
+      newState.pendingRoadBuilding = {
+        playerId: action.playerId,
+        roadsRemaining: 2
+      }
+      events.push(createEvent(state, 'roadBuildingActivated', action.playerId, {}))
       break
       
     case 'yearOfPlenty':
-      // Would need UI to select 2 resources
+      // Handle resource selection - if resources specified, apply them
+      if (action.data.resources) {
+        const selectedResources = action.data.resources as Partial<ResourceCards>
+        const totalSelected = Object.values(selectedResources).reduce((sum, count) => sum + (count || 0), 0)
+        
+        if (totalSelected === 2) {
+          // Apply the selected resources
+          Object.entries(selectedResources).forEach(([resource, count]) => {
+            if (count && count > 0) {
+              (newPlayer.resources as any)[resource] += count
+            }
+          })
+          events.push(createEvent(state, 'yearOfPlentyUsed', action.playerId, { resources: selectedResources }))
+        } else {
+          return {
+            success: false,
+            newState: state,
+            events: [],
+            error: 'Must select exactly 2 resources'
+          }
+        }
+      } else {
+        // Need resource selection from UI
+        return {
+          success: false,
+          newState: state,
+          events: [],
+          error: 'Must specify which 2 resources to take'
+        }
+      }
       break
       
     case 'monopoly':
-      // Would need UI to select resource type
+      // Handle resource type selection
+      if (action.data.resourceType) {
+        const resourceType = action.data.resourceType as keyof ResourceCards
+        let totalStolen = 0
+        
+        // Take all cards of this type from other players
+        newState.players.forEach((otherPlayer, otherPlayerId) => {
+          if (otherPlayerId !== action.playerId) {
+            const amount = otherPlayer.resources[resourceType]
+            if (amount > 0) {
+              otherPlayer.resources[resourceType] = 0
+              newPlayer.resources[resourceType] += amount
+              totalStolen += amount
+            }
+          }
+        })
+        
+        events.push(createEvent(state, 'monopolyUsed', action.playerId, { 
+          resourceType, 
+          totalStolen 
+        }))
+      } else {
+        return {
+          success: false,
+          newState: state,
+          events: [],
+          error: 'Must specify which resource type to monopolize'
+        }
+      }
       break
       
     case 'victory':
@@ -353,6 +485,7 @@ function processPlayCard(state: GameState, action: GameAction): ProcessResult {
         ...newPlayer.score,
         hidden: newPlayer.score.hidden + VICTORY_POINTS.victoryCard
       }
+      events.push(createEvent(state, 'victoryPointRevealed', action.playerId, {}))
       break
   }
   
@@ -601,13 +734,41 @@ function distributeResources(state: GameState, distribution: Map<PlayerId, Resou
   return newState
 }
 
-function getPlayersAdjacentToHex(state: GameState, hexPosition: any): Array<{ playerId: PlayerId, buildingType: string }> {
+function getPlayersAdjacentToHex(state: GameState, hexPosition: { q: number, r: number, s: number }): Array<{ playerId: PlayerId, buildingType: string }> {
   const adjacentPlayers: Array<{ playerId: PlayerId, buildingType: string }> = []
   
-  // Implementation would check vertices adjacent to hex for buildings
-  // This is a simplified version
+  // Get all vertices adjacent to this hex
+  const adjacentVertices = getAdjacentVertices(hexPosition)
+  
+  adjacentVertices.forEach(vertexId => {
+    const vertex = state.board.vertices.get(vertexId)
+    if (vertex && vertex.building) {
+      adjacentPlayers.push({
+        playerId: vertex.building.owner,
+        buildingType: vertex.building.type
+      })
+    }
+  })
   
   return adjacentPlayers
+}
+
+// Helper function to get vertices adjacent to a hex
+function getAdjacentVertices(hexPos: { q: number, r: number, s: number }): string[] {
+  const { q, r, s } = hexPos
+  
+  // Each hex has 6 vertices at the corners
+  // Using cube coordinates, the vertices are at specific offsets
+  const vertices = [
+    `${q},${r},${s}-N`,     // North
+    `${q},${r},${s}-NE`,    // Northeast  
+    `${q},${r},${s}-SE`,    // Southeast
+    `${q},${r},${s}-S`,     // South
+    `${q},${r},${s}-SW`,    // Southwest
+    `${q},${r},${s}-NW`     // Northwest
+  ]
+  
+  return vertices
 }
 
 function updateLongestRoad(state: GameState): GameState {

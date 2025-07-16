@@ -124,11 +124,11 @@ function DevCard({ card, onPlay, canPlay, disabled = false }: DevCardProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="text-2xl">{getCardEmoji(card.type)}</div>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-white">
               {getCardDisplayName(card.type)}
             </div>
-            <div className="text-xs text-white/60">
+            <div className="text-xs text-white/60 break-words">
               {getCardDescription(card.type)}
             </div>
           </div>
