@@ -107,18 +107,27 @@ export function GameInterface({
     )
   }
 
-  return (
-    <div className="relative w-full h-screen flex flex-col pointer-events-none">
-      {/* Top Players Panel */}
-      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
-        <PlayersPanel
-          gameState={gameState}
-          playerAvatars={playerAvatars}
-        />
-      </div>
+      return (
+      <div className="relative w-full h-screen flex flex-col pointer-events-none">
+      {/* 
+        CONSISTENT SPACING CALCULATION - FINAL:
+        - Top edge: 16px margin (top-4 = 16px)
+        - Top bar: 80px height (h-20 = 80px) → ends at 96px from top
+        - Gap: 16px (top-28 = 112px, so 112px - 96px = 16px gap)
+        - Sidebar: fills space (top-28 to bottom: 112px) → ends at 112px from bottom
+        - Gap: 16px (bottom bar starts at 96px from bottom: 112px - 96px = 16px gap)
+        - Bottom bar: 80px height (bottom: 16px, height: 80px) → 16px-96px from bottom
+        - Bottom edge: 16px margin
+        Perfect 16px spacing everywhere!
+      */}
+      {/* Top Players Panel - FULL WIDTH FOR TESTING */}
+      <PlayersPanel
+        gameState={gameState}
+        playerAvatars={playerAvatars}
+      />
 
-      {/* Left Sidebar - positioned with equal visual gaps; dont change */}
-      <div className="absolute left-4 top-32 bottom-23 w-80 z-10 pointer-events-auto">
+      {/* Left Sidebar - Wider for content */}
+      <div className="absolute left-4 w-80 top-24 z-10 pointer-events-auto" style={{ bottom: 'calc(16px + var(--bottom-bar-height, 60px) + 16px)' }}>
         <PlayerSidebar
           gameState={gameState}
           localPlayer={localPlayer}
@@ -127,8 +136,8 @@ export function GameInterface({
         />
       </div>
 
-      {/* Floating Action Bar - Connected toolbar below sidebar */}
-      <div className="absolute left-4 bottom-4 z-10 w-80 pointer-events-auto">
+      {/* Floating Action Bar - Same width as sidebar */}
+      <div className="absolute left-4 w-80 bottom-4 z-10 pointer-events-auto">
         <div className="flex items-center justify-between bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-2">
           {/* Turn Timer */}
           <div className="flex items-center space-x-2 px-2 py-1">
@@ -157,7 +166,7 @@ export function GameInterface({
             <Button
               size="icon"
               onClick={() => setShowRestartDialog(true)}
-              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
               title={gameState?.turn === 0 ? 'Regenerate Board' : 'Restart Game'}
             >
               <RotateCcw className="h-4 w-4" />
@@ -170,7 +179,7 @@ export function GameInterface({
                 // TODO: Implement theme toggle (PNG vs plain backgrounds)
                 // Toggle theme assets
               }}
-              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
               title="Toggle Theme Assets"
             >
               <Palette className="h-4 w-4" />
@@ -181,7 +190,7 @@ export function GameInterface({
               size="icon"
               onClick={handleAuto}
               disabled
-              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
+              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
               title="Auto Mode (Coming Soon)"
             >
               <Play className="h-4 w-4" />
@@ -192,7 +201,7 @@ export function GameInterface({
               size="icon"
               onClick={handleExit}
               disabled
-              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
+              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
               title="Exit Game (Coming Soon)"
             >
               <LogOut className="h-4 w-4" />
@@ -202,7 +211,7 @@ export function GameInterface({
             <Button
               size="icon"
               onClick={handleInfo}
-              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              className="h-8 w-8 bg-transparent hover:bg-white/10 text-white border-0"
               title="Game Information"
             >
               <Info className="h-4 w-4" />

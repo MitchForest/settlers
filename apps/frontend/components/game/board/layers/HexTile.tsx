@@ -77,15 +77,13 @@ export function HexTile({
   return (
     <g 
       transform={`translate(${position.x}, ${position.y})`}
-      className="cursor-pointer transition-all duration-200 ease-out"
+      className="cursor-pointer"
       data-hex-id={hexId}
       onMouseEnter={() => onHexHover?.(hexId || null)}
       onMouseLeave={() => onHexHover?.(null)}
       onClick={() => onHexClick?.(hexId || null)}
       style={{ 
         pointerEvents: 'all',
-        // Elevation layering for hover state
-        zIndex: showHoverEffect ? 10 : (isSelected ? 5 : 1),
       }}
     >
       {/* Texture pattern definition */}
@@ -117,36 +115,31 @@ export function HexTile({
         stroke={theme?.ui?.hexBorder || '#2D3748'}
         strokeWidth={theme?.ui?.hexBorderWidth || 1}
         opacity={isEmpty ? 0.3 : 1}
-        className="transition-all duration-200 ease-out"
         style={{
-          // Surgical micro-interactions: subtle scale + elevation
-          transform: showHoverEffect ? 'scale(1.03) translateY(-1px)' : 'scale(1)',
-          transformOrigin: 'center',
-          // Clean drop shadow for elevation (no brightness/saturation changes)
-          filter: showHoverEffect 
-            ? 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15))' 
-            : isSelected 
-              ? 'drop-shadow(0 3px 12px rgba(37, 99, 235, 0.25))' 
-              : 'none',
-          // Subtle opacity shift for depth
-          opacity: showHoverEffect 
-            ? (isEmpty ? 0.4 : 0.95) 
-            : (isEmpty ? 0.3 : 1),
+          filter: isSelected ? 'drop-shadow(0 3px 12px rgba(37, 99, 235, 0.25))' : 'none',
         }}
       />
 
-      {/* Selection indicator only - no hover overlay needed */}
+      {/* Subtle white hover overlay */}
+      {showHoverEffect && (
+        <path
+          d={hexPath}
+          fill="var(--hover-overlay)"
+          className="pointer-events-none"
+          style={{
+            transition: `opacity var(--interaction-timing) var(--interaction-easing)`,
+          }}
+        />
+      )}
+
+      {/* Selection indicator */}
       {isSelected && (
         <path
           d={hexPath}
           fill="none"
           stroke="rgba(37, 99, 235, 0.7)"
           strokeWidth="2"
-          className="transition-all duration-300 ease-out pointer-events-none"
-          style={{
-            transform: 'scale(1.02)',
-            transformOrigin: 'center',
-          }}
+          className="pointer-events-none"
         />
       )}
       

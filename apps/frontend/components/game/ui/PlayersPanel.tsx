@@ -2,7 +2,7 @@
 
 import { Player, GameState } from '@settlers/core'
 import { PlayerAvatar } from './AvatarPicker'
-import { Card } from '@/components/ui/card'
+
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Crown, Shield, Sword } from 'lucide-react'
@@ -21,8 +21,8 @@ export function PlayersPanel({
     .sort(([, a], [, b]) => b.score.total - a.score.total)
 
   return (
-    <Card className="bg-black/30 backdrop-blur-sm border-white/20 p-4">
-      <div className="flex items-center justify-between">
+    <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
+      <div className="flex items-center justify-between px-2">
         {/* Players List - Evenly spaced with balanced edge spacing */}
         <div className="flex items-center justify-evenly w-full px-4">
           {sortedPlayers.map(([playerId, player]) => {
@@ -44,7 +44,7 @@ export function PlayersPanel({
           })}
         </div>
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -67,9 +67,10 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
       <HoverCardTrigger asChild>
         <div className={`
           flex items-center space-x-3 p-2 rounded-lg transition-all duration-200 cursor-pointer
+          bg-black/30 backdrop-blur-sm hover:bg-black/40
           ${isCurrentTurn 
-            ? 'bg-yellow-400/20 border border-yellow-400/50 shadow-lg' 
-            : 'bg-white/5 hover:bg-white/10'
+            ? 'border border-yellow-400/50 shadow-lg' 
+            : 'border border-white/20'
           }
         `}>
           {/* Avatar & Name */}

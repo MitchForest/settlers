@@ -13,6 +13,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       duration={3000}
       visibleToasts={1}
       position="bottom-right"
+      style={{ 
+        bottom: '16px',
+        right: '16px',
+        margin: '0',
+        padding: '0'
+      }}
       toastOptions={{
         style: {
           background: 'var(--card)',
