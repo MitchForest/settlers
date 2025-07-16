@@ -1,21 +1,17 @@
 import React, { useState } from 'react'
+import { defineHex, Orientation } from 'honeycomb-grid'
 import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
 
 const HEX_RADIUS = 32
 
-// Generate hexagon path points for SVG
-function getHexPath(x: number, y: number, radius: number): string {
-  // Use pre-calculated points for pointy-top hexagon (like Catan)
-  // Starting from top point and going clockwise
-  const points: [number, number][] = [
-    [x, y - radius], // Top (270°)
-    [x + radius * 0.866025403784, y - radius * 0.5], // Top-right (330°)
-    [x + radius * 0.866025403784, y + radius * 0.5], // Bottom-right (30°)
-    [x, y + radius], // Bottom (90°)
-    [x - radius * 0.866025403784, y + radius * 0.5], // Bottom-left (150°)
-    [x - radius * 0.866025403784, y - radius * 0.5], // Top-left (210°)
-  ]
-  return `M ${points.map(p => p.join(',')).join(' L ')} Z`
+// Generate hexagon path points for SVG using honeycomb-grid
+function getHexPath(radius: number): string {
+  // Let honeycomb-grid calculate the correct corners based on orientation
+  const CustomHex = defineHex({ dimensions: radius, orientation: Orientation.FLAT })
+  const hex = new CustomHex({ q: 0, r: 0 }) // Create hex at origin
+  const corners = hex.corners // Library calculates all the math! (corners is a getter)
+  const points = corners.map((corner: any) => [corner.x, corner.y])
+  return `M ${points.map((p: any) => p.join(',')).join(' L ')} Z`
 }
 
 // Get terrain color using Settlers terminology
@@ -63,7 +59,7 @@ export function HexTile({
   // Use theme resources or fallback to empty array
   const resources = theme?.resources || []
   const terrainColor = terrain ? getTerrainColor(terrain, resources) : '#F4E4BC'
-  const hexPath = getHexPath(0, 0, HEX_RADIUS)
+  const hexPath = getHexPath(HEX_RADIUS)
   
   // Only apply hover effects to playable terrain (not sea or desert)
   const isPlayableTerrain = terrain && terrain !== 'sea' && terrain !== 'desert'
