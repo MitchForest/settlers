@@ -15,6 +15,7 @@ interface HexGridLayerProps {
   onHexSelect?: (hexId: string) => void
   selectedHexId?: string
   disableTransitions?: boolean
+  viewBox?: string // Override viewBox calculation
 }
 
 export const HexGridLayer: React.FC<HexGridLayerProps> = ({ 
@@ -22,7 +23,8 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   theme, 
   onHexSelect,
   selectedHexId,
-  disableTransitions = false
+  disableTransitions = false,
+  viewBox
 }) => {
   const [hoveredHexId, setHoveredHexId] = useState<string | null>(null)
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
@@ -112,7 +114,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       <svg
         width="100%"
         height="100%"
-        viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
+        viewBox={viewBox || `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
         className="hex-grid-svg"
         style={{ background: 'transparent' }}
       >

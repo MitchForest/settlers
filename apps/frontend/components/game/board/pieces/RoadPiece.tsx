@@ -13,7 +13,6 @@ interface RoadPieceProps {
 }
 
 export function RoadPiece({ 
-  road, 
   startPosition, 
   endPosition, 
   playerColor = 0,
@@ -23,12 +22,6 @@ export function RoadPiece({
 }: RoadPieceProps) {
   // Get player color using CSS variables
   const cssPlayerColor = `var(--player-${playerColor})`
-  
-  // Calculate road direction for better visual representation
-  const dx = endPosition.x - startPosition.x
-  const dy = endPosition.y - startPosition.y
-  const length = Math.sqrt(dx * dx + dy * dy)
-  const angle = Math.atan2(dy, dx) * 180 / Math.PI
   
   return (
     <g onClick={onClick} className={onClick ? 'cursor-pointer' : ''}>

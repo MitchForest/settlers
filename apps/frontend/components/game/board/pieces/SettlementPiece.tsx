@@ -1,6 +1,6 @@
 'use client'
 
-import { Building, PlayerColor } from '@settlers/core'
+import { Building } from '@settlers/core'
 
 interface SettlementPieceProps {
   building: Building
@@ -12,7 +12,6 @@ interface SettlementPieceProps {
 }
 
 export function SettlementPiece({ 
-  building, 
   position, 
   playerColor = 0,
   size = 32, 

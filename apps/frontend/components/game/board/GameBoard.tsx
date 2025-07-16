@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { Board } from '@settlers/core'
 import { useState, useEffect, useCallback } from 'react'
 import { AssetResolver, GameTheme } from '@/lib/theme-types'
+import { useZoomPan } from '@/lib/use-zoom-pan'
+import { useBoardInteractions } from '@/lib/use-board-interactions'
 
 interface TestPiece {
   type: 'settlement' | 'city' | 'road'
@@ -35,6 +37,24 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
   const { theme: contextTheme, loading } = useGameTheme()
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
   const [selectedHexId, setSelectedHexId] = useState<string | undefined>(undefined)
+  
+  // Zoom and pan controls
+  const zoomPanControls = useZoomPan()
+  const boardInteractions = useBoardInteractions({ 
+    controls: zoomPanControls,
+    shouldAllowPan: (event: React.MouseEvent) => {
+      // Don't allow panning if clicking on a hex tile or interactive game element
+      const target = event.target as Element
+      if (!target) return true
+      
+      // Check if the clicked element is a hex tile or within hex-related elements
+      const isHexTile = target.closest('g[class*="cursor-pointer"]') || 
+                       target.closest('.hex-tile') ||
+                       target.closest('[data-hex-interactive]')
+      
+      return !isHexTile
+    }
+  })
   
   // Use forceTheme if provided, otherwise use context theme
   const theme = forceTheme !== undefined ? forceTheme : contextTheme
@@ -88,13 +108,20 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
   }
   
   return (
-    <div className={cn(
-      "fixed inset-0 w-screen h-screen",
-      "overflow-hidden"
-    )}
-    style={{
-      background: `linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent))`
-    }}>
+    <div 
+      className={cn(
+        "fixed inset-0 w-screen h-screen overflow-hidden select-none",
+        boardInteractions.isDragging ? "cursor-grabbing" : "cursor-grab"
+      )}
+      style={{
+        background: `linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent))`
+      }}
+      onWheel={boardInteractions.handleWheel}
+      onMouseDown={boardInteractions.handleMouseDown}
+      onMouseMove={boardInteractions.handleMouseMove}
+      onMouseUp={boardInteractions.handleMouseUp}
+      onMouseLeave={boardInteractions.handleMouseLeave}
+    >
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,var(--color-game-bg-primary)_0%,transparent_50%)]" />
@@ -102,12 +129,13 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
       </div>
     
     {/* Base Layer: Hex Grid for terrain - renders with or without theme */}
-    <div className="absolute inset-0 z-10">
+    <div className="absolute inset-0 z-10 pointer-events-auto">
       <HexGridLayer 
         board={board} 
         theme={theme} // Can be null - component handles fallbacks
         selectedHexId={selectedHexId}
         disableTransitions={disableTransitions}
+        viewBox={zoomPanControls.getViewBoxString()}
         onHexSelect={(hexId) => {
           console.log('Hex selected:', hexId)
           setSelectedHexId(hexId === selectedHexId ? undefined : hexId) // Toggle selection
@@ -123,7 +151,7 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
           height="100%"
           className="port-layer-svg"
           style={{ background: 'transparent' }}
-          viewBox="-200 -200 400 400"
+          viewBox={zoomPanControls.getViewBoxString()}
         >
           <PortLayer board={board} />
         </svg>
@@ -138,7 +166,7 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
           height="100%"
           className="game-pieces-svg"
           style={{ background: 'transparent' }}
-          viewBox="-200 -200 400 400"
+          viewBox={zoomPanControls.getViewBoxString()}
         >
           <PieceLayer 
             board={board} 

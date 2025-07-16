@@ -12,7 +12,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       duration={2000}
       visibleToasts={4}
-      position="top-right"
+      position="bottom-right"
       toastOptions={{
         style: {
           background: 'var(--card)',

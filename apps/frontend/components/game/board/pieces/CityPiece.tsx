@@ -12,7 +12,6 @@ interface CityPieceProps {
 }
 
 export function CityPiece({ 
-  building, 
   position, 
   playerColor = 0,
   size = 40, 

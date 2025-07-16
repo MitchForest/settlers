@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useGameTheme } from '@/components/theme-provider'
+import { GameTheme } from '@/lib/theme-types'
 import { Player, ResourceCards, GamePhase, BUILDING_COSTS } from '@settlers/core'
 import { hasResources } from '@settlers/core'
 
@@ -13,7 +14,7 @@ interface PlayerDashboardProps {
   gamePhase: GamePhase
   isCurrentPlayer: boolean
   canRoll?: boolean
-  onAction: (action: string, data?: any) => void
+  onAction: (action: string, data?: unknown) => void
 }
 
 export function PlayerDashboard({ 
@@ -187,11 +188,11 @@ export function PlayerDashboard({
 interface ResourceCardProps {
   type: keyof ResourceCards
   count: number
-  theme: any
+  theme: GameTheme | null
 }
 
 function ResourceCard({ type, count, theme }: ResourceCardProps) {
-  const displayName = theme?.displayNames?.resources?.[type] || type
+  const displayName = theme?.resourceMapping?.[type]?.displayName || type
   const emoji = getResourceEmoji(type)
   
   return (

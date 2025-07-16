@@ -72,9 +72,9 @@
   --terrain-sea: #1E40AF;
 
   /* === GAME BACKGROUND COLORS (Set dynamically by theme loader) === */
-  --game-bg-primary: #1e3a8a;
-  --game-bg-secondary: #3730a3;
-  --game-bg-accent: #065f46;
+  --game-bg-primary: #16a34a;     /* Forest green */
+  --game-bg-secondary: #8b5cf6;   /* Purple */
+  --game-bg-accent: #059669;      /* Emerald green */
 
   /* === PLAYER COLORS === */
   --player-0: #E8E9EA;
@@ -182,9 +182,9 @@
   --terrain-desert: #E4C1A0; /* Lighter sand for dark mode */
 
   /* === GAME BACKGROUND COLORS DARK === */
-  --game-bg-primary: #1e40af; /* Slightly brighter blue for dark mode */
-  --game-bg-secondary: #4338ca; /* Slightly brighter purple for dark mode */
-  --game-bg-accent: #047857; /* Slightly brighter emerald for dark mode */
+  --game-bg-primary: #22c55e; /* Brighter green for dark mode */
+  --game-bg-secondary: #a855f7; /* Brighter purple for dark mode */
+  --game-bg-accent: #10b981;  /* Brighter emerald for dark mode */
 }
 
 @layer base {
@@ -601,4 +601,13 @@
 
 .hex-fade-in {
   animation: hex-fade-in 0.5s var(--spring-out);
+}
+
+/* Cursor utilities for zoom/pan */
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
 }

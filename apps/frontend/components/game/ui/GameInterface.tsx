@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { GameFlowManager, GameState, GameAction, DiceRoll, createEmptyResources } from '@settlers/core'
+import { GameFlowManager, GameState, GameAction } from '@settlers/core'
 import { DiceRoller } from './DiceRoller'
 import { PlayerDashboard } from './PlayerDashboard'
 import { DevelopmentCards } from './DevelopmentCards'
@@ -30,7 +30,7 @@ export function GameInterface({ onAction }: GameInterfaceProps) {
       const state = manager.getState()
       const updatedPlayers = new Map(state.players)
       
-      updatedPlayers.forEach((player, playerId) => {
+      updatedPlayers.forEach((player) => {
         // Give starting resources for testing
         player.resources = {
           wood: 2,
@@ -70,7 +70,7 @@ export function GameInterface({ onAction }: GameInterfaceProps) {
     }
   }, [])
 
-  const handleGameAction = (actionType: string, data?: any) => {
+  const handleGameAction = (actionType: string, data?: unknown) => {
     if (!gameManager || !gameState || !localPlayerId) {
       toast.error('Game not initialized')
       return
@@ -166,7 +166,7 @@ export function GameInterface({ onAction }: GameInterfaceProps) {
     }
   }
 
-  const handleDiceRoll = (dice: DiceRoll) => {
+  const handleDiceRoll = () => {
     // The dice component handles the UI, this is called after animation
     handleGameAction('roll')
   }
@@ -196,7 +196,7 @@ export function GameInterface({ onAction }: GameInterfaceProps) {
       const state = manager.getState()
       const updatedPlayers = new Map(state.players)
       
-      updatedPlayers.forEach((player, playerId) => {
+      updatedPlayers.forEach((player) => {
         player.resources = {
           wood: 2,
           brick: 2,

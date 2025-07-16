@@ -102,7 +102,6 @@ function Die({ value, isAnimating }: DieProps) {
 }
 
 function DiceFace({ value }: { value: number }) {
-  const dots = Array.from({ length: value }, (_, i) => i)
   
   return (
     <div className="w-12 h-12 relative">

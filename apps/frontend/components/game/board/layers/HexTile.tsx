@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
 
 const HEX_RADIUS = 32
@@ -48,7 +48,7 @@ function getProbabilityDots(num: number): number {
   return probabilities[num] || 0
 }
 
-export const HexTile: React.FC<HexTileProps> = ({
+export function HexTile({
   terrain,
   numberToken,
   position,
@@ -57,22 +57,54 @@ export const HexTile: React.FC<HexTileProps> = ({
   isSelected = false,
   isEmpty = false,
   disableTransitions = false
-}) => {
-  // Use CSS colors only - no asset loading
-  const terrainColor = terrain ? getTerrainColor(terrain, theme?.resources || []) : '#F4E4BC'
+}: HexTileProps) {
+  const [localHovered, setLocalHovered] = useState(false)
   
+  // Use theme resources or fallback to empty array
+  const resources = theme?.resources || []
+  const terrainColor = terrain ? getTerrainColor(terrain, resources) : '#F4E4BC'
+  const hexPath = getHexPath(0, 0, HEX_RADIUS)
+  
+  // Only apply hover effects to playable terrain (not sea or desert)
+  const isPlayableTerrain = terrain && terrain !== 'sea' && terrain !== 'desert'
+  const showHoverEffect = (isHovered || localHovered) && isPlayableTerrain
+  
+  const handleMouseEnter = () => {
+    if (isPlayableTerrain) {
+      setLocalHovered(true)
+    }
+  }
+  
+  const handleMouseLeave = () => {
+    if (isPlayableTerrain) {
+      setLocalHovered(false)
+    }
+  }
+
   return (
-    <g transform={`translate(${position.x}, ${position.y})`}>
-      {/* Hex Background */}
+    <g 
+      transform={`translate(${position.x}, ${position.y})`}
+      className={isPlayableTerrain ? "cursor-pointer" : ""}
+      data-hex-interactive={isPlayableTerrain ? "true" : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Hex base */}
       <path
-        d={getHexPath(0, 0, HEX_RADIUS)}
+        d={hexPath}
         fill={terrainColor}
-        stroke={theme?.ui?.hexBorder || '#333333'}
-        strokeWidth={theme?.ui?.hexBorderWidth || 2}
+        stroke={theme?.ui?.hexBorder || '#2D3748'}
+        strokeWidth={theme?.ui?.hexBorderWidth || 1}
         opacity={isEmpty ? 0.3 : 1}
-        className={`hex-tile ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''} ${!disableTransitions ? 'transition-all duration-200' : ''}`}
+        className={`
+          transition-all duration-200
+          ${isSelected ? "filter-[url(#hexGlow)]" : ""}
+          ${showHoverEffect ? "brightness-110 drop-shadow-md" : ""}
+          ${!disableTransitions ? "transition-all duration-200" : ""}
+        `}
         style={{
-          filter: isHovered ? 'brightness(1.1)' : isSelected ? 'brightness(1.2)' : 'none'
+          filter: showHoverEffect ? 'brightness(1.15) drop-shadow(0 4px 8px rgba(0,0,0,0.2))' : 
+                  isSelected ? 'brightness(1.2)' : 'none'
         }}
       />
       
