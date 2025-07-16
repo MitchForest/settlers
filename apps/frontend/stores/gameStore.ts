@@ -119,14 +119,14 @@ export const useGameStore = create<GameStore>()(
       currentPlayer: () => {
         const state = get().gameState
         if (!state) return null
-        return state.players.get(state.playerOrder[state.currentPlayerIndex]) || null
+        return state.players.get(state.currentPlayer) || null
       },
       
       isMyTurn: () => {
         const state = get().gameState
         const localId = get().localPlayerId
         if (!state || !localId) return false
-        return state.playerOrder[state.currentPlayerIndex] === localId
+        return state.currentPlayer === localId
       },
       
       myPlayer: () => {

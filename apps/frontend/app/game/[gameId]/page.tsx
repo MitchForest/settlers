@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { generateBoard } from '@settlers/core'
@@ -20,24 +20,8 @@ export default function GamePage({ params }: GamePageProps) {
   const [board, setBoard] = useState<Board | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  // Auto-load settlers theme when component mounts
-  useEffect(() => {
-    if (!theme && !themeLoading) {
-      loadTheme('settlers').catch(error => {
-        console.error('Failed to load settlers theme:', error)
-        toast.error('Failed to load game theme')
-      })
-    }
-  }, [theme, themeLoading, loadTheme])
-
-  // Generate test board when theme is loaded
-  useEffect(() => {
-    if (theme && !board && !isGenerating) {
-      generateTestBoard()
-    }
-  }, [theme, board, isGenerating])
-
-  const generateTestBoard = async () => {
+  // Memoize the generateTestBoard function to fix useEffect dependency
+  const generateTestBoard = useCallback(async () => {
     if (!theme) {
       toast.error('Theme must be loaded before generating board')
       return
@@ -54,7 +38,24 @@ export default function GamePage({ params }: GamePageProps) {
     } finally {
       setIsGenerating(false)
     }
-  }
+  }, [theme])
+
+  // Auto-load settlers theme when component mounts
+  useEffect(() => {
+    if (!theme && !themeLoading) {
+      loadTheme('settlers').catch(error => {
+        console.error('Failed to load settlers theme:', error)
+        toast.error('Failed to load game theme')
+      })
+    }
+  }, [theme, themeLoading, loadTheme])
+
+  // Generate test board when theme is loaded
+  useEffect(() => {
+    if (theme && !board && !isGenerating) {
+      generateTestBoard()
+    }
+  }, [theme, board, isGenerating, generateTestBoard])
 
   const regenerateBoard = () => {
     setBoard(null)

@@ -169,7 +169,8 @@ export const GamePiece: React.FC<GamePieceProps> = ({
   assetResolver,
   rotation = 0
 }) => {
-  const playerColor = theme?.players.colors.find(c => c.id === playerId)
+  // Find player color in the new theme structure
+  const playerColor = theme?.playerColors.find(c => c.id.toString() === playerId)
   const color = playerColor?.primary || getHardcodedPlayerColor(playerId)
   const useGeometricFallbacks = !theme || !assetResolver
   
@@ -178,10 +179,10 @@ export const GamePiece: React.FC<GamePieceProps> = ({
       {type === 'road' && (
         <Road
           color={color}
-          width={theme?.structures.road.width || 4}
+          width={4}
           length={24}
           rotation={rotation}
-          asset={theme?.structures.road.asset}
+          asset={undefined}
           assetResolver={assetResolver || (async () => null)}
           isDefault={useGeometricFallbacks}
         />
@@ -191,7 +192,7 @@ export const GamePiece: React.FC<GamePieceProps> = ({
         <Settlement
           color={color}
           level={1}
-          asset={theme?.structures.settlement.asset}
+          asset={undefined}
           assetResolver={assetResolver || (async () => null)}
           isDefault={useGeometricFallbacks}
         />
@@ -201,7 +202,7 @@ export const GamePiece: React.FC<GamePieceProps> = ({
         <Settlement
           color={color}
           level={2}
-          asset={theme?.structures.city.asset}
+          asset={undefined}
           assetResolver={assetResolver || (async () => null)}
           isDefault={useGeometricFallbacks}
         />

@@ -48,7 +48,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   
   // Convert hexes to pixel coordinates for rendering
   const renderHexes = useMemo(() => {
-    return board.hexes.map(hex => {
+    return Array.from(board.hexes.values()).map(hex => {
       const hexId = `${hex.position.q},${hex.position.r},${hex.position.s}`
       const pixelPos = hexToPixel(hex.position.q, hex.position.r, 32)
       
