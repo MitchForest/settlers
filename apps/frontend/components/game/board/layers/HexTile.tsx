@@ -14,6 +14,12 @@ function getHexPath(radius: number): string {
   return `M ${points.map((p: any) => p.join(',')).join(' L ')} Z`
 }
 
+// Get terrain texture path from theme
+function getTerrainTexture(terrain: string, resources: ResourceTheme[]): string | null {
+  const resource = resources.find((r: ResourceTheme) => r.id === terrain)
+  return resource?.texture || null
+}
+
 // Get terrain color using Settlers terminology
 function getTerrainColor(terrain: string, resources: ResourceTheme[]): string {
   const resource = resources.find((r: ResourceTheme) => r.id === terrain)
@@ -59,7 +65,11 @@ export function HexTile({
   // Use theme resources or fallback to empty array
   const resources = theme?.resources || []
   const terrainColor = terrain ? getTerrainColor(terrain, resources) : '#F4E4BC'
+  const terrainTexture = terrain ? getTerrainTexture(terrain, resources) : null
   const hexPath = getHexPath(HEX_RADIUS)
+  
+  // Generate unique pattern ID for this hex
+  const patternId = terrainTexture ? `texture-${terrain}-${Math.random().toString(36).substr(2, 9)}` : null
   
   // Only apply hover effects to playable terrain (not sea or desert)
   const isPlayableTerrain = terrain && terrain !== 'sea' && terrain !== 'desert'
@@ -85,10 +95,32 @@ export function HexTile({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Hex base */}
+      {/* Texture pattern definition */}
+      {terrainTexture && patternId && (
+        <defs>
+          <pattern 
+            id={patternId}
+            patternUnits="objectBoundingBox"
+            patternContentUnits="objectBoundingBox"
+            width="1"
+            height="1"
+          >
+            <image
+              href={terrainTexture}
+              width="1.3"
+              height="1.3"
+              x="-0.15"
+              y="-0.15"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </pattern>
+        </defs>
+      )}
+
+      {/* Hex base - use texture or fallback to color */}
       <path
         d={hexPath}
-        fill={terrainColor}
+        fill={terrainTexture && patternId ? `url(#${patternId})` : terrainColor}
         stroke={theme?.ui?.hexBorder || '#2D3748'}
         strokeWidth={theme?.ui?.hexBorderWidth || 1}
         opacity={isEmpty ? 0.3 : 1}

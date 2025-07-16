@@ -1,351 +1,349 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { GameFlowManager, GameState, GameAction } from '@settlers/core'
+import { GameState, GameAction } from '@settlers/core'
+import { PlayersPanel } from './PlayersPanel'
+import { PlayerSidebar } from './PlayerSidebar'
 import { DiceRoller } from './DiceRoller'
-import { PlayerDashboard } from './PlayerDashboard'
-import { DevelopmentCards } from './DevelopmentCards'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Bot, LogOut, Info, RotateCcw, Palette, Play } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
+
 
 interface GameInterfaceProps {
+  gameState: GameState | null
+  localPlayerId: string | null
+  playerAvatars: Record<string, { avatar: string; name: string }>
   onAction?: (action: GameAction) => void
+  onTurnTimeout?: () => void
+  onRegenerateBoard?: () => void
 }
 
-export function GameInterface({ onAction }: GameInterfaceProps) {
-  const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
-  const [gameState, setGameState] = useState<GameState | null>(null)
-  const [localPlayerId, setLocalPlayerId] = useState<string | null>(null)
+export function GameInterface({ 
+  gameState, 
+  localPlayerId, 
+  playerAvatars, 
+  onAction, 
+  onTurnTimeout,
+  onRegenerateBoard
+}: GameInterfaceProps) {
 
-  // Initialize demo game with starting resources
+  const [showRestartDialog, setShowRestartDialog] = useState(false)
+  const [showInfoDialog, setShowInfoDialog] = useState(false)
+  const [timeRemaining, setTimeRemaining] = useState(120)
+
+  // Timer countdown
   useEffect(() => {
-    try {
-      const manager = GameFlowManager.createGame({
-        playerNames: ['You', 'AI Player 1', 'AI Player 2', 'AI Player 3'],
-        randomizePlayerOrder: true
-      })
-      
-      // Give players starting resources for testing
-      const state = manager.getState()
-      const updatedPlayers = new Map(state.players)
-      
-      updatedPlayers.forEach((player) => {
-        // Give starting resources for testing
-        player.resources = {
-          wood: 2,
-          brick: 2,
-          ore: 1,
-          wheat: 2,
-          sheep: 1
-        }
-        
-        // Give some development cards for testing
-        if (state.developmentDeck.length > 0) {
-          const card1 = state.developmentDeck.pop()!
-          const card2 = state.developmentDeck.pop()!
-          card1.purchasedTurn = 0
-          card2.purchasedTurn = 0
-          player.developmentCards.push(card1, card2)
-        }
-      })
-      
-      const modifiedState = {
-        ...state,
-        players: updatedPlayers,
-        turn: 1 // Start at turn 1 so cards are playable
-      }
-      
-      setGameManager(manager)
-      setGameState(modifiedState)
-      
-      // Set local player as the first player
-      const playerIds = Array.from(modifiedState.players.keys())
-      setLocalPlayerId(playerIds[0])
-      
-      toast.success('Demo game created with starting resources!')
-    } catch (error) {
-      console.error('Failed to create demo game:', error)
-      toast.error('Failed to create demo game')
-    }
-  }, [])
-
-  const handleGameAction = (actionType: string, data?: unknown) => {
-    if (!gameManager || !gameState || !localPlayerId) {
-      toast.error('Game not initialized')
-      return
-    }
-
-    let action: GameAction
-
-    switch (actionType) {
-      case 'roll':
-        action = {
-          type: 'roll',
-          playerId: localPlayerId,
-          data: {}
-        }
-        break
-      case 'endTurn':
-        action = {
-          type: 'endTurn',
-          playerId: localPlayerId,
-          data: {}
-        }
-        break
-      case 'playCard':
-        action = {
-          type: 'playCard',
-          playerId: localPlayerId,
-          data: { cardId: data }
-        }
-        break
-      case 'buyCard':
-        // Simulate buying a development card
-        const localPlayer = gameState.players.get(localPlayerId)!
-        if (gameState.developmentDeck.length > 0) {
-          const newCard = gameState.developmentDeck[0]
-          newCard.purchasedTurn = gameState.turn
-          
-          // Update state manually since we don't have full action processing for buy card yet
-          const newState = { ...gameState }
-          const newPlayers = new Map(newState.players)
-          const updatedPlayer = { ...localPlayer }
-          
-          // Deduct resources
-          updatedPlayer.resources = {
-            wood: Math.max(0, updatedPlayer.resources.wood),
-            brick: Math.max(0, updatedPlayer.resources.brick),
-            ore: Math.max(0, updatedPlayer.resources.ore - 1),
-            wheat: Math.max(0, updatedPlayer.resources.wheat - 1),
-            sheep: Math.max(0, updatedPlayer.resources.sheep - 1)
-          }
-          
-          // Add card
-          updatedPlayer.developmentCards.push({ ...newCard })
-          newState.developmentDeck = newState.developmentDeck.slice(1)
-          newPlayers.set(localPlayerId, updatedPlayer)
-          newState.players = newPlayers
-          
-          setGameState(newState)
-          toast.success('Development card purchased!')
-          return
-        } else {
-          toast.error('No development cards left')
-          return
-        }
-      case 'buildSettlement':
-        toast.info('Settlement placement not implemented yet')
-        return
-      case 'buildCity':
-        toast.info('City placement not implemented yet')
-        return
-      case 'buildRoad':
-        toast.info('Road placement not implemented yet')
-        return
-      case 'trade':
-        toast.info('Trading not implemented yet')
-        return
-      default:
-        toast.error(`Unknown action: ${actionType}`)
-        return
-    }
-
-    const result = gameManager.processAction(action)
+    if (!gameState?.currentPlayer) return
     
-    if (result.success) {
-      setGameState(result.newState)
-      toast.success(result.message || 'Action completed')
-      
-      // Call external handler if provided
-      if (onAction) {
-        onAction(action)
-      }
-    } else {
-      toast.error(result.error || 'Action failed')
+    setTimeRemaining(120)
+    
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          return 0 // Don't reset to 120 here, let separate effect handle timeout
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [gameState?.currentPlayer, gameState?.turn])
+
+  // Handle timeout separately to avoid setState during render
+  useEffect(() => {
+    if (timeRemaining === 0 && gameState?.currentPlayer) {
+      onTurnTimeout?.()
+      setTimeRemaining(120) // Reset after timeout is handled
+    }
+  }, [timeRemaining, gameState?.currentPlayer, onTurnTimeout])
+
+  const handleGameAction = (action: GameAction) => {
+    // Call external handler
+    if (onAction) {
+      onAction(action)
     }
   }
 
-  const handleDiceRoll = () => {
-    // The dice component handles the UI, this is called after animation
-    handleGameAction('roll')
+  const handleAuto = () => {
+    // AI play functionality - to be implemented later
+    console.log('Auto play')
   }
 
-  const handlePlayCard = (cardId: string) => {
-    handleGameAction('playCard', cardId)
+  const handleExit = () => {
+    // Exit game functionality
+    console.log('Exit game')
   }
 
-  const getCurrentPlayer = () => {
-    if (!gameState) return null
-    return gameState.players.get(gameState.currentPlayer) || null
+  const handleInfo = () => {
+    setShowInfoDialog(true)
   }
+
 
   const getLocalPlayer = () => {
     if (!gameState || !localPlayerId) return null
     return gameState.players.get(localPlayerId) || null
   }
 
-  const restartGame = () => {
-    try {
-      const manager = GameFlowManager.createGame({
-        playerNames: ['You', 'AI Player 1', 'AI Player 2', 'AI Player 3'],
-        randomizePlayerOrder: true
-      })
-      
-      // Give players starting resources for testing
-      const state = manager.getState()
-      const updatedPlayers = new Map(state.players)
-      
-      updatedPlayers.forEach((player) => {
-        player.resources = {
-          wood: 2,
-          brick: 2,
-          ore: 1,
-          wheat: 2,
-          sheep: 1
-        }
-        
-        if (state.developmentDeck.length > 0) {
-          const card1 = state.developmentDeck.pop()!
-          const card2 = state.developmentDeck.pop()!
-          card1.purchasedTurn = 0
-          card2.purchasedTurn = 0
-          player.developmentCards.push(card1, card2)
-        }
-      })
-      
-      const modifiedState = {
-        ...state,
-        players: updatedPlayers,
-        turn: 1
-      }
-      
-      setGameManager(manager)
-      setGameState(modifiedState)
-      
-      const playerIds = Array.from(modifiedState.players.keys())
-      setLocalPlayerId(playerIds[0])
-      
-      toast.success('Game restarted!')
-    } catch (error) {
-      console.error('Failed to restart game:', error)
-      toast.error('Failed to restart game')
-    }
+  const isMyTurn = () => {
+    return gameState?.currentPlayer === localPlayerId
   }
 
   if (!gameState || !localPlayerId) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-white text-lg">Initializing game...</div>
+        <div className="text-white">Loading game...</div>
       </div>
     )
   }
 
-  const currentPlayer = getCurrentPlayer()
   const localPlayer = getLocalPlayer()
-  const isMyTurn = gameState.currentPlayer === localPlayerId
+  if (!localPlayer) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-white">Player not found</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Game Status */}
-      <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">Settlers Demo Game</h2>
-            <div className="text-sm text-white/70">
-              Turn {gameState.turn} | Current: {currentPlayer?.name} | Phase: {gameState.phase}
+    <div className="relative w-full h-screen flex flex-col">
+      {/* Top Players Panel */}
+      <div className="absolute top-4 left-4 right-4 z-20">
+        <PlayersPanel
+          gameState={gameState}
+          playerAvatars={playerAvatars}
+        />
+      </div>
+
+      {/* Left Sidebar - positioned with equal visual gaps; dont change */}
+      <div className="absolute left-4 top-32 bottom-23 w-80 z-10">
+        <PlayerSidebar
+          gameState={gameState}
+          localPlayer={localPlayer}
+          isMyTurn={isMyTurn()}
+          onAction={handleGameAction}
+        />
+      </div>
+
+      {/* Floating Action Bar - Connected toolbar below sidebar */}
+      <div className="absolute left-4 bottom-4 z-10 w-80">
+        <div className="flex items-center justify-between bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-2">
+          {/* Turn Timer */}
+          <div className="flex items-center space-x-2 px-2 py-1">
+            <div className="text-right">
+              <div className="text-xs text-white/60">Turn {gameState?.turn || 0}</div>
+              <div className="text-sm font-mono text-white">
+                {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+              </div>
+            </div>
+            
+            {/* Timer Progress Bar */}
+            <div className="w-8 h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-1000 ${
+                  timeRemaining / 120 > 0.5 ? 'bg-green-500' : 
+                  timeRemaining / 120 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${(timeRemaining / 120) * 100}%` }}
+              />
             </div>
           </div>
-          <Button onClick={restartGame} variant="outline" size="sm">
-            Restart Game
-          </Button>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-0.5">
+            {/* Regenerate/Restart Button */}
+            <Button
+              size="icon"
+              onClick={() => setShowRestartDialog(true)}
+              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              title={gameState?.turn === 0 ? 'Regenerate Board' : 'Restart Game'}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            
+            {/* Theme Toggle Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                // TODO: Implement theme toggle (PNG vs plain backgrounds)
+                console.log('Toggle theme assets')
+              }}
+              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              title="Toggle Theme Assets"
+            >
+              <Palette className="h-4 w-4" />
+            </Button>
+            
+            {/* Auto Mode Button */}
+            <Button
+              size="icon"
+              onClick={handleAuto}
+              disabled
+              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
+              title="Auto Mode (Coming Soon)"
+            >
+              <Play className="h-4 w-4" />
+            </Button>
+            
+            {/* Exit Button */}
+            <Button
+              size="icon"
+              onClick={handleExit}
+              disabled
+              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white/50 border-0 cursor-not-allowed"
+              title="Exit Game (Coming Soon)"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+            
+            {/* Info Button */}
+            <Button
+              size="icon"
+              onClick={handleInfo}
+              className="h-10 w-10 bg-transparent hover:bg-white/10 text-white border-0"
+              title="Game Information"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </Card>
+      </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        {/* Player Dashboard */}
-        {localPlayer && (
-          <PlayerDashboard
-            player={localPlayer}
-            gamePhase={gameState.phase}
-            isCurrentPlayer={isMyTurn}
-            canRoll={gameState.phase === 'roll' && isMyTurn}
-            onAction={handleGameAction}
+      {/* Dice Roller (center-bottom when needed) */}
+      {gameState.phase === 'roll' && isMyTurn() && (
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10">
+          <DiceRoller
+            onRoll={() => {
+              handleGameAction({
+                type: 'roll',
+                playerId: localPlayerId,
+                data: {}
+              })
+            }}
+            disabled={false}
           />
-        )}
+        </div>
+      )}
+      
+      {/* Restart/Regenerate Confirmation Dialog */}
+      <Dialog open={showRestartDialog} onOpenChange={setShowRestartDialog}>
+        <DialogContent className="bg-black/60 backdrop-blur-md border border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle>Game Actions</DialogTitle>
+            <DialogDescription className="text-white/80">
+              Choose an action below. These changes cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+            <Button 
+              onClick={() => {
+                setShowRestartDialog(false)
+                // Call the regenerate function from parent
+                onRegenerateBoard?.()
+              }}
+              className="bg-blue-600/80 hover:bg-blue-700/90 text-white border-0"
+            >
+              Regenerate Board
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowRestartDialog(false)
+                // TODO: Implement restart functionality
+                console.log('Restarting game...')
+              }}
+              className="bg-orange-600/80 hover:bg-orange-700/90 text-white border-0"
+            >
+              Restart Game
+            </Button>
+            <Button 
+              onClick={() => setShowRestartDialog(false)}
+              variant="outline"
+              className="bg-transparent border-white/40 text-white hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        {/* Development Cards */}
-        {localPlayer && localPlayer.developmentCards.length > 0 && (
-          <DevelopmentCards
-            cards={localPlayer.developmentCards}
-            currentTurn={gameState.turn}
-            onPlayCard={handlePlayCard}
-            onBuyCard={() => handleGameAction('buyCard')}
-            canBuyCard={localPlayer.resources.ore >= 1 && localPlayer.resources.wheat >= 1 && localPlayer.resources.sheep >= 1}
-          />
-        )}
-
-        {/* Game Controls */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Dice Roller */}
-          {gameState.phase === 'roll' && isMyTurn && (
-            <DiceRoller
-              onRoll={handleDiceRoll}
-              disabled={!isMyTurn}
-              isRolling={false}
-            />
-          )}
-
-          {/* Last Dice Roll */}
-          {gameState.dice && (
-            <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-              <h3 className="text-lg font-semibold text-white mb-2">Last Roll</h3>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white">
-                  {gameState.dice.sum}
+      {/* Info Dialog */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="bg-black/60 backdrop-blur-md border border-white/20 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Game Information</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 text-sm">
+            {/* Building Costs */}
+            <div>
+              <h3 className="font-semibold text-white mb-3">Building Costs</h3>
+              <div className="space-y-2 bg-white/10 rounded p-3">
+                <div className="flex justify-between items-center">
+                  <span>🏠 Settlement</span>
+                  <div className="flex space-x-1">
+                    <span>🌲</span><span>🧱</span><span>🌾</span><span>🐑</span>
+                  </div>
                 </div>
-                <div className="text-sm text-white/70">
-                  {gameState.dice.die1} + {gameState.dice.die2}
+                <div className="flex justify-between items-center">
+                  <span>🏙️ City</span>
+                  <div className="flex space-x-1">
+                    <span>🌾🌾</span><span>⛏️⛏️⛏️</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>🛤️ Road</span>
+                  <div className="flex space-x-1">
+                    <span>🌲</span><span>🧱</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>📜 Development Card</span>
+                  <div className="flex space-x-1">
+                    <span>🌾</span><span>🐑</span><span>⛏️</span>
+                  </div>
                 </div>
               </div>
-            </Card>
-          )}
-        </div>
+            </div>
 
-        {/* Other Players */}
-        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-2">Other Players</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from(gameState.players.values())
-              .filter(p => p.id !== localPlayerId)
-              .map(player => (
-                <div key={player.id} className="bg-white/5 rounded p-3">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className={`w-4 h-4 rounded-full`} 
-                         style={{ backgroundColor: `var(--color-player-${player.color})` }} />
-                    <span className="text-white text-sm font-medium">{player.name}</span>
-                  </div>
-                  <div className="text-xs text-white/70 space-y-1">
-                    <div>Score: {player.score.total} pts</div>
-                    <div>Cards: {player.developmentCards.length}</div>
-                    <div>Resources: {Object.values(player.resources).reduce((a, b) => a + b, 0)}</div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </Card>
+            {/* How to Play */}
+            <div>
+              <h3 className="font-semibold text-white mb-3">How to Play</h3>
+              <div className="space-y-2 text-white/80">
+                <p><strong>Goal:</strong> Be the first to reach 10 victory points</p>
+                <p><strong>Turn Structure:</strong></p>
+                <ul className="list-disc ml-4 space-y-1">
+                  <li>Roll dice to produce resources</li>
+                  <li>Trade resources with other players or the bank</li>
+                  <li>Build roads, settlements, cities, or buy development cards</li>
+                  <li>End your turn</li>
+                </ul>
+                <p><strong>Victory Points:</strong></p>
+                <ul className="list-disc ml-4 space-y-1">
+                  <li>Settlement = 1 point</li>
+                  <li>City = 2 points</li>
+                  <li>Longest Road = 2 points (5+ roads)</li>
+                  <li>Largest Army = 2 points (3+ knights)</li>
+                  <li>Victory Point development cards = 1 point each</li>
+                </ul>
+              </div>
+            </div>
 
-        {/* Game Help */}
-        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-2">Demo Instructions</h3>
-          <div className="text-sm text-white/70 space-y-1">
-            <p>• This is a working demo of the Settlers game engine with starting resources</p>
-            <p>• Current features: dice rolling, turn management, resource tracking, development cards</p>
-            <p>• Try: buying cards, playing cards (wait a turn after buying), rolling dice</p>
-            <p>• Coming soon: piece placement, trading, robber mechanics</p>
+            {/* Resources */}
+            <div>
+              <h3 className="font-semibold text-white mb-3">Resources</h3>
+              <div className="grid grid-cols-2 gap-2 text-white/80">
+                <div>🌲 Wood (Forest)</div>
+                <div>🧱 Brick (Hills)</div>
+                <div>⛏️ Ore (Mountains)</div>
+                <div>🌾 Wheat (Fields)</div>
+                <div>🐑 Sheep (Pasture)</div>
+              </div>
+            </div>
           </div>
-        </Card>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

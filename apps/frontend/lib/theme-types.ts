@@ -16,6 +16,7 @@ export interface ResourceTheme {
   color: string
   icon: string
   resourceProduced: string | null
+  texture?: string  // Optional path to texture asset
 }
 
 export interface ResourceMapping {

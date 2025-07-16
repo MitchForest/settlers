@@ -3,7 +3,7 @@
 import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
-import { NewGameInterface } from '@/components/game/ui/NewGameInterface'
+import { GameInterface } from '@/components/game/ui/GameInterface'
 import { generateBoard, GameFlowManager, GameState, GameAction } from '@settlers/core'
 import type { Board } from '@settlers/core'
 import { Button } from '@/components/ui/button'
@@ -223,32 +223,17 @@ export default function GamePage({ params }: GamePageProps) {
           />
           
           {/* Game Interface Overlay */}
-          <NewGameInterface
+          <GameInterface
             gameState={gameState}
             localPlayerId={localPlayerId}
             playerAvatars={playerAvatars}
             onAction={handleGameAction}
             onTurnTimeout={handleTurnTimeout}
+            onRegenerateBoard={generateTestBoard}
           />
 
           {/* Board Regeneration Button - Top Right */}
-          <div className="absolute top-20 right-4 z-50">
-            <Button 
-              onClick={regenerateBoard}
-              disabled={isGenerating}
-              variant="outline"
-              className="bg-black/50 backdrop-blur-sm border-white/20 text-white hover:bg-white/10"
-            >
-              {isGenerating ? 'Generating...' : 'Regenerate Board'}
-            </Button>
-          </div>
 
-          {/* Game Status - Bottom Left */}
-          <div className="absolute bottom-4 left-96 z-50">
-            <Card className="bg-black/50 rounded-lg p-3 backdrop-blur-sm text-white text-sm border-white/20">
-              Game ID: {gameId} | Theme: {theme.meta.name} | Board: {board ? 'Generated' : 'None'}
-            </Card>
-          </div>
         </div>
       ) : (
         <div className="h-full flex items-center justify-center">

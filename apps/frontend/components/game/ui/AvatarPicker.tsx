@@ -130,7 +130,7 @@ export function PlayerAvatar({
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border border-gray-800" />
         )}
       </div>
-      <span className="text-sm font-medium text-white truncate max-w-24">
+      <span className="hidden lg:block text-sm font-medium text-white truncate max-w-24">
         {name}
       </span>
     </div>

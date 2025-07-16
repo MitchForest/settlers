@@ -89,7 +89,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
     <div className="h-full flex flex-col bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg">
       {/* Resources Section - Horizontal layout */}
       <div className="p-4 border-b border-white/20">
-        <h3 className="text-sm font-semibold text-white mb-2 text-center">Resources</h3>
+        <h3 className="text-sm font-semibold text-white mb-2 text-left">Resources</h3>
         <div className="flex flex-wrap gap-3 justify-center">
           {Object.entries(localPlayer.resources).map(([resource, count]) => (
             <div key={resource} className="flex items-center space-x-1 bg-white/10 rounded-full px-2 py-1">
@@ -125,7 +125,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     onClick={() => handleAction('buildSettlement')}
                     disabled={!canBuildSettlement}
                     variant={canBuildSettlement ? "default" : "outline"}
-                    className="w-full text-sm justify-start"
+                    className={`w-full text-sm justify-start ${!canBuildSettlement ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>🏠 Build Settlement</span>
@@ -139,7 +139,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     onClick={() => handleAction('buildCity')}
                     disabled={!canBuildCity}
                     variant={canBuildCity ? "default" : "outline"}
-                    className="w-full text-sm justify-start"
+                    className={`w-full text-sm justify-start ${!canBuildCity ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>🏙️ Build City</span>
@@ -153,7 +153,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     onClick={() => handleAction('buildRoad')}
                     disabled={!canBuildRoad}
                     variant={canBuildRoad ? "default" : "outline"}
-                    className="w-full text-sm justify-start"
+                    className={`w-full text-sm justify-start ${!canBuildRoad ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>🛤️ Build Road</span>
@@ -167,7 +167,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     onClick={() => handleAction('buyCard')}
                     disabled={!canBuyCard}
                     variant={canBuyCard ? "default" : "outline"}
-                    className="w-full text-sm justify-start"
+                    className={`w-full text-sm justify-start ${!canBuyCard ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span>📜 Buy Development Card</span>
@@ -180,7 +180,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                   <Button 
                     onClick={() => handleAction('trade')}
                     variant="outline"
-                    className="w-full text-sm"
+                    className="w-full text-sm bg-white/5 border-white/20 hover:bg-white/10 text-white"
                   >
                     🤝 Trade
                   </Button>
@@ -215,7 +215,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                     key={index}
                     onClick={() => handleAction('playCard', { cardType: card.type })}
                     variant="outline"
-                    className="w-full text-left text-sm p-2 h-auto"
+                    className="w-full text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
                   >
                     <div className="flex items-start space-x-2">
                       <span className="text-lg">{cardInfo.emoji}</span>

@@ -14,7 +14,8 @@
       "description": "Dense woodlands that produce lumber",
       "color": "#2D5016",
       "icon": "🌲",
-      "resourceProduced": "wood"
+      "resourceProduced": "wood",
+      "texture": "/themes/settlers/assets/terrains/forest.png"
     },
     {
       "id": "pasture", 
@@ -22,7 +23,8 @@
       "description": "Rolling hills where sheep graze",
       "color": "#7CB342",
       "icon": "🐑",
-      "resourceProduced": "sheep"
+      "resourceProduced": "sheep",
+      "texture": "/themes/settlers/assets/terrains/pasture.png"
     },
     {
       "id": "fields",
@@ -30,7 +32,8 @@
       "description": "Fertile farmland growing wheat",
       "color": "#FFC107",
       "icon": "🌾",
-      "resourceProduced": "wheat"
+      "resourceProduced": "wheat",
+      "texture": "/themes/settlers/assets/terrains/wheat.png"
     },
     {
       "id": "hills",
@@ -38,7 +41,8 @@
       "description": "Clay hills perfect for making brick",
       "color": "#D84315",
       "icon": "🧱",
-      "resourceProduced": "brick"
+      "resourceProduced": "brick",
+      "texture": "/themes/settlers/assets/terrains/brick.png"
     },
     {
       "id": "mountains",
@@ -46,7 +50,8 @@
       "description": "Rocky peaks rich with ore",
       "color": "#6A1B9A",
       "icon": "⛰️",
-      "resourceProduced": "ore"
+      "resourceProduced": "ore",
+      "texture": "/themes/settlers/assets/terrains/ore.png"
     },
     {
       "id": "desert",
@@ -54,7 +59,8 @@
       "description": "Barren wasteland that produces nothing",
       "color": "#F4E4BC",
       "icon": "🏜️",
-      "resourceProduced": null
+      "resourceProduced": null,
+      "texture": "/themes/settlers/assets/terrains/desert.png"
     },
     {
       "id": "sea",
@@ -62,7 +68,8 @@
       "description": "Ocean waters surrounding the island",
       "color": "#1E40AF",
       "icon": "🌊",
-      "resourceProduced": null
+      "resourceProduced": null,
+      "texture": "/themes/settlers/assets/terrains/sea.png"
     }
   ],
   "resourceMapping": {

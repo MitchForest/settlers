@@ -21,10 +21,10 @@ export function PlayersPanel({
     .sort(([, a], [, b]) => b.score.total - a.score.total)
 
   return (
-    <Card className="bg-black/30 backdrop-blur-sm border-white/20 p-4 rounded-bl-none">
+    <Card className="bg-black/30 backdrop-blur-sm border-white/20 p-4">
       <div className="flex items-center justify-between">
-        {/* Players List - Evenly spaced */}
-        <div className="flex items-center justify-between w-full">
+        {/* Players List - Evenly spaced with balanced edge spacing */}
+        <div className="flex items-center justify-evenly w-full px-4">
           {sortedPlayers.map(([playerId, player]) => {
             const isCurrentTurn = gameState.currentPlayer === playerId
             const playerInfo = playerAvatars[playerId] || { 
@@ -66,7 +66,7 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
     <HoverCard>
       <HoverCardTrigger asChild>
         <div className={`
-          flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 cursor-pointer
+          flex items-center space-x-3 p-2 rounded-lg transition-all duration-200 cursor-pointer
           ${isCurrentTurn 
             ? 'bg-yellow-400/20 border border-yellow-400/50 shadow-lg' 
             : 'bg-white/5 hover:bg-white/10'
@@ -80,41 +80,36 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
             isCurrentTurn={isCurrentTurn}
           />
 
-          {/* Always show Victory Points */}
+          {/* Victory Points - Bigger */}
           <div className="flex items-center space-x-1">
-            <Crown className="w-4 h-4 text-yellow-400" />
-            <span className="text-white font-medium">{player.score.public}</span>
+            <Crown className="w-5 h-5 text-yellow-400" />
+            <span className="text-white font-bold text-lg">{player.score.public}</span>
             {player.score.hidden > 0 && (
-              <span className="text-yellow-400">+{player.score.hidden}</span>
+              <span className="text-yellow-400 text-lg">+{player.score.hidden}</span>
             )}
           </div>
 
           {/* Desktop: Show all stats */}
           <div className="hidden lg:flex items-center space-x-4 text-sm">
-            {/* Resource Cards */}
-            <Badge variant="outline" className="border-blue-400 text-blue-300">
-              🃏 {totalResources}
-            </Badge>
-
-            {/* Development Cards */}
-            {unplayedDevCards > 0 && (
-              <Badge variant="outline" className="border-purple-400 text-purple-300">
+            {/* Cards - Stacked */}
+            <div className="flex flex-col space-y-1">
+              <Badge variant="outline" className="bg-white/10 border-white/20 text-blue-300">
+                🃏 {totalResources}
+              </Badge>
+              <Badge variant="outline" className="bg-white/10 border-white/20 text-purple-300">
                 📜 {unplayedDevCards}
               </Badge>
-            )}
+            </div>
 
-            {/* Knights Played */}
-            {player.knightsPlayed > 0 && (
-              <div className="flex items-center space-x-1">
-                <Sword className="w-4 h-4 text-red-400" />
-                <span className="text-red-300">{player.knightsPlayed}</span>
-              </div>
-            )}
-
-            {/* Longest Road */}
-            <div className="flex items-center space-x-1">
-              <span className="text-orange-300">🛤️</span>
-              <span className="text-orange-300">{longestRoadLength}</span>
+            {/* Knights & Roads - Stacked */}
+            <div className="flex flex-col space-y-1">
+              <Badge variant="outline" className="bg-white/10 border-white/20 text-red-300">
+                <Sword className="w-3 h-3" />
+                {player.knightsPlayed}
+              </Badge>
+              <Badge variant="outline" className="bg-white/10 border-white/20 text-orange-300">
+                🛤️ {15 - player.buildings.roads}
+              </Badge>
             </div>
 
             {/* Achievements */}
