@@ -3,16 +3,16 @@
 import { HexGridLayer } from './layers/HexGridLayer'
 import { ConnectionLayer } from './layers/ConnectionLayer'
 import { InteractionLayer } from './layers/InteractionLayer'
-import { PortLayer } from './layers/PortLayer'
+
 import { PieceLayer } from './layers/PieceLayer'
-import { GamePiece } from './pieces/GamePiece'
+
 import { useGameStore } from '@/stores/gameStore'
 import { useGameTheme } from '@/components/theme-provider'
-import { getAssetResolver } from '@/lib/theme-loader'
+
 import { cn } from '@/lib/utils'
 import { Board } from '@settlers/core'
-import { useState, useEffect, useRef } from 'react'
-import { AssetResolver, GameTheme } from '@/lib/theme-types'
+import { useEffect, useRef } from 'react'
+import { GameTheme } from '@/lib/theme-types'
 import { useZoomPan } from '@/lib/use-zoom-pan'
 import { useInteractionSystem } from '@/lib/interaction-system'
 import { initializeBoardGrid } from '@/lib/board-utils'
@@ -32,12 +32,10 @@ interface GameBoardProps {
   forceTheme?: GameTheme | null
 }
 
-export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, disableTransitions = false, forceTheme }: GameBoardProps = {}) {
+export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBoardProps = {}) {
   // === UNIFIED STATE MANAGEMENT ===
   const gameState = useGameStore(state => state.gameState)
-  const placementMode = useGameStore(state => state.placementMode)
   const { theme: contextTheme, loading } = useGameTheme()
-  const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Use forceTheme if provided, otherwise use context theme
@@ -62,24 +60,7 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
     }
   }, [board])
   
-  // Initialize asset resolver
-  useEffect(() => {
-    if (!theme) {
-      setAssetResolver(null)
-      return
-    }
-    
-    const initResolver = async () => {
-      try {
-        const resolver = await getAssetResolver(theme)
-        setAssetResolver(() => resolver)
-      } catch (error) {
-        console.error('Failed to load theme assets, using fallbacks:', error)
-        setAssetResolver(null)
-      }
-    }
-    initResolver()
-  }, [theme])
+
 
   // Register board clear callback
   useEffect(() => {
@@ -124,14 +105,12 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,var(--color-game-bg-accent)_0%,transparent_50%)]" />
       </div>
     
-      {/* Base Layer: Hex Grid for terrain */}
+      {/* Hex Grid Layer - Main board rendering */}
       <div className="absolute inset-0 z-10 pointer-events-none">
-        <HexGridLayer 
+        <HexGridLayer
           board={board} 
           theme={theme}
-          selectedHexId={interactions.selectedHexId || undefined}
-          hoveredHexId={interactions.hoveredHexId || undefined}
-          disableTransitions={disableTransitions}
+          disableTransitions={false}
           viewBox={zoomPanControls.getViewBoxString()}
           onHexHover={interactions.onHexHover}
           onHexClick={interactions.onHexSelect}
@@ -154,7 +133,7 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
       )}
       
       {/* Piece Layer: Game pieces (settlements, cities, roads) */}
-      {(testPieces.length > 0 || gameState) && (
+      {gameState && (
         <div className="absolute inset-0 z-15 pointer-events-none">
           <svg
             width="100%"
@@ -163,46 +142,30 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
             className="piece-layer-svg"
             style={{ background: 'transparent' }}
           >
-            {/* Test pieces */}
-            {testPieces.map((piece, index) => (
-              <GamePiece 
-                key={`test-${index}`}
-                type={piece.type}
-                playerId={piece.playerId}
-                position={piece.position}
-                theme={theme}
-                assetResolver={assetResolver}
-                rotation={piece.rotation}
-              />
-            ))}
+            {/* Test pieces would be rendered here */}
             
             {/* Real game pieces would go here when we implement them */}
             <PieceLayer 
               board={board} 
-              gameState={gameState || undefined}
-              onSettlementClick={(vertexId: string) => {/* Handle settlement click */}}
-              onCityClick={(vertexId: string) => {/* Handle city click */}}
-              onRoadClick={(edgeId: string) => {/* Handle road click */}}
+              gameState={gameState}
+              onSettlementClick={(_vertexId: string) => {/* Handle settlement click */}}
+              onCityClick={(_vertexId: string) => {/* Handle city click */}}
+              onRoadClick={(_edgeId: string) => {/* Handle road click */}}
             />
           </svg>
         </div>
       )}
       
       {/* Connection Layer: SVG for roads and buildings */}
-      {placementMode !== 'none' && (
-        <div className="absolute inset-0 z-20 pointer-events-none">
-          <ConnectionLayer />
-        </div>
-      )}
-      
+      <div className="absolute inset-0 z-20 pointer-events-none">
+        <ConnectionLayer viewBox={zoomPanControls.getViewBoxString()} />
+      </div>
+
       {/* Interaction Layer: Overlays, tooltips, highlights */}
       <div className="absolute inset-0 z-30 pointer-events-none">
         {gameState && (
           <InteractionLayer 
-            gameState={gameState}
-            hoveredHexId={interactions.hoveredHexId}
-            selectedHexId={interactions.selectedHexId}
-            viewBox={zoomPanControls.getViewBoxString()}
+          viewBox={zoomPanControls.getViewBoxString()}
           />
         )}
       </div>

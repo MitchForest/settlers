@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useGameStore } from '@/stores/gameStore'
 
 // Unified interaction modes
@@ -15,12 +15,8 @@ interface InteractionState {
   panStart: { x: number; y: number } | null
   panCurrent: { x: number; y: number } | null
   
-  // Hex interaction state (unified with store)
-  hoveredHexId: string | null
-  selectedHexId: string | null
-  
   // Touch/gesture state
-  touchStart: { distance: number; center: { x: number; y: number } } | null
+  touchStart: { x: number; y: number } | null
 }
 
 // Zoom/pan controls interface
@@ -55,25 +51,22 @@ interface InteractionSystemOptions {
 export function useInteractionSystem({
   viewBoxControls,
   containerRef,
-  onHexHover,
   onHexSelect,
   panThreshold = 5,
   zoomSensitivity = 0.001
 }: InteractionSystemOptions) {
   
-  // Get game state and store updaters
-  const gameState = useGameStore(state => state.gameState)
-  const placementMode = useGameStore(state => state.placementMode)
+  // Get store updaters
   const updateHoveredHex = useGameStore(state => state.setHoveredHex)
   const updateSelectedHex = useGameStore(state => state.setSelectedHex)
+  const storeHoveredHex = useGameStore(state => state.hoveredHex)
+  const storeSelectedHex = useGameStore(state => state.selectedHex)
   
-  // Local interaction state (separate from game state)
+  // Local interaction state (viewport only - no hex state duplication)
   const [state, setState] = useState<InteractionState>({
     mode: 'idle',
     panStart: null,
     panCurrent: null,
-    hoveredHexId: null,
-    selectedHexId: null,
     touchStart: null
   })
   
@@ -98,18 +91,15 @@ export function useInteractionSystem({
   // === HEX INTERACTION HANDLERS ===
   
   const handleHexHover = useCallback((hexId: string | null) => {
-    // Update both local state and game store
-    setState(prev => ({ ...prev, hoveredHexId: hexId }))
+    console.log('🎯 HOVER:', hexId)
     updateHoveredHex(hexId)
-    onHexHover?.(hexId)
-  }, [updateHoveredHex, onHexHover])
+  }, [updateHoveredHex])
   
   const handleHexSelect = useCallback((hexId: string | null) => {
     // Only allow selection in appropriate modes
     if (state.mode === 'panning') return
     
-    // Update both local state and game store
-    setState(prev => ({ ...prev, selectedHexId: hexId }))
+    console.log('🎯 SELECT:', hexId)
     updateSelectedHex(hexId)
     onHexSelect?.(hexId)
   }, [state.mode, updateSelectedHex, onHexSelect])
@@ -187,7 +177,7 @@ export function useInteractionSystem({
       // Two-finger pinch/zoom
       const touch1 = event.touches[0]
       const touch2 = event.touches[1]
-      const distance = getDistance(
+      const _distance = getDistance(
         { x: touch1.clientX, y: touch1.clientY },
         { x: touch2.clientX, y: touch2.clientY }
       )
@@ -198,7 +188,7 @@ export function useInteractionSystem({
       
       setState(prev => ({
         ...prev,
-        touchStart: { distance, center }
+        touchStart: { x: center.x, y: center.y }
       }))
     } else if (event.touches.length === 1) {
       // Single finger - treat like mouse
@@ -217,13 +207,13 @@ export function useInteractionSystem({
         { x: touch2.clientX, y: touch2.clientY }
       )
       
-      const zoomDelta = (distance - state.touchStart.distance) * 0.01
+      const zoomDelta = (distance - getDistance(state.touchStart!, { x: touch1.clientX, y: touch1.clientY })) * 0.01
       const newZoom = viewBoxControls.zoom + zoomDelta
       viewBoxControls.setZoom(newZoom)
       
       setState(prev => ({
         ...prev,
-        touchStart: prev.touchStart ? { ...prev.touchStart, distance } : null
+        touchStart: { x: touch1.clientX, y: touch1.clientY }
       }))
     } else if (event.touches.length === 1) {
       // Single finger - treat like mouse
@@ -268,44 +258,33 @@ export function useInteractionSystem({
       cancelFrame()
     }
   }, [
-    handleWheel, handleMouseDown, handleMouseMove, handleMouseUp,
+    containerRef, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp,
     handleTouchStart, handleTouchMove, handleTouchEnd, cancelFrame
   ])
   
-  // === DERIVED STATE ===
-  
-  const isPanning = state.mode === 'panning'
-  const isPlacing = placementMode !== 'none'
-  
-  // Get current hover/selection from game store (single source of truth)
-  const storeHoveredHex = useGameStore(state => state.hoveredHex)
-  const storeSelectedHex = useGameStore(state => state.selectedHex)
+  // === RETURN INTERACTION INTERFACE ===
   
   return {
-    // Container ref for event attachment
-    containerRef,
-    
-    // Interaction state
-    isPanning,
-    isPlacing,
+    // Interaction state from store (single source of truth)
     hoveredHexId: storeHoveredHex,
     selectedHexId: storeSelectedHex,
     
-    // Hex interaction handlers (for direct HexTile usage)
+    // Viewport interaction handlers
     onHexHover: handleHexHover,
     onHexSelect: handleHexSelect,
     
-    // Utility methods
-    reset: () => {
+    // Viewport state and controls
+    mode: state.mode,
+    isPanning: state.mode === 'panning',
+    
+    // Reset functions
+    resetInteractions: () => {
       setState({
         mode: 'idle',
         panStart: null,
         panCurrent: null,
-        hoveredHexId: null,
-        selectedHexId: null,
         touchStart: null
       })
-      viewBoxControls.reset()
     }
   }
 } 

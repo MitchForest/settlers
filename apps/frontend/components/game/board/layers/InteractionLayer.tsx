@@ -1,22 +1,21 @@
 'use client'
 
 import React from 'react'
-import { GameState } from '@settlers/core'
+
 import { hexToPixel, HEX_RADIUS } from '@/lib/board-utils'
+import { useGameStore } from '@/stores/gameStore'
 
 interface InteractionLayerProps {
-  gameState: GameState
-  hoveredHexId?: string | null
-  selectedHexId?: string | null
   viewBox?: string
 }
 
 export function InteractionLayer({ 
-  gameState, 
-  hoveredHexId, 
-  selectedHexId,
   viewBox 
 }: InteractionLayerProps) {
+  // Get hex selection state from store
+  const hoveredHexId = useGameStore(state => state.hoveredHex)
+  const selectedHexId = useGameStore(state => state.selectedHex)
+  
   // Calculate bounds for the SVG viewBox if not provided
   const defaultViewBox = viewBox || "0 0 400 400"
   
@@ -33,8 +32,7 @@ export function InteractionLayer({
         {hoveredHexId && (
           <HexHighlight 
             hexId={hoveredHexId} 
-            type="hover" 
-            gameState={gameState}
+            type="hover"
           />
         )}
         
@@ -42,8 +40,7 @@ export function InteractionLayer({
         {selectedHexId && (
           <HexHighlight 
             hexId={selectedHexId} 
-            type="selected" 
-            gameState={gameState}
+            type="selected"
           />
         )}
       </svg>
@@ -51,13 +48,13 @@ export function InteractionLayer({
   )
 }
 
-interface HexHighlightProps {
-  hexId: string
-  type: 'hover' | 'selected'
-  gameState: GameState
-}
 
-function HexHighlight({ hexId, type, gameState }: HexHighlightProps) {
+
+function HexHighlight({ hexId, type }: { hexId: string; type: 'hover' | 'selected' }) {
+  const gameState = useGameStore(state => state.gameState)
+  
+  if (!gameState) return null
+
   // Parse hex coordinates from ID
   const coords = hexId.split(',').map(Number)
   if (coords.length < 2) return null

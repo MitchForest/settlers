@@ -539,56 +539,30 @@
   filter: brightness(1.2) drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
 }
 
-/* Production animation */
-@keyframes hex-pulse {
-  0%, 100% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
+/* === SUBTLE HEX MICRO-INTERACTIONS === */
+.hex-micro-interaction {
+  transition: transform var(--interaction-timing) var(--interaction-easing),
+              filter var(--interaction-timing) var(--interaction-easing),
+              opacity var(--interaction-timing) var(--interaction-easing);
 }
 
-@keyframes hex-selected-pulse {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.02);
-  }
+.hex-hover {
+  transform: scale(var(--hover-scale)) translateY(var(--hover-lift));
+  filter: var(--hover-shadow);
 }
 
-@keyframes hex-float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-2px);
-  }
+.hex-selected {
+  filter: var(--selected-shadow);
 }
 
-@keyframes hex-fade-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Hex Animation Classes */
+/* Reserved for special game states only */
 .hex-producing {
-  animation: hex-pulse 2s ease-in-out infinite;
+  animation: subtle-pulse 3s ease-in-out infinite;
 }
 
-.hex-hover-spring {
-  transition: all 0.3s var(--spring-out);
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
 }
 
 .hex-selected-glow {
@@ -610,4 +584,14 @@
 
 .cursor-grabbing {
   cursor: grabbing;
+}
+
+/* === MICRO-INTERACTIONS === */
+:root {
+  --hover-scale: 1.03;
+  --hover-lift: -1px;
+  --hover-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --selected-shadow: 0 3px 12px rgba(37, 99, 235, 0.25);
+  --interaction-timing: 200ms;
+  --interaction-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }

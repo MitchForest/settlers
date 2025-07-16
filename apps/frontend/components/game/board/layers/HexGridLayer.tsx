@@ -1,17 +1,15 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
-import { HexTile, HexTileFilters } from './HexTile'
-import { GameTheme, AssetResolver } from '@/lib/theme-types'
-import { getAssetResolver } from '@/lib/theme-loader'
-import { hexToPixel, HEX_RADIUS } from '@/lib/board-utils'
-import type { Board } from '@settlers/core'
+import React, { useMemo } from 'react'
+import { Board } from '@settlers/core'
+import { GameTheme } from '@/lib/theme-types'
+import { hexToPixel } from '@/lib/board-utils'
+import { HexTile } from './HexTile'
+import { useGameStore } from '@/stores/gameStore'
 
 interface HexGridLayerProps {
   board: Board
   theme: GameTheme | null
-  selectedHexId?: string
-  hoveredHexId?: string
   disableTransitions?: boolean
   viewBox?: string // Override viewBox calculation
   onHexHover?: (hexId: string | null) => void
@@ -21,33 +19,14 @@ interface HexGridLayerProps {
 export const HexGridLayer: React.FC<HexGridLayerProps> = ({ 
   board, 
   theme, 
-  selectedHexId,
-  hoveredHexId,
   disableTransitions = false,
   viewBox,
   onHexHover,
   onHexClick
 }) => {
-  const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
-  
-  // Initialize asset resolver
-  useEffect(() => {
-    if (!theme) {
-      setAssetResolver(null) // No theme = use geometric fallbacks
-      return
-    }
-    
-    const initResolver = async () => {
-      try {
-        const resolver = await getAssetResolver(theme)
-        setAssetResolver(() => resolver)
-      } catch (error) {
-        console.error('Failed to load theme assets, using fallbacks:', error)
-        setAssetResolver(null) // Fall back to geometric shapes on error
-      }
-    }
-    initResolver()
-  }, [theme])
+  // Get hex selection state from store
+  const selectedHexId = useGameStore(state => state.selectedHex)
+  const hoveredHexId = useGameStore(state => state.hoveredHex)
   
   // Convert hexes to pixel coordinates for rendering
   const renderHexes = useMemo(() => {
@@ -107,8 +86,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         style={{ background: 'transparent' }}
       >
         {/* Filter definitions */}
-        <HexTileFilters />
-        
         {/* Hex tiles - render with geometric fallbacks if no theme/assetResolver */}
         {sortedHexes.map(hex => {
           const isEmptySlot = hex.terrain === null || hex.terrain === undefined
@@ -122,7 +99,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
               numberToken={hex.numberToken}
               position={hex.pixelPosition}
               theme={theme} // Can be null - HexTile handles fallbacks
-              assetResolver={assetResolver} // Can be null - HexTile handles fallbacks
+              assetResolver={null} // Asset resolver is no longer a prop, so pass null
               isHovered={isHovered}
               isSelected={isSelected}
               isEmpty={isEmptySlot}

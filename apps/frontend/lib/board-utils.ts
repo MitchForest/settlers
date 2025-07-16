@@ -140,7 +140,7 @@ export function hexDistance(from: {q: number, r: number}, to: {q: number, r: num
 /**
  * Check if a vertex position is valid for building
  */
-export function isValidVertexPosition(position: VertexPosition): boolean {
+export function isValidVertexPosition(_position: VertexPosition): boolean {
   // TODO: Implement vertex validation logic
   return true
 }
@@ -148,7 +148,7 @@ export function isValidVertexPosition(position: VertexPosition): boolean {
 /**
  * Get all hexes within a certain radius - simplified implementation for now
  */
-export function getHexesInRadius(center: {q: number, r: number}, radius: number): Array<{q: number, r: number, s: number}> {
+export function getHexesInRadius(center: {q: number, r: number}, _radius: number): Array<{q: number, r: number, s: number}> {
   if (!boardGrid) {
     return []
   }
