@@ -27,8 +27,8 @@ export function GameInterface({ onGameAction }: GameInterfaceProps) {
 
   if (!gameState || !localPlayerId) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="text-lg text-gray-500">Loading game...</div>
+      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
+        <div className="text-lg text-white">Loading game...</div>
       </div>
     )
   }
@@ -38,8 +38,14 @@ export function GameInterface({ onGameAction }: GameInterfaceProps) {
   const isMyTurn = gameState.currentPlayer === localPlayerId
 
   if (!myPlayer) {
+    console.error('GameInterface: Player not found in game', {
+      localPlayerId,
+      gameStatePlayerIds: Array.from(gameState.players.keys()),
+      gameStatePlayers: Array.from(gameState.players.values()).map(p => ({ id: p.id, name: p.name })),
+      playerExistsInGame: gameState.players.has(localPlayerId)
+    })
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
+      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
         <div className="text-lg text-red-500">Player not found in game</div>
       </div>
     )

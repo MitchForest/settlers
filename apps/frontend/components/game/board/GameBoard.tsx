@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { Board, GameAction } from '@settlers/core'
 import { GameTheme } from '@/lib/theme-types'
 import { HexGridLayer } from './layers/HexGridLayer'
 import { PortLayer } from './layers/PortLayer'
 import { PieceLayer } from './layers/PieceLayer'
 import { useGameStore } from '@/stores/gameStore'
+import { useSimplePanZoom } from '@/lib/use-simple-pan-zoom'
 
 interface GameBoardProps {
   board: Board
@@ -16,12 +17,16 @@ interface GameBoardProps {
 
 export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
   const [loading, setLoading] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   
   // Get game state and hex interaction functions from store
   const gameState = useGameStore(state => state.gameState)
   const setHoveredHex = useGameStore(state => state.setHoveredHex)
   const setSelectedHex = useGameStore(state => state.setSelectedHex)
   const localPlayerId = useGameStore(state => state.localPlayerId)
+  
+  // Pan and zoom controls
+  const { transform, isDragging, reset, zoomIn, zoomOut, canZoomIn, canZoomOut } = useSimplePanZoom(containerRef)
 
   // Track asset loading state
   useEffect(() => {
@@ -89,11 +94,18 @@ export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
   })
 
   return (
-    <div className="game-board relative w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+    <div 
+      ref={containerRef}
+      className="game-board relative w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden cursor-grab"
+      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+    >
       {/* Main board rendering */}
       <div 
         className="absolute inset-0 flex items-center justify-center"
-        style={{ pointerEvents: 'none' }}  // Disable pointer events on container
+        style={{ 
+          pointerEvents: 'none',
+          transform 
+        }}
       >
         <svg
           className="board-svg"
@@ -101,11 +113,7 @@ export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
           style={{ 
             width: '800px', 
             height: '800px',
-            left: '50%',
-            top: '50%',
-            marginLeft: '-400px',
-            marginTop: '-400px',
-            pointerEvents: 'all'  // Re-enable pointer events for SVG content
+            pointerEvents: 'all'
           }}
         >
           <HexGridLayer
@@ -120,6 +128,30 @@ export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
         </svg>
       </div>
       
+      {/* Zoom Controls */}
+      <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+        <button
+          onClick={zoomIn}
+          disabled={!canZoomIn}
+          className="w-10 h-10 bg-black/70 text-white rounded-md hover:bg-black/90 disabled:opacity-50 flex items-center justify-center"
+        >
+          +
+        </button>
+        <button
+          onClick={reset}
+          className="w-10 h-10 bg-black/70 text-white rounded-md hover:bg-black/90 flex items-center justify-center text-xs"
+        >
+          ⌂
+        </button>
+        <button
+          onClick={zoomOut}
+          disabled={!canZoomOut}
+          className="w-10 h-10 bg-black/70 text-white rounded-md hover:bg-black/90 disabled:opacity-50 flex items-center justify-center"
+        >
+          −
+        </button>
+      </div>
+
       {/* Theme loading indicator (optional, non-blocking) */}
       {loading && (
         <div className="absolute top-4 left-4 z-50 bg-black/50 text-white px-3 py-1 rounded-md text-sm">

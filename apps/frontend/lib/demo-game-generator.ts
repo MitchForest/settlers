@@ -9,14 +9,16 @@ import { GameFlowManager, GameState } from '@settlers/core'
  * - Game in active play state
  */
 export function generateDemoGame(): GameState {
-  // Create base game with 4 players
+  // Create base game with 4 players using fixed seed for consistent IDs
   const gameFlow = GameFlowManager.createGame({
     playerNames: ['Alice', 'Bob', 'Charlie', 'Diana'],
-    gameId: 'demo-game',
+    gameId: 'demo-game-12345', // Fixed ID for demo
     randomizePlayerOrder: false
   })
 
   const state = gameFlow.getState()
+  
+  console.log('Demo game created with players:', Array.from(state.players.keys()))
   
   // Get players for modification
   const players = Array.from(state.players.values())

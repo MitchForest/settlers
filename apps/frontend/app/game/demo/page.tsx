@@ -4,22 +4,32 @@ import { useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { GameInterface } from '@/components/game/ui/GameInterface'
+import { PlayerSidebar } from '@/components/game/ui/PlayerSidebar'
+import { PlayerDashboard } from '@/components/game/ui/PlayerDashboard'
+import { PlayersPanel } from '@/components/game/ui/PlayersPanel'
+import { DiceRoller } from '@/components/game/ui/DiceRoller'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { GameAction, GameFlowManager, GameState } from '@settlers/core'
 import { createDemoGameManager, generateDemoGame } from '@/lib/demo-game-generator'
-import Link from 'next/link'
-import { ArrowLeft, RotateCcw } from 'lucide-react'
+import { useGameStore } from '@/stores/gameStore'
+import { Home, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 export default function DemoGamePage() {
+  const router = useRouter()
+  
   // Theme loading
   const { theme, loading: themeLoading, loadTheme } = useGameTheme()
   
+  // Use game store for demo state so GameInterface can access it
+  const { gameState, updateGameState, localPlayerId } = useGameStore()
+  
   // Local demo state (not connected to backend)
-  const [gameState, setGameState] = useState<GameState | null>(null)
   const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
-  const [_localPlayerId, setLocalPlayerId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
 
   // Generate demo game when theme is loaded
   const generateDemo = useCallback(async () => {
@@ -31,21 +41,59 @@ export default function DemoGamePage() {
       const demoState = generateDemoGame()
       const manager = createDemoGameManager()
       
-      setGameManager(manager)
-      setGameState(demoState)
-      
-      // Set local player as Alice (first player)
+      // Set local player as Alice (first player) BEFORE updating game state
       const playerIds = Array.from(demoState.players.keys())
-      setLocalPlayerId(playerIds[0])
+      const aliceId = playerIds[0]
       
-      toast.success('Demo game loaded! You are playing as Alice.')
+      // Double check that Alice exists in the game state
+      if (!demoState.players.has(aliceId)) {
+        console.error('Alice player ID not found in demo game state!', {
+          aliceId,
+          availablePlayerIds: playerIds
+        })
+        throw new Error('Demo game setup failed - Alice not found')
+      }
+      
+      console.log('Demo game player setup:', {
+        aliceId,
+        playerIds,
+        playersInState: Array.from(demoState.players.keys()),
+        aliceExists: demoState.players.has(aliceId),
+        alicePlayer: demoState.players.get(aliceId)
+      })
+      
+      // Update both at the same time to ensure consistency
+      useGameStore.setState({
+        gameState: demoState,
+        localPlayerId: aliceId
+      })
+      
+      setGameManager(manager)
+      
+      console.log('Demo game generated successfully:', {
+        players: demoState.players.size,
+        phase: demoState.phase,
+        turn: demoState.turn,
+        aliceId,
+        playerIds
+      })
+      
+      // Verify the store state was updated
+      setTimeout(() => {
+        const storeState = useGameStore.getState()
+        console.log('Store state after update:', {
+          hasGameState: !!storeState.gameState,
+          localPlayerId: storeState.localPlayerId,
+          gamePhase: storeState.gameState?.phase
+        })
+      }, 100)
     } catch (error) {
       console.error('Failed to generate demo game:', error)
       toast.error('Failed to generate demo game')
     } finally {
       setIsGenerating(false)
     }
-  }, [isGenerating])
+  }, [isGenerating, updateGameState])
 
   // Generate demo when theme is loaded
   useEffect(() => {
@@ -71,13 +119,13 @@ export default function DemoGamePage() {
     const interval = setInterval(() => {
       const hadExpiredTrades = gameManager.cleanupExpiredTrades()
       if (hadExpiredTrades) {
-        setGameState(gameManager.getState())
+        updateGameState(gameManager.getState())
         toast.info('Some trade offers have expired')
       }
     }, 5000) // Check every 5 seconds
 
     return () => clearInterval(interval)
-  }, [gameManager, gameState])
+  }, [gameManager, gameState, updateGameState])
 
   const handleGameAction = (action: GameAction) => {
     if (!gameManager || !gameState) {
@@ -92,15 +140,15 @@ export default function DemoGamePage() {
     
     if (result.success) {
       // Update the local game state
-      setGameState(result.newState)
+      updateGameState(result.newState)
       
-      // Handle specific action types with demo-appropriate messages
+      // Handle specific action types with clean messages (no demo mode indicators)
       switch (action.type) {
         case 'roll':
           const dice = result.newState.dice
           if (dice) {
             if (dice.sum === 7) {
-              toast.warning(`Rolled ${dice.sum}! Robber activated! (Demo mode)`)
+              toast.warning(`Rolled ${dice.sum}! Robber activated!`)
             } else {
               toast.success(`Rolled ${dice.die1} + ${dice.die2} = ${dice.sum}`)
             }
@@ -110,21 +158,21 @@ export default function DemoGamePage() {
         case 'build':
           const placementEvent = result.events.find(e => e.type === 'placementModeStarted')
           if (placementEvent) {
-            toast.info(`Demo: Click on the board to place your ${placementEvent.data.buildingType}`)
+            toast.info(`Click on the board to place your ${placementEvent.data.buildingType}`)
           }
           break
           
         case 'buyCard':
-          toast.success('Development card purchased! (Demo mode)')
+          toast.success('Development card purchased!')
           break
           
         case 'endTurn':
-          toast.info('Turn ended (Demo mode)')
+          toast.info('Turn ended')
           break
           
         default:
           if (result.message) {
-            toast.success(`${result.message} (Demo mode)`)
+            toast.success(result.message)
           }
       }
       
@@ -134,16 +182,15 @@ export default function DemoGamePage() {
       }
     } else {
       // Show error message
-      toast.error(result.error || 'Action failed (Demo mode)')
+      toast.error(result.error || 'Action failed')
       console.error('Demo: Action failed:', result.error, action)
     }
   }
 
   // Reset demo game
   const resetDemo = () => {
-    setGameState(null)
+    useGameStore.setState({ gameState: null, localPlayerId: null })
     setGameManager(null)
-    setLocalPlayerId(null)
     generateDemo()
   }
 
@@ -153,7 +200,7 @@ export default function DemoGamePage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-          <div className="text-white text-lg">Loading demo theme...</div>
+          <div className="text-white text-lg">Loading game theme...</div>
         </div>
       </div>
     )
@@ -180,7 +227,7 @@ export default function DemoGamePage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-          <div className="text-white text-lg">Generating demo game...</div>
+          <div className="text-white text-lg">Loading demo...</div>
         </div>
       </div>
     )
@@ -199,33 +246,12 @@ export default function DemoGamePage() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-slate-900 relative">
-      {/* Demo Header */}
-      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between items-center">
-        <Link href="/">
-          <Button variant="outline" size="sm" className="bg-black/50 backdrop-blur-sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
-          </Button>
-        </Link>
-        
-        <div className="bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2">
-          <span className="text-white text-sm font-medium">DEMO MODE</span>
-        </div>
-        
-        <Button 
-          onClick={resetDemo} 
-          variant="outline" 
-          size="sm" 
-          className="bg-black/50 backdrop-blur-sm"
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Reset Demo
-        </Button>
-      </div>
+  const myPlayer = gameState ? gameState.players.get(localPlayerId || '') : null
+  const isMyTurn = gameState ? gameState.currentPlayer === localPlayerId : false
 
-      {/* Main game display */}
+  return (
+    <div className="h-screen bg-slate-900 relative overflow-hidden">
+      {/* Main game display - EXACTLY like real game */}
       <div className="relative w-full h-full">
         {/* Game Board */}
         <GameBoard
@@ -234,10 +260,106 @@ export default function DemoGamePage() {
           onGameAction={handleGameAction}
         />
         
-        {/* Game Interface Overlay */}
-        <GameInterface
-          onGameAction={handleGameAction}
-        />
+        {/* Game Interface Overlay - only render when we have localPlayerId */}
+        {localPlayerId && (
+          <GameInterface
+            onGameAction={handleGameAction}
+          />
+        )}
+
+        {/* Player Sidebar - Left side */}
+        {myPlayer && gameState && (
+          <div className="fixed left-4 top-20 bottom-4 w-80 z-40">
+            <PlayerSidebar
+              gameState={gameState}
+              localPlayer={myPlayer}
+              isMyTurn={isMyTurn}
+              onAction={handleGameAction}
+            />
+          </div>
+        )}
+
+        {/* Players Panel - Right side */}
+        {gameState && (
+          <div className="fixed right-4 top-20 w-80 z-40">
+            <PlayersPanel
+              gameState={gameState}
+              playerAvatars={Object.fromEntries(
+                Array.from(gameState.players.entries()).map(([id, player]) => [
+                  id, 
+                  { avatar: '👤', name: player.name }
+                ])
+              )}
+            />
+          </div>
+        )}
+
+        {/* Bottom Action Bar */}
+        {myPlayer && gameState && isMyTurn && gameState.phase === 'roll' && (
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
+            <DiceRoller
+              onRoll={(dice) => handleGameAction({
+                type: 'roll',
+                playerId: localPlayerId || '',
+                data: {}
+              })}
+              canRoll={true}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Small floating demo panel in bottom right */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <Card className="bg-black/80 backdrop-blur-sm border-white/20 text-white">
+          <div className="p-2">
+            {panelCollapsed ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/60">Demo</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPanelCollapsed(false)}
+                  className="h-6 w-6 p-0 text-white/60 hover:text-white"
+                >
+                  <ChevronUp className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-white/60">Demo Mode</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPanelCollapsed(true)}
+                    className="h-6 w-6 p-0 text-white/60 hover:text-white"
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push('/')}
+                    className="h-8 px-2 text-white/80 hover:text-white hover:bg-white/10"
+                  >
+                    <Home className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetDemo}
+                    className="h-8 px-2 text-white/80 hover:text-white hover:bg-white/10"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   )
