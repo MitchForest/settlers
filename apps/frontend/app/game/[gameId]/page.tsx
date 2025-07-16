@@ -4,7 +4,7 @@ import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { GameInterface } from '@/components/game/ui/GameInterface'
-import { generateBoard, GameFlowManager, GameState, GameAction } from '@settlers/core'
+import { generateBoard, GameFlowManager, GameAction, DevelopmentCardType } from '@settlers/core'
 import type { Board } from '@settlers/core'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -41,6 +41,16 @@ export default function GamePage({ params }: GamePageProps) {
     try {
       const newBoard = generateBoard()
       setBoard(newBoard)
+      
+      // Update game state with the new board if game manager exists
+      if (gameManager && gameState) {
+        const updatedState = {
+          ...gameState,
+          board: newBoard
+        }
+        updateGameState(updatedState)
+      }
+      
       toast.success('Board generated successfully!')
     } catch (error) {
       console.error('Failed to generate board:', error)
@@ -48,7 +58,7 @@ export default function GamePage({ params }: GamePageProps) {
     } finally {
       setIsGenerating(false)
     }
-  }, [theme])
+  }, [theme, gameManager, gameState, updateGameState])
 
   // Auto-load settlers theme when component mounts
   useEffect(() => {
@@ -79,22 +89,122 @@ export default function GamePage({ params }: GamePageProps) {
         
         let avatarIndex = 0
         updatedPlayers.forEach((player, playerId) => {
-          // Give starting resources for testing
-          player.resources = {
-            wood: 2,
-            brick: 2,
-            ore: 1,
-            wheat: 2,
-            sheep: 1
-          }
-          
-          // Give some development cards for testing
-          if (state.developmentDeck.length > 0) {
-            const card1 = state.developmentDeck.pop()!
-            const card2 = state.developmentDeck.pop()!
-            card1.purchasedTurn = 0
-            card2.purchasedTurn = 0
-            player.developmentCards.push(card1, card2)
+          if (avatarIndex === 0) {
+            // Current player - give lots of resources and all types of development cards
+            player.resources = {
+              wood: 5,
+              brick: 4,
+              ore: 3,
+              wheat: 6,
+              sheep: 4
+            }
+            
+            // Give current player one of each development card type (playable)
+            const cardTypes: DevelopmentCardType[] = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly', 'victory']
+            cardTypes.forEach((cardType, _index) => {
+              const card = state.developmentDeck.find(c => c.type === cardType)
+              if (card) {
+                const cardIndex = state.developmentDeck.indexOf(card)
+                state.developmentDeck.splice(cardIndex, 1)
+                card.purchasedTurn = 0 // Can be played immediately
+                player.developmentCards.push(card)
+              }
+            })
+            
+            // Add some extra knights for largest army demo
+            for (let i = 0; i < 2; i++) {
+              const knightCard = state.developmentDeck.find(c => c.type === 'knight')
+              if (knightCard) {
+                const cardIndex = state.developmentDeck.indexOf(knightCard)
+                state.developmentDeck.splice(cardIndex, 1)
+                knightCard.purchasedTurn = 0
+                player.developmentCards.push(knightCard)
+              }
+            }
+            
+            // Add some newly bought cards (can't be played this turn)
+            for (let i = 0; i < 2; i++) {
+              const newCard = state.developmentDeck.pop()
+              if (newCard) {
+                newCard.purchasedTurn = 1 // Current turn, can't play yet
+                player.developmentCards.push(newCard)
+              }
+            }
+            
+            player.knightsPlayed = 2 // For largest army demonstration
+            player.score.public = 7 // Close to winning
+            player.score.hidden = 1 // Victory point card
+            player.score.total = 8
+            player.hasLargestArmy = true
+            
+          } else if (avatarIndex === 1) {
+            // Second player - moderate resources, some cards, longest road
+            player.resources = {
+              wood: 3,
+              brick: 2,
+              ore: 1,
+              wheat: 3,
+              sheep: 2
+            }
+            
+            // Give a few development cards
+            for (let i = 0; i < 3; i++) {
+              const card = state.developmentDeck.pop()
+              if (card) {
+                card.purchasedTurn = 0
+                player.developmentCards.push(card)
+              }
+            }
+            
+            player.knightsPlayed = 1
+            player.score.public = 5
+            player.score.hidden = 0
+            player.score.total = 5
+            player.hasLongestRoad = true
+            
+          } else if (avatarIndex === 2) {
+            // Third player - minimal resources, few cards
+            player.resources = {
+              wood: 1,
+              brick: 1,
+              ore: 0,
+              wheat: 2,
+              sheep: 1
+            }
+            
+            // Give one development card
+            const card = state.developmentDeck.pop()
+            if (card) {
+              card.purchasedTurn = 0
+              player.developmentCards.push(card)
+            }
+            
+            player.score.public = 3
+            player.score.hidden = 0
+            player.score.total = 3
+            
+          } else {
+            // Fourth player - balanced resources
+            player.resources = {
+              wood: 2,
+              brick: 2,
+              ore: 2,
+              wheat: 2,
+              sheep: 2
+            }
+            
+            // Give two development cards
+            for (let i = 0; i < 2; i++) {
+              const card = state.developmentDeck.pop()
+              if (card) {
+                card.purchasedTurn = 0
+                player.developmentCards.push(card)
+              }
+            }
+            
+            player.score.public = 4
+            player.score.hidden = 0
+            player.score.total = 4
           }
           
           // Set up avatar
@@ -109,7 +219,8 @@ export default function GamePage({ params }: GamePageProps) {
           ...state,
           players: updatedPlayers,
           turn: 1,
-          phase: 'actions' as const // Start in actions phase for testing
+          phase: 'actions' as const, // Start in actions phase for testing
+          board: board || state.board // Use local board if available
         }
         
         setGameManager(manager)
@@ -126,7 +237,7 @@ export default function GamePage({ params }: GamePageProps) {
         toast.error('Failed to create demo game')
       }
     }
-  }, [gameManager, theme])
+  }, [gameManager, theme, updateGameState])
 
   // Generate test board when theme is loaded
   useEffect(() => {
@@ -158,7 +269,7 @@ export default function GamePage({ params }: GamePageProps) {
       case 'endTurn':
         const endResult = gameManager.processAction(action)
         if (endResult.success) {
-          setGameState(endResult.newState)
+          updateGameState(endResult.newState)
           toast.success('Turn ended')
         } else {
           toast.error(endResult.error || 'Failed to end turn')

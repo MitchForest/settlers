@@ -26,24 +26,28 @@ export function SettlementPiece({
       onClick={onClick}
       className={onClick ? 'cursor-pointer' : ''}
     >
-      {/* Settlement circle background - standardized design */}
+      {/* Settlement circle background - solid team color */}
       <circle
         r={TOKEN_DESIGN.radius}
-        fill={TOKEN_DESIGN.backgroundColor}
-        stroke={cssPlayerColor}
-        strokeWidth={TOKEN_DESIGN.playerAccent.borderWidth}
+        fill={cssPlayerColor}
+        stroke={TOKEN_DESIGN.borderColor}
+        strokeWidth={TOKEN_DESIGN.borderWidth}
         className={`drop-shadow-md transition-all duration-200 ${
           isHighlighted ? 'scale-110 brightness-110' : ''
         }`}
       />
       
-      {/* House emoji */}
+      {/* House emoji on top of colored background */}
       <text
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={TOKEN_DESIGN.fontSize.emoji}
-        fill={TOKEN_DESIGN.textColor}
+        fill="white"
         className="select-none pointer-events-none"
+        style={{
+          textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+          fontWeight: 'bold'
+        }}
       >
         {PIECE_EMOJIS.settlement}
       </text>

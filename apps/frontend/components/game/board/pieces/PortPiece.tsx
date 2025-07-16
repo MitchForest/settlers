@@ -18,7 +18,7 @@ const RESOURCE_EMOJIS: Record<ResourceType, string> = {
   sheep: '🐑'
 }
 
-export function PortPiece({ port, position }: PortPieceProps) {
+export function PortPiece({ port, position: _position }: PortPieceProps) {
   const { theme } = useGameTheme()
   
   // Determine display content
@@ -32,9 +32,11 @@ export function PortPiece({ port, position }: PortPieceProps) {
     : theme?.resourceMapping?.[port.type as ResourceType]?.color || TOKEN_DESIGN.borderColor
 
   return (
-    <g transform={`translate(${position.x}, ${position.y})`}>
+    <g>
       {/* Port circle background - standardized design */}
       <circle
+        cx="0"
+        cy="0"
         r={TOKEN_DESIGN.radius}
         fill={TOKEN_DESIGN.backgroundColor}
         stroke={portColor}
@@ -44,6 +46,7 @@ export function PortPiece({ port, position }: PortPieceProps) {
       
       {/* Resource emoji */}
       <text
+        x="0"
         y="-6"
         textAnchor="middle"
         fontSize={TOKEN_DESIGN.fontSize.emoji}
@@ -55,6 +58,7 @@ export function PortPiece({ port, position }: PortPieceProps) {
       
       {/* Ratio text */}
       <text
+        x="0"
         y="6"
         textAnchor="middle"
         fontSize={TOKEN_DESIGN.fontSize.ratio}

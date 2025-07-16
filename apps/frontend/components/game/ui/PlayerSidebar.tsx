@@ -28,8 +28,8 @@ const DEV_CARD_INFO = {
     description: 'Move robber and steal a resource'
   },
   roadBuilding: {
-    emoji: '🛤️',
-    name: 'Road Building',
+    emoji: '🚧',
+    name: 'Road Builder',
     description: 'Build 2 roads for free'
   },
   yearOfPlenty: {
@@ -46,6 +46,40 @@ const DEV_CARD_INFO = {
     emoji: '👑',
     name: 'Victory Point',
     description: '+1 Victory Point (automatic)'
+  }
+} as const
+
+// Action info for consistent styling
+const ACTION_INFO = {
+  buildSettlement: {
+    emoji: '🏠',
+    name: 'Build Settlement',
+    description: 'Build a new settlement',
+    cost: ['🌲', '🧱', '🌾', '🐑']
+  },
+  buildCity: {
+    emoji: '🏛️',
+    name: 'Build City',
+    description: 'Upgrade settlement to city',
+    cost: ['🌾', '🌾', '🪨', '🪨', '🪨']
+  },
+  buildRoad: {
+    emoji: '🛤️',
+    name: 'Build Road',
+    description: 'Build a new road',
+    cost: ['🌲', '🧱']
+  },
+  buyCard: {
+    emoji: '📜',
+    name: 'Buy Development Card',
+    description: 'Purchase a development card',
+    cost: ['🌾', '🐑', '🪨']
+  },
+  endTurn: {
+    emoji: '⏭️',
+    name: 'End Turn',
+    description: 'End your turn',
+    cost: []
   }
 } as const
 
@@ -76,7 +110,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
       <div className="p-4 border-b border-white/20">
         <div className="flex flex-col space-y-3">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-white/80">Turn {gameState?.turn || 0}:</div>
+            <div className="text-sm font-semibold text-white">Turn {gameState?.turn || 0}</div>
             <div className="text-lg font-mono text-white">
               {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
             </div>
@@ -121,9 +155,16 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
               {gameState.phase === 'roll' && (
                 <Button 
                   onClick={() => handleAction('roll')}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-sm"
+                  variant="outline"
+                  className="w-full justify-start text-left text-sm p-2 h-auto bg-blue-600/20 border-blue-400/20 hover:bg-blue-600/30 text-white"
                 >
-                  🎲 Roll Dice
+                  <div className="flex items-start space-x-2 w-full">
+                    <span className="text-lg">🎲</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-white text-left">Roll Dice</div>
+                      <div className="text-xs text-white/60 text-left">Roll to start your turn</div>
+                    </div>
+                  </div>
                 </Button>
               )}
 
@@ -132,13 +173,23 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   <Button 
                     onClick={() => handleAction('buildSettlement')}
                     disabled={!canBuildSettlement}
-                    variant={canBuildSettlement ? "default" : "outline"}
-                    className={`w-full text-sm justify-start ${!canBuildSettlement ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildSettlement 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span>🏠 Build Settlement</span>
-                      <div className="flex items-center space-x-1 text-xs">
-                        <span>🌲</span><span>🧱</span><span>🌾</span><span>🐑</span>
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildSettlement.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildSettlement.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildSettlement.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildSettlement.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Button>
@@ -146,13 +197,23 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   <Button 
                     onClick={() => handleAction('buildCity')}
                     disabled={!canBuildCity}
-                    variant={canBuildCity ? "default" : "outline"}
-                    className={`w-full text-sm justify-start ${!canBuildCity ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildCity 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span>🏙️ Build City</span>
-                      <div className="flex items-center space-x-1 text-xs">
-                        <span>🌾🌾</span><span>🪨🪨🪨</span>
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildCity.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildCity.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildCity.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildCity.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Button>
@@ -160,13 +221,23 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   <Button 
                     onClick={() => handleAction('buildRoad')}
                     disabled={!canBuildRoad}
-                    variant={canBuildRoad ? "default" : "outline"}
-                    className={`w-full text-sm justify-start ${!canBuildRoad ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildRoad 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span>🛤️ Build Road</span>
-                      <div className="flex items-center space-x-1 text-xs">
-                        <span>🌲</span><span>🧱</span>
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildRoad.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildRoad.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildRoad.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildRoad.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Button>
@@ -174,13 +245,23 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   <Button 
                     onClick={() => handleAction('buyCard')}
                     disabled={!canBuyCard}
-                    variant={canBuyCard ? "default" : "outline"}
-                    className={`w-full text-sm justify-start ${!canBuyCard ? 'bg-white/5 border-white/20 text-white/60' : ''}`}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuyCard 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span>📜 Buy Development Card</span>
-                      <div className="flex items-center space-x-1 text-xs">
-                        <span>🌾</span><span>🐑</span><span>🪨</span>
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buyCard.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buyCard.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buyCard.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buyCard.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Button>
@@ -188,16 +269,29 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   <Button 
                     onClick={() => handleAction('trade')}
                     variant="outline"
-                    className="w-full text-sm bg-white/5 border-white/20 hover:bg-white/10 text-white"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
                   >
-                    🤝 Trade
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">🤝</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">Trade</div>
+                        <div className="text-xs text-white/60 text-left">Trade resources with players or ports</div>
+                      </div>
+                    </div>
                   </Button>
 
                   <Button 
                     onClick={() => handleAction('endTurn')}
-                    className="w-full bg-red-600 hover:bg-red-700 text-sm"
+                    variant="outline"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-red-600/20 border-red-400/20 hover:bg-red-600/30 text-white"
                   >
-                    ⏭️ End Turn
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.endTurn.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.endTurn.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.endTurn.description}</div>
+                      </div>
+                    </div>
                   </Button>
                 </>
               )}
@@ -223,13 +317,13 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     key={index}
                     onClick={() => handleAction('playCard', { cardType: card.type })}
                     variant="outline"
-                    className="w-full text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
                   >
-                    <div className="flex items-start space-x-2">
+                    <div className="flex items-start space-x-2 w-full">
                       <span className="text-lg">{cardInfo.emoji}</span>
-                      <div className="flex-1">
-                        <div className="font-medium text-white">{cardInfo.name}</div>
-                        <div className="text-xs text-white/60">{cardInfo.description}</div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{cardInfo.name}</div>
+                        <div className="text-xs text-white/60 text-left">{cardInfo.description}</div>
                       </div>
                     </div>
                   </Button>

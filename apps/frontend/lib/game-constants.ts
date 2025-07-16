@@ -27,12 +27,12 @@ export const TOKEN_DESIGN = {
 
 // Road design constants
 export const ROAD_DESIGN = {
-  // Road should be ~80% of hex edge length
-  // For HEX_RADIUS=32, hex edge ≈ 32px, so road width = ~25px
-  width: 25,
+  // Road should be visible but not dominate the board
+  // Hex borders are 1-2px, so roads should be ~3-4x thicker for visibility
+  width: 6,
   playerColorFill: true,
   outlineColor: '#191919',
-  outlineWidth: 2
+  outlineWidth: 1
 } as const
 
 // Game piece emojis

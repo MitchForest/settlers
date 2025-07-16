@@ -277,7 +277,7 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
   // Add some demo roads
   const edgeIds = Array.from(edges.keys())
   if (edgeIds.length > 0) {
-    // Player 0 road
+    // Player 0 roads (red) - connected sequence
     const edge1 = edges.get('0,0,0-1,-1,0-NE')
     if (edge1) {
       edge1.connection = {
@@ -286,8 +286,28 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
         position: edge1.position
       }
     }
+    
+    // Player 0 - second road connecting to first
+    const edge1b = edges.get('1,-1,0-2,-1,-1-NE')
+    if (edge1b) {
+      edge1b.connection = {
+        type: 'road',
+        owner: 'player-demo-0',
+        position: edge1b.position
+      }
+    }
+    
+    // Player 0 - third road in sequence
+    const edge1c = edges.get('2,-1,-1-2,0,-2-SE')
+    if (edge1c) {
+      edge1c.connection = {
+        type: 'road',
+        owner: 'player-demo-0',
+        position: edge1c.position
+      }
+    }
 
-    // Player 1 road
+    // Player 1 roads (blue) - connected sequence
     const edge2 = edges.get('1,-1,0-0,0,0-SW')
     if (edge2) {
       edge2.connection = {
@@ -296,8 +316,18 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
         position: edge2.position
       }
     }
+    
+    // Player 1 - second road
+    const edge2b = edges.get('0,0,0--1,1,0-SW')
+    if (edge2b) {
+      edge2b.connection = {
+        type: 'road',
+        owner: 'player-demo-1',
+        position: edge2b.position
+      }
+    }
 
-    // Player 2 road
+    // Player 2 roads (green) - connected sequence
     const edge3 = edges.get('-1,1,0-0,1,-1-E')
     if (edge3) {
       edge3.connection = {
@@ -306,14 +336,44 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
         position: edge3.position
       }
     }
+    
+    // Player 2 - second road
+    const edge3b = edges.get('0,1,-1-1,1,-2-E')
+    if (edge3b) {
+      edge3b.connection = {
+        type: 'road',
+        owner: 'player-demo-2',
+        position: edge3b.position
+      }
+    }
+    
+    // Player 2 - third road
+    const edge3c = edges.get('1,1,-2-1,0,-1-SW')
+    if (edge3c) {
+      edge3c.connection = {
+        type: 'road',
+        owner: 'player-demo-2',
+        position: edge3c.position
+      }
+    }
 
-    // Player 3 road
+    // Player 3 roads (orange) - shorter sequence
     const edge4 = edges.get('0,-1,1--1,0,1-SW')
     if (edge4) {
       edge4.connection = {
         type: 'road',
         owner: 'player-demo-3',
         position: edge4.position
+      }
+    }
+    
+    // Player 3 - second road
+    const edge4b = edges.get('-1,0,1--1,-1,2-S')
+    if (edge4b) {
+      edge4b.connection = {
+        type: 'road',
+        owner: 'player-demo-3',
+        position: edge4b.position
       }
     }
   }
@@ -330,92 +390,41 @@ function addDemoPieces(vertices: Map<string, Vertex>, edges: Map<string, Edge>) 
   })
 }
 
-// Generate standard Catan ports
+// Generate standard Catan ports with alternating pattern
 function generatePorts(): Port[] {
   // Standard Catan has 9 ports: 4 generic (3:1) and 5 resource-specific (2:1)
   const ports: Port[] = []
   
-  // Define port placements around the sea edges
-  // These correspond to specific edges between sea and land hexes
-  const portPlacements = [
-    // Generic ports (3:1)
-    { 
-      id: 'port-1', 
-      hexes: [{ q: 2, r: -3, s: 1 }, { q: 1, r: -2, s: 1 }], 
-      direction: 'SE' as const, 
-      type: 'generic' as const, 
-      ratio: 3 
-    },
-    { 
-      id: 'port-2', 
-      hexes: [{ q: 0, r: 3, s: -3 }, { q: -1, r: 2, s: -1 }], 
-      direction: 'SW' as const, 
-      type: 'generic' as const, 
-      ratio: 3 
-    },
-    { 
-      id: 'port-3', 
-      hexes: [{ q: -3, r: 2, s: 1 }, { q: -2, r: 1, s: 1 }], 
-      direction: 'NE' as const, 
-      type: 'generic' as const, 
-      ratio: 3 
-    },
-    { 
-      id: 'port-4', 
-      hexes: [{ q: 1, r: -3, s: 2 }, { q: 0, r: -2, s: 2 }], 
-      direction: 'E' as const, 
-      type: 'generic' as const, 
-      ratio: 3 
-    },
-    
-    // Resource-specific ports (2:1)
-    { 
-      id: 'port-5', 
-      hexes: [{ q: 3, r: -2, s: -1 }, { q: 2, r: -1, s: -1 }], 
-      direction: 'SW' as const, 
-      type: 'wood' as const, 
-      ratio: 2 
-    },
-    { 
-      id: 'port-6', 
-      hexes: [{ q: 2, r: 1, s: -3 }, { q: 1, r: 1, s: -2 }], 
-      direction: 'W' as const, 
-      type: 'brick' as const, 
-      ratio: 2 
-    },
-    { 
-      id: 'port-7', 
-      hexes: [{ q: -1, r: 3, s: -2 }, { q: -1, r: 2, s: -1 }], 
-      direction: 'NW' as const, 
-      type: 'ore' as const, 
-      ratio: 2 
-    },
-    { 
-      id: 'port-8', 
-      hexes: [{ q: -3, r: 1, s: 2 }, { q: -2, r: 0, s: 2 }], 
-      direction: 'NE' as const, 
-      type: 'wheat' as const, 
-      ratio: 2 
-    },
-    { 
-      id: 'port-9', 
-      hexes: [{ q: 0, r: -3, s: 3 }, { q: 1, r: -2, s: 1 }], 
-      direction: 'E' as const, 
-      type: 'sheep' as const, 
-      ratio: 2 
-    }
+  // Port types in the order they should appear (alternating around the board)
+  // This maintains the classic Catan distribution
+  const portTypes = [
+    { type: 'generic' as const, ratio: 3 },
+    { type: 'wood' as const, ratio: 2 },
+    { type: 'generic' as const, ratio: 3 },
+    { type: 'brick' as const, ratio: 2 },
+    { type: 'generic' as const, ratio: 3 },
+    { type: 'sheep' as const, ratio: 2 },
+    { type: 'generic' as const, ratio: 3 },
+    { type: 'ore' as const, ratio: 2 },
+    { type: 'wheat' as const, ratio: 2 }
   ]
   
-  // Create port objects with edge positions
-  portPlacements.forEach(placement => {
+  // Place ports in alternating sea hexes (every other hex)
+  // Start at index 1, then place every 2 sea hexes (creating the alternating pattern)
+  const portIndices = [1, 3, 5, 7, 9, 11, 13, 15, 17] // 9 port positions, every other sea hex
+  
+  portIndices.forEach((seaHexIndex, portIndex) => {
+    const seaHex = SEA_HEX_POSITIONS[seaHexIndex]
+    const portType = portTypes[portIndex]
+    
     ports.push({
-      id: placement.id,
-      position: {
-        hexes: placement.hexes,
-        direction: placement.direction
-      },
-      type: placement.type,
-      ratio: placement.ratio
+      id: `port-${portIndex + 1}`,
+             position: {
+         hexes: [seaHex], // Port is centered in this sea hex
+         direction: 'NE' // Direction doesn't matter for rendering, just for consistency
+       },
+      type: portType.type,
+      ratio: portType.ratio
     })
   })
   

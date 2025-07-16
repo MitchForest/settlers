@@ -3,7 +3,7 @@ import { VertexPosition } from '@settlers/core'
 import type { Board } from '@settlers/core'
 
 // CRITICAL: This must match HexTile.tsx HEX_RADIUS constant
-export const HEX_RADIUS = 32
+export const HEX_RADIUS = 50  // Increased from 32 to make hexes more visible
 
 // Player colors for the game
 export const PLAYER_COLORS = {

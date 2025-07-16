@@ -1,21 +1,18 @@
 'use client'
 
+import React, { useRef, useEffect } from 'react'
+import { Board } from '@settlers/core'
+import { useGameStore } from '@/stores/gameStore'
+
+import { useGameTheme } from '@/components/theme-provider'
+import { GameTheme } from '@/lib/theme-types'
 import { HexGridLayer } from './layers/HexGridLayer'
-import { ConnectionLayer } from './layers/ConnectionLayer'
-import { InteractionLayer } from './layers/InteractionLayer'
 import { PieceLayer } from './layers/PieceLayer'
 import { PortLayer } from './layers/PortLayer'
 
-import { useGameStore } from '@/stores/gameStore'
-import { useGameTheme } from '@/components/theme-provider'
 
-import { cn } from '@/lib/utils'
-import { Board } from '@settlers/core'
-import { useEffect, useRef } from 'react'
-import { GameTheme } from '@/lib/theme-types'
-import { useZoomPan } from '@/lib/use-zoom-pan'
-import { useInteractionSystem } from '@/lib/interaction-system'
 import { initializeBoardGrid } from '@/lib/board-utils'
+import { useSimplePanZoom } from '@/lib/use-simple-pan-zoom'
 
 interface TestPiece {
   type: 'settlement' | 'city' | 'road'
@@ -35,6 +32,8 @@ interface GameBoardProps {
 export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBoardProps = {}) {
   // === UNIFIED STATE MANAGEMENT ===
   const gameState = useGameStore(state => state.gameState)
+  const setHoveredHex = useGameStore(state => state.setHoveredHex)
+  const setSelectedHex = useGameStore(state => state.setSelectedHex)
   const { theme: contextTheme, loading } = useGameTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -44,24 +43,21 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
   // Use prop board if provided, otherwise fall back to store
   const board = propBoard || gameState?.board
   
-  // === UNIFIED INTERACTION SYSTEM ===
-  const zoomPanControls = useZoomPan({
-    viewportOffsets: {
-      left: 400,       // Increased to shift board more to the right
-      top: 96,         // Top bar height (estimated with padding)
-      right: 0,        // No right UI elements
-      bottom: 64       // Bottom button area height (h-12 + spacing)
-    },
-    initialViewBox: {
-      x: -250,    // Zoomed in more (was -300)
-      y: -250,    // Zoomed in more (was -300)
-      width: 500, // Smaller view area for more zoom (was 600)
-      height: 500 // Smaller view area for more zoom (was 600)
-    }
+  console.log('GameBoard render:', { 
+    propBoard: !!propBoard, 
+    storeBoard: !!gameState?.board, 
+    finalBoard: !!board,
+    gameState: !!gameState,
+    boardHexCount: board?.hexes?.size || 0,
+    firstFewHexes: board?.hexes ? Array.from(board.hexes.entries()).slice(0, 3) : []
   })
-  const interactions = useInteractionSystem({
-    viewBoxControls: zoomPanControls,
-    containerRef
+  
+  // === UNIFIED INTERACTION SYSTEM ===
+  // === NEW SIMPLE PAN/ZOOM SYSTEM ===
+  const { transform, isDragging } = useSimplePanZoom(containerRef, {
+    minScale: 0.3,    // Allow zooming out more to see full board
+    maxScale: 3.0,    // Allow zooming in more for detail
+    zoomStep: 0.05    // Much finer control for smooth zooming
   })
   
   // === INITIALIZATION ===
@@ -88,6 +84,8 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
     onBoardClear(clearSelection)
   }, [onBoardClear])
   
+
+  
   // === RENDER ===
   
   // CRITICAL FIX: Only block if no board exists
@@ -104,93 +102,53 @@ export function GameBoard({ board: propBoard, onBoardClear, forceTheme }: GameBo
   return (
     <div 
       ref={containerRef}
-      className={cn(
-        "fixed inset-0 w-screen h-screen overflow-hidden select-none",
-        interactions.isPanning ? "cursor-grabbing" : "cursor-grab"
-      )}
+      className="fixed inset-0 w-screen h-screen overflow-hidden select-none"
       style={{
+        cursor: isDragging ? 'grabbing' : 'grab',
         background: `linear-gradient(135deg, var(--color-game-bg-primary), var(--color-game-bg-secondary), var(--color-game-bg-accent))`
       }}
+      onContextMenu={(e) => e.preventDefault()}
+      tabIndex={0}
     >
-      {/* Background pattern */}
+      {/* Background pattern - stays fixed */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,var(--color-game-bg-primary)_0%,transparent_50%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,var(--color-game-bg-accent)_0%,transparent_50%)]" />
       </div>
     
-      {/* Hex Grid Layer - Main board rendering */}
-      <div className="absolute inset-0 z-10 pointer-events-none">
-        <HexGridLayer
-          board={board} 
-          theme={theme}
-          disableTransitions={false}
-          viewBox={zoomPanControls.getViewBoxString()}
-          onHexHover={interactions.onHexHover}
-          onHexClick={interactions.onHexSelect}
-        />
-      </div>
-      
-      {/* Port Layer - renders ports around the board */}
-      {board && (
-        <div className="absolute inset-0 z-12 pointer-events-none">
-          <svg
-            width="100%"
-            height="100%"
-            viewBox={zoomPanControls.getViewBoxString()}
-            className="port-layer-svg"
-            style={{ background: 'transparent' }}
-          >
-            {/* Port components would go here */}
-          </svg>
-        </div>
-      )}
-      
-      {/* Piece Layer: Game pieces (settlements, cities, roads) */}
-      {gameState && (
-        <div className="absolute inset-0 z-15 pointer-events-none">
-          <svg
-            width="100%"
-            height="100%"
-            viewBox={zoomPanControls.getViewBoxString()}
-            className="piece-layer-svg"
-            style={{ background: 'transparent' }}
-          >
-            {/* Test pieces would be rendered here */}
-            
-            {/* Real game pieces would go here when we implement them */}
-            <PieceLayer 
-              board={board} 
-              gameState={gameState}
-              hexSize={32}
-              onSettlementClick={(_vertexId: string) => {/* Handle settlement click */}}
-              onCityClick={(_vertexId: string) => {/* Handle city click */}}
-              onRoadClick={(_edgeId: string) => {/* Handle road click */}}
-            />
-            
-            {/* Render ports */}
-            <PortLayer 
-              board={board}
-              hexSize={32}
-            />
-          </svg>
-        </div>
-      )}
-      
-      {/* Connection Layer: SVG for roads and buildings */}
-      <div className="absolute inset-0 z-20 pointer-events-none">
-        <ConnectionLayer viewBox={zoomPanControls.getViewBoxString()} />
-      </div>
-
-      {/* Interaction Layer: Overlays, tooltips, highlights */}
-      <div className="absolute inset-0 z-30 pointer-events-none">
-        {gameState && (
-          <InteractionLayer 
-          viewBox={zoomPanControls.getViewBoxString()}
+      {/* MAIN BOARD CONTENT - CSS Transform Applied Here */}
+      <div 
+        className="absolute inset-0 origin-center"
+        style={{ 
+          transform,
+          pointerEvents: 'none'  // Let mouse events pass through to SVG elements
+        }}
+      >
+        {/* Fixed-size SVG container with proper viewBox for hexagon board */}
+        <svg 
+          className="absolute"
+          viewBox="-400 -400 800 800"
+          style={{ 
+            width: '800px', 
+            height: '800px',
+            left: '50%',
+            top: '50%',
+            marginLeft: '-400px',
+            marginTop: '-400px',
+            pointerEvents: 'all'  // Re-enable pointer events for SVG content
+          }}
+        >
+          <HexGridLayer
+            board={board} 
+            theme={theme}
+            disableTransitions={false}
+            onHexHover={setHoveredHex}
+            onHexClick={setSelectedHex}
           />
-        )}
+          <PortLayer board={board} />
+          <PieceLayer board={board} />
+        </svg>
       </div>
-      
-     
       
       {/* Theme loading indicator (optional, non-blocking) */}
       {loading && (

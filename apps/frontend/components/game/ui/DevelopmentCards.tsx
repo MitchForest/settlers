@@ -174,7 +174,7 @@ function getCardDisplayName(type: DevelopmentCardType): string {
   const names = {
     knight: 'Knight',
     victory: 'Victory Point',
-    roadBuilding: 'Road Building',
+    roadBuilding: 'Road Builder',
     yearOfPlenty: 'Year of Plenty',
     monopoly: 'Monopoly'
   }

@@ -133,14 +133,15 @@ export function HexTile({
         />
       )}
 
-      {/* Selection indicator */}
+      {/* Selection indicator - subtle overlay like hover but stronger */}
       {isSelected && (
         <path
           d={hexPath}
-          fill="none"
-          stroke="rgba(37, 99, 235, 0.7)"
-          strokeWidth="2"
+          fill="rgba(255, 255, 255, 0.12)"
           className="pointer-events-none"
+          style={{
+            transition: `opacity var(--interaction-timing) var(--interaction-easing)`,
+          }}
         />
       )}
       

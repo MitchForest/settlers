@@ -11,7 +11,6 @@ interface HexGridLayerProps {
   board: Board
   theme: GameTheme | null
   disableTransitions?: boolean
-  viewBox?: string // Override viewBox calculation
   onHexHover?: (hexId: string | null) => void
   onHexClick?: (hexId: string | null) => void
 }
@@ -20,7 +19,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   board, 
   theme, 
   disableTransitions = false,
-  viewBox,
   onHexHover,
   onHexClick
 }) => {
@@ -30,7 +28,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   
   // Convert hexes to pixel coordinates for rendering
   const renderHexes = useMemo(() => {
-    return Array.from(board.hexes.values()).map(hex => {
+    const hexes = Array.from(board.hexes.values()).map(hex => {
       const hexId = `${hex.position.q},${hex.position.r},${hex.position.s}`
       const pixelPos = hexToPixel(hex.position.q, hex.position.r)
       
@@ -40,28 +38,20 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         pixelPosition: pixelPos
       }
     })
+    
+    console.log('HexGridLayer renderHexes:', {
+      totalHexes: hexes.length,
+      firstFew: hexes.slice(0, 3).map(h => ({
+        id: h.id,
+        terrain: h.terrain,
+        position: h.pixelPosition
+      }))
+    })
+    
+    return hexes
   }, [board.hexes])
   
-  // Calculate SVG viewBox to fit all hexes with padding
-  const bounds = useMemo(() => {
-    if (renderHexes.length === 0) {
-      return { minX: 0, minY: 0, width: 400, height: 400 }
-    }
-    
-    const positions = renderHexes.map(hex => hex.pixelPosition)
-    
-    const minX = Math.min(...positions.map(p => p.x)) - 50
-    const maxX = Math.max(...positions.map(p => p.x)) + 50
-    const minY = Math.min(...positions.map(p => p.y)) - 50  
-    const maxY = Math.max(...positions.map(p => p.y)) + 50
-    
-    return {
-      minX,
-      minY,
-      width: maxX - minX,
-      height: maxY - minY
-    }
-  }, [renderHexes])
+
   
   // Sort hexes for proper z-index rendering (selected/hovered on top)
   const sortedHexes = useMemo(() => {
@@ -74,43 +64,39 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
     })
   }, [renderHexes, selectedHexId, hoveredHexId])
 
-  // CRITICAL FIX: Always render, assetResolver is optional
-  // When assetResolver is null, HexTile components will use geometric fallbacks
+  // CRITICAL FIX: Return SVG elements directly, not wrapped in another SVG
+  // This component now returns JSX to be rendered inside the parent SVG
   return (
-    <div className="hex-grid-layer w-full h-full">
-      <svg
-        width="100%"
-        height="100%"
-        viewBox={viewBox || `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
-        className="hex-grid-svg"
-        style={{ background: 'transparent' }}
-      >
-        {/* Filter definitions */}
-        {/* Hex tiles - render with geometric fallbacks if no theme/assetResolver */}
-        {sortedHexes.map(hex => {
-          const isEmptySlot = hex.terrain === null || hex.terrain === undefined
-          const isHovered = hoveredHexId === hex.id
-          const isSelected = selectedHexId === hex.id
-          
-          return (
-            <HexTile
-              key={hex.id}
-              terrain={hex.terrain}
-              numberToken={hex.numberToken}
-              position={hex.pixelPosition}
-              theme={theme} // Can be null - HexTile handles fallbacks
-              assetResolver={null} // Asset resolver is no longer a prop, so pass null
-              isHovered={isHovered}
-              isSelected={isSelected}
-              isEmpty={isEmptySlot}
-              disableTransitions={disableTransitions}
-              hexId={hex.id}
-              onHexHover={onHexHover}
-              onHexClick={onHexClick}
-            />
-          )
-        })}
-      </svg>
-    </div>
+    <g className="hex-grid-layer">
+      {/* Filter definitions */}
+      <defs>
+        {/* Add any global filters here if needed */}
+      </defs>
+      
+      {/* Hex tiles - render with geometric fallbacks if no theme/assetResolver */}
+      {sortedHexes.map(hex => {
+        const isEmptySlot = hex.terrain === null || hex.terrain === undefined
+        const isHovered = hoveredHexId === hex.id
+        const isSelected = selectedHexId === hex.id
+        
+        return (
+          <HexTile
+            key={hex.id}
+            terrain={hex.terrain}
+            numberToken={hex.numberToken}
+            position={hex.pixelPosition}
+            theme={theme} // Can be null - HexTile handles fallbacks
+            assetResolver={null} // Asset resolver is no longer a prop, so pass null
+            isHovered={isHovered}
+            isSelected={isSelected}
+            isEmpty={isEmptySlot}
+            disableTransitions={disableTransitions}
+            hexId={hex.id}
+            onHexHover={onHexHover}
+            onHexClick={onHexClick}
+          />
+        )
+      })}
+    </g>
   )
 } 

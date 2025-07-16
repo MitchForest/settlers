@@ -4,7 +4,8 @@ import { Board, Vertex, Edge, GameState } from '@settlers/core'
 import { SettlementPiece } from '../pieces/SettlementPiece'
 import { CityPiece } from '../pieces/CityPiece'
 import { RoadPiece } from '../pieces/RoadPiece'
-import { hexToPixel } from '@/lib/board-utils'
+
+import { getVertexPixelPosition, getEdgePixelPositions } from '@/lib/hex-geometry'
 
 interface PieceLayerProps {
   board: Board
@@ -17,49 +18,14 @@ interface PieceLayerProps {
 
 // Using hexToPixel from board-utils (honeycomb-grid integration)
 
-// Calculate vertex position (junction between hexes)
-function getVertexPosition(vertex: Vertex, hexSize: number): { x: number; y: number } {
-  if (vertex.position.hexes.length === 0) {
-    return { x: 0, y: 0 }
-  }
-  
-  // For now, use the first hex position as a base
-  // In a real implementation, this would calculate the exact vertex position
-  // based on the direction and connected hexes
-  const baseHex = hexToPixel(vertex.position.hexes[0].q, vertex.position.hexes[0].r)
-  
-  // Offset based on direction to approximate vertex positions
-  const offsets = {
-    'N': { x: 0, y: -hexSize * 0.866 }, // sqrt(3)/2
-    'NE': { x: hexSize * 0.75, y: -hexSize * 0.433 },
-    'SE': { x: hexSize * 0.75, y: hexSize * 0.433 },
-    'S': { x: 0, y: hexSize * 0.866 },
-    'SW': { x: -hexSize * 0.75, y: hexSize * 0.433 },
-    'NW': { x: -hexSize * 0.75, y: -hexSize * 0.433 }
-  }
-  
-  const offset = offsets[vertex.position.direction] || { x: 0, y: 0 }
-  
-  return {
-    x: baseHex.x + offset.x,
-    y: baseHex.y + offset.y
-  }
+// Calculate vertex position using proper honeycomb-grid geometry
+function getVertexPosition(vertex: Vertex, _hexSize: number): { x: number; y: number } {
+  return getVertexPixelPosition(vertex.position)
 }
 
-// Calculate edge position (connection between vertices)
+// Calculate edge position using proper honeycomb-grid geometry
 function getEdgePositions(edge: Edge, _hexSize: number): { start: { x: number; y: number }, end: { x: number; y: number } } {
-  if (edge.position.hexes.length < 2) {
-    const fallback = edge.position.hexes[0] || { q: 0, r: 0, s: 0 }
-    const pos = hexToPixel(fallback.q, fallback.r)
-    return { start: pos, end: pos }
-  }
-  
-  const hex1 = hexToPixel(edge.position.hexes[0].q, edge.position.hexes[0].r)
-  const hex2 = hexToPixel(edge.position.hexes[1].q, edge.position.hexes[1].r)
-  
-  // For now, draw roads between hex centers
-  // In a real implementation, this would calculate exact edge positions
-  return { start: hex1, end: hex2 }
+  return getEdgePixelPositions(edge.position)
 }
 
 export function PieceLayer({ 
