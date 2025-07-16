@@ -1,0 +1,151 @@
+{
+  "meta": {
+    "id": "settlers",
+    "name": "Settlers Classic",
+    "description": "Classic Catan-style settlers theme with terrain textures",
+    "version": "1.0.0",
+    "author": "Settlers Team",
+    "useCustomIcons": true
+  },
+  "resources": [
+    {
+      "id": "terrain1",
+      "name": "Wood",
+      "color": "#2D5016",
+      "icon": "🌲",
+      "terrainTexture": "forest.png"
+    },
+    {
+      "id": "terrain2", 
+      "name": "Sheep",
+      "color": "#7CB342",
+      "icon": "🐑",
+      "terrainTexture": "pasture.png"
+    },
+    {
+      "id": "terrain3",
+      "name": "Wheat",
+      "color": "#FFC107",
+      "icon": "🌾",
+      "terrainTexture": "wheat.png"
+    },
+    {
+      "id": "terrain4",
+      "name": "Brick",
+      "color": "#D84315",
+      "icon": "🧱",
+      "terrainTexture": "brick.png"
+    },
+    {
+      "id": "terrain5",
+      "name": "Ore",
+      "color": "#6A1B9A",
+      "icon": "⛰️",
+      "terrainTexture": "ore.png"
+    },
+    {
+      "id": "desert",
+      "name": "Desert",
+      "color": "#F4E4BC",
+      "icon": "🏜️",
+      "terrainTexture": "desert.png"
+    }
+  ],
+  "structures": {
+    "settlement": {
+      "name": "Settlement",
+      "plural": "Settlements",
+      "description": "Basic settlement for resource production",
+      "icon": "🏠",
+      "color": "#primary"
+    },
+    "city": {
+      "name": "City",
+      "plural": "Cities", 
+      "description": "Advanced city for double resource production",
+      "icon": "🏢",
+      "color": "#primary"
+    },
+    "road": {
+      "name": "Road",
+      "plural": "Roads",
+      "description": "Connection between settlements",
+      "width": 4,
+      "style": "solid"
+    }
+  },
+  "players": {
+    "colors": [
+      {
+        "id": "red",
+        "name": "Red",
+        "primary": "#DC2626",
+        "secondary": "#FCA5A5",
+        "accent": "#991B1B"
+      },
+      {
+        "id": "blue", 
+        "name": "Blue",
+        "primary": "#2563EB",
+        "secondary": "#93C5FD",
+        "accent": "#1D4ED8"
+      },
+      {
+        "id": "white",
+        "name": "White",
+        "primary": "#FFFFFF",
+        "secondary": "#F3F4F6", 
+        "accent": "#D1D5DB"
+      },
+      {
+        "id": "orange",
+        "name": "Orange",
+        "primary": "#EA580C",
+        "secondary": "#FED7AA",
+        "accent": "#C2410C"
+      }
+    ]
+  },
+  "developmentCards": {
+    "knight": {
+      "name": "Knight",
+      "description": "Move the robber",
+      "icon": "⚔️",
+      "color": "#8B5CF6"
+    },
+    "victory": {
+      "name": "Victory Point",
+      "description": "Counts toward victory",
+      "icon": "🏆", 
+      "color": "#F59E0B"
+    },
+    "progress1": {
+      "name": "Road Building",
+      "description": "Build 2 roads for free",
+      "icon": "🛤️",
+      "color": "#10B981"
+    },
+    "progress2": {
+      "name": "Year of Plenty", 
+      "description": "Take 2 resource cards",
+      "icon": "💰",
+      "color": "#3B82F6"
+    },
+    "progress3": {
+      "name": "Monopoly",
+      "description": "Take all cards of one type",
+      "icon": "💎",
+      "color": "#8B5CF6"
+    }
+  },
+  "ui": {
+    "colors": {
+      "primary": "#1F2937",
+      "secondary": "#374151", 
+      "accent": "#6366F1",
+      "background": "#F9FAFB",
+      "surface": "#FFFFFF",
+      "text": "#111827"
+    }
+  }
+} 

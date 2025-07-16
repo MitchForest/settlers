@@ -13,6 +13,8 @@
   --animation-fast: 150ms;
   --animation-base: 250ms;
   --animation-slow: 350ms;
+  --spring-out: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --spring-gentle: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
   /* === Z-INDEX SCALE === */
   --z-sidebar: 40;
@@ -512,16 +514,7 @@
   @apply drop-shadow-md;
 }
 
-.number-token text {
-  @apply font-bold;
-  font-size: 20px;
-  fill: #1a1a1a;
-}
 
-.number-token text.high-probability {
-  @apply text-red-600;
-  fill: #dc2626;
-}
 
 /* Glass morphism for hexes */
 .hex-glass {
@@ -546,6 +539,54 @@
   }
 }
 
+@keyframes hex-selected-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes hex-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes hex-fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Hex Animation Classes */
 .hex-producing {
   animation: hex-pulse 2s ease-in-out infinite;
+}
+
+.hex-hover-spring {
+  transition: all 0.3s var(--spring-out);
+}
+
+.hex-selected-glow {
+  animation: hex-selected-pulse 1.5s var(--spring-gentle) infinite;
+}
+
+.hex-float-gentle {
+  animation: hex-float 3s ease-in-out infinite;
+}
+
+.hex-fade-in {
+  animation: hex-fade-in 0.5s var(--spring-out);
 }

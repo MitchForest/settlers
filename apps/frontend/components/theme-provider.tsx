@@ -3,7 +3,7 @@
 import * as React from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { GameTheme } from "@/lib/theme-types"
-import { ThemeLoader } from "@/lib/theme-loader"
+import { loadTheme } from "@/lib/theme-loader"
 
 interface ThemeProviderProps {
   children: React.ReactNode
@@ -35,29 +35,20 @@ export function useGameTheme() {
 
 function GameThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = React.useState<GameTheme | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(false)
   
-  const themeLoader = React.useMemo(() => ThemeLoader.getInstance(), [])
-
-  const loadTheme = React.useCallback(async (themeId: string) => {
-    setLoading(true)
+  const loadGameTheme = React.useCallback(async (themeId: string) => {
     try {
-      const newTheme = await themeLoader.loadTheme(themeId)
-      setTheme(newTheme)
+      setLoading(true)
+      const loadedTheme = await loadTheme(themeId)
+      setTheme(loadedTheme)
     } catch (error) {
       console.error('Failed to load theme:', error)
+      setTheme(null) // Use geometric fallbacks on error
     } finally {
       setLoading(false)
     }
-  }, [themeLoader])
-
-  // Load default theme on mount
-  React.useEffect(() => {
-    console.log('ThemeProvider: Loading default theme...')
-    loadTheme('default').then(() => {
-      console.log('ThemeProvider: Default theme loaded successfully')
-    })
-  }, [loadTheme])
+  }, [])
 
   const getResourceName = React.useCallback((resourceId: string): string => {
     if (!theme) return resourceId
@@ -66,49 +57,39 @@ function GameThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme])
 
   const getResourceColor = React.useCallback((resourceId: string): string => {
-    if (!theme) return '#666666'
+    if (!theme) return '#F4E4BC'
     const resource = theme.resources.find(r => r.id === resourceId)
-    return resource?.color || '#666666'
+    return resource?.color || '#F4E4BC'
   }, [theme])
 
   const getResourceIcon = React.useCallback((resourceId: string): string => {
-    if (!theme) return '?'
+    if (!theme) return '❓'
     const resource = theme.resources.find(r => r.id === resourceId)
-    return resource?.icon || '?'
+    return resource?.icon || '❓'
   }, [theme])
 
-  const value: GameThemeContextType = {
+  const contextValue = React.useMemo(() => ({
     theme,
     loading,
-    loadTheme,
+    loadTheme: loadGameTheme,
     getResourceName,
     getResourceColor,
-    getResourceIcon
-  }
+    getResourceIcon,
+  }), [theme, loading, loadGameTheme, getResourceName, getResourceColor, getResourceIcon])
 
   return (
-    <GameThemeContext.Provider value={value}>
+    <GameThemeContext.Provider value={contextValue}>
       {children}
     </GameThemeContext.Provider>
   )
 }
 
-export function ThemeProvider({ 
-  children, 
-  attribute = "class",
-  defaultTheme = "system",
-  enableSystem = true,
-  disableTransitionOnChange = false,
-  ...props 
+export function ThemeProvider({
+  children,
+  ...props
 }: ThemeProviderProps) {
   return (
-    <NextThemesProvider
-      attribute={attribute}
-      defaultTheme={defaultTheme}
-      enableSystem={enableSystem}
-      disableTransitionOnChange={disableTransitionOnChange}
-      {...props}
-    >
+    <NextThemesProvider {...props}>
       <GameThemeProvider>
         {children}
       </GameThemeProvider>

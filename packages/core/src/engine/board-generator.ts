@@ -34,37 +34,33 @@ const GameHex = defineHex()
 export function generateClassicBaseGrid(): BaseGrid {
   const hexes: HexCoordinate[] = []
   
-  // Generate hex coordinates in classic Catan pattern
-  // Center hex
+  // Standard Catan 19-hex layout with proper cube coordinates
+  // This creates the exact layout used in the board game
+  
+  // Center hex (1)
   hexes.push({ q: 0, r: 0, s: 0 })
   
-  // Ring 1 (6 hexes around center)
-  for (let i = 0; i < 6; i++) {
-    const angle = i * 60
-    const q = Math.round(Math.cos(angle * Math.PI / 180))
-    const r = Math.round(Math.sin(angle * Math.PI / 180) * -1)
-    const s = -q - r
-    hexes.push({ q, r, s })
-  }
+  // Inner ring (6 hexes around center) 
+  hexes.push({ q: 1, r: -1, s: 0 })
+  hexes.push({ q: 1, r: 0, s: -1 })
+  hexes.push({ q: 0, r: 1, s: -1 })
+  hexes.push({ q: -1, r: 1, s: 0 })
+  hexes.push({ q: -1, r: 0, s: 1 })
+  hexes.push({ q: 0, r: -1, s: 1 })
   
-  // Ring 2 (12 hexes around ring 1)
-  for (let i = 0; i < 6; i++) {
-    const angle = i * 60
-    const q1 = Math.round(Math.cos(angle * Math.PI / 180) * 2)
-    const r1 = Math.round(Math.sin(angle * Math.PI / 180) * -2)
-    const s1 = -q1 - r1
-    hexes.push({ q: q1, r: r1, s: s1 })
-    
-    // Add the intermediate hex
-    const nextAngle = ((i + 1) % 6) * 60
-    const q2 = Math.round(Math.cos(nextAngle * Math.PI / 180))
-    const r2 = Math.round(Math.sin(nextAngle * Math.PI / 180) * -1)
-    const s2 = -q2 - r2
-    const qMid = q1 + q2
-    const rMid = r1 + r2
-    const sMid = s1 + s2
-    hexes.push({ q: qMid, r: rMid, s: sMid })
-  }
+  // Outer ring (12 hexes)
+  hexes.push({ q: 2, r: -2, s: 0 })
+  hexes.push({ q: 2, r: -1, s: -1 })
+  hexes.push({ q: 2, r: 0, s: -2 })
+  hexes.push({ q: 1, r: 1, s: -2 })
+  hexes.push({ q: 0, r: 2, s: -2 })
+  hexes.push({ q: -1, r: 2, s: -1 })
+  hexes.push({ q: -2, r: 2, s: 0 })
+  hexes.push({ q: -2, r: 1, s: 1 })
+  hexes.push({ q: -2, r: 0, s: 2 })
+  hexes.push({ q: -1, r: -1, s: 2 })
+  hexes.push({ q: 0, r: -2, s: 2 })
+  hexes.push({ q: 1, r: -2, s: 1 })
   
   // Generate port placements around the edge
   const ports: PortPlacement[] = [

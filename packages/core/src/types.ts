@@ -27,12 +27,19 @@ export interface PortPlacement {
 
 // Terrain types for hex tiles (theme-agnostic)
 export type TerrainType = 
-  | 'terrain1'  // Forest (Lumber)
-  | 'terrain2'  // Pasture (Wool) 
-  | 'terrain3'  // Fields (Grain)
-  | 'terrain4'  // Hills (Brick)
-  | 'terrain5'  // Mountains (Ore)
-  | 'desert'    // No resources
+  | 'tile-type-1'  // Resource type 1
+  | 'tile-type-2'  // Resource type 2
+  | 'tile-type-3'  // Resource type 3
+  | 'tile-type-4'  // Resource type 4
+  | 'tile-type-5'  // Resource type 5
+  | 'tile-type-6'  // Non-producing tile
+  // Legacy support
+  | 'terrain1'     // Forest (Lumber)
+  | 'terrain2'     // Pasture (Wool) 
+  | 'terrain3'     // Fields (Grain)
+  | 'terrain4'     // Hills (Brick)
+  | 'terrain5'     // Mountains (Ore)
+  | 'desert'       // No resources
 
 // Terrain assignment for the grid
 export interface TerrainAssignment {

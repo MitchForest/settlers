@@ -1,160 +1,188 @@
 // Theme loader - loads game themes with assets
 // Structure: themes/[themeId]/config.json + themes/[themeId]/assets/
 
-import { GameTheme, ResourceTheme, StructureTheme, ThemeMeta, DevelopmentCardTheme } from './theme-types'
+import { GameTheme, AssetResolver } from './theme-types'
 
-export class ThemeLoader {
-  private static instance: ThemeLoader
-  private themeCache = new Map<string, GameTheme>()
-  private assetCache = new Map<string, string>()
+// Default theme ID for fallbacks
+const DEFAULT_THEME_ID = 'default'
 
-  static getInstance(): ThemeLoader {
-    if (!ThemeLoader.instance) {
-      ThemeLoader.instance = new ThemeLoader()
+// Enhanced theme loader with asset-level fallback system
+export async function loadTheme(themeId: string): Promise<GameTheme> {
+  const basePath = `/themes/${themeId}`
+  
+  try {
+    const configResponse = await fetch(`${basePath}/config.json`)
+    if (!configResponse.ok) {
+      throw new Error(`Failed to load theme config: ${configResponse.status}`)
     }
-    return ThemeLoader.instance
+    
+    const theme: GameTheme = await configResponse.json()
+    
+    // Set base path for asset resolution
+    theme._assetBasePath = basePath
+    
+    // Resolve all asset paths for this theme
+    await resolveThemeAssets(theme)
+    
+    return theme
+  } catch (error) {
+    console.error(`Failed to load theme '${themeId}':`, error)
+    throw error
   }
+}
 
-  async loadTheme(themeId: string): Promise<GameTheme> {
-    if (this.themeCache.has(themeId)) {
-      return this.themeCache.get(themeId)!
+// Resolve asset paths for a theme
+async function resolveThemeAssets(theme: GameTheme): Promise<void> {
+  const basePath = theme._assetBasePath!
+  
+  // Process resources (terrain hex tiles)
+  for (const resource of theme.resources) {
+    // Look for hex tile asset (try multiple formats)
+    const hexAssetCandidates = [
+      `${basePath}/assets/terrain/hex-${resource.id}.png`,
+      `${basePath}/assets/terrain/hex-${resource.id}.svg`,
+      `${basePath}/assets/terrain/${resource.id}.png`,
+      `${basePath}/assets/terrain/${resource.id}.svg`
+    ]
+    
+    for (const candidate of hexAssetCandidates) {
+      if (await assetExists(candidate)) {
+        resource.hexAsset = candidate
+        break
+      }
     }
-
-    try {
-      const configUrl = `/themes/${themeId}/config.json`
-      const response = await fetch(configUrl)
+    
+    // Look for resource icon
+    if (resource.icon && !resource.icon.startsWith('http')) {
+      const iconCandidates = [
+        `${basePath}/assets/icons/${resource.icon}`,
+        `${basePath}/assets/icons/resource-${resource.id}.svg`,
+        `${basePath}/assets/icons/resource-${resource.id}.png`
+      ]
       
-      if (!response.ok) {
-        throw new Error(`Failed to load theme '${themeId}': ${response.statusText}`)
+      for (const candidate of iconCandidates) {
+        if (await assetExists(candidate)) {
+          resource.iconAsset = candidate
+          break
+        }
       }
-
-      const themeConfig = await response.json()
-      const enhancedTheme = await this.enhanceThemeWithAssets(themeId, themeConfig)
+    }
+  }
+  
+  // Process structures (settlements, cities, roads)
+  const structures = theme.structures
+  
+  // Look for structure assets
+  const structureTypes = ['settlement', 'city', 'road'] as const
+  for (const structureType of structureTypes) {
+    const structure = structures[structureType]
+    const assetCandidates = [
+      `${basePath}/assets/structures/${structureType}.png`,
+      `${basePath}/assets/structures/${structureType}.svg`,
+      `${basePath}/assets/pieces/${structureType}.png`,
+      `${basePath}/assets/pieces/${structureType}.svg`
+    ]
+    
+    for (const candidate of assetCandidates) {
+      if (await assetExists(candidate)) {
+        structure.asset = candidate
+        break
+      }
+    }
+  }
+  
+  // Process development cards
+  for (const [cardId, card] of Object.entries(theme.developmentCards)) {
+    const cardCandidates = [
+      `${basePath}/assets/cards/${cardId}.png`,
+      `${basePath}/assets/cards/${cardId}.svg`,
+      `${basePath}/assets/development-cards/${cardId}.png`,
+      `${basePath}/assets/development-cards/${cardId}.svg`
+    ]
+    
+    for (const candidate of cardCandidates) {
+      if (await assetExists(candidate)) {
+        card.artAsset = candidate
+        break
+      }
+    }
+    
+    if (card.icon && !card.icon.startsWith('http')) {
+      const iconCandidates = [
+        `${basePath}/assets/icons/${card.icon}`,
+        `${basePath}/assets/cards/icons/${cardId}.svg`
+      ]
       
-      this.themeCache.set(themeId, enhancedTheme)
-      return enhancedTheme
-    } catch (error) {
-      console.error(`Failed to load theme '${themeId}':`, error)
-      throw error
+      for (const candidate of iconCandidates) {
+        if (await assetExists(candidate)) {
+          card.iconAsset = candidate
+          break
+        }
+      }
     }
   }
+}
 
-  private async enhanceThemeWithAssets(themeId: string, config: Record<string, unknown>): Promise<GameTheme> {
-    const basePath = `/themes/${themeId}/assets`
-    
-    // Enhance resources with asset paths
-    const enhancedResources = (config.resources as ResourceTheme[]).map((resource: ResourceTheme) => ({
-      ...resource,
-      terrainAsset: `${basePath}/terrain/${resource.id}.png`,
-      iconAsset: (config.meta as ThemeMeta)?.useCustomIcons ? `${basePath}/icons/${resource.id}.svg` : undefined
-    }))
-
-    // Enhance structures with asset paths
-    const structures = config.structures as Record<string, { icon?: string; [key: string]: unknown }>
-    const enhancedStructures = Object.entries(structures).reduce((acc, [key, structure]) => {
-      acc[key] = {
-        ...structure,
-        iconAsset: structure.icon ? `${basePath}/pieces/${structure.icon}` : undefined
-      }
-      return acc
-    }, {} as Record<string, unknown>)
-
-    // Enhance development cards with asset paths
-    const developmentCards = config.developmentCards as Record<string, DevelopmentCardTheme & { art?: string }>
-    const enhancedDevelopmentCards = Object.entries(developmentCards).reduce((acc, [key, card]) => {
-      acc[key] = {
-        ...card,
-        iconAsset: card.icon ? `${basePath}/development-cards/${card.icon}` : undefined,
-        artAsset: card.art ? `${basePath}/development-cards/${card.art}` : undefined
-      }
-      return acc
-    }, {} as Record<string, DevelopmentCardTheme>)
-
-    return {
-      meta: config.meta,
-      resources: enhancedResources,
-      structures: enhancedStructures as unknown as StructureTheme,
-      developmentCards: enhancedDevelopmentCards,
-      ui: config.ui,
-      _assetBasePath: basePath
-    } as GameTheme
-  }
-
-  async preloadAssets(themeId: string): Promise<void> {
-    const theme = await this.loadTheme(themeId)
-    const preloadPromises: Promise<void>[] = []
-
-    // Preload terrain assets
-    theme.resources.forEach(resource => {
-      if (resource.terrainAsset) {
-        preloadPromises.push(this.preloadImage(resource.terrainAsset))
-      }
-      if (resource.iconAsset) {
-        preloadPromises.push(this.preloadImage(resource.iconAsset))
-      }
-    })
-
-    // Preload structure assets
-    Object.values(theme.structures).forEach(structure => {
-      if (structure.iconAsset) {
-        preloadPromises.push(this.preloadImage(structure.iconAsset))
-      }
-    })
-
-    // Preload development card assets
-    Object.values(theme.developmentCards).forEach(card => {
-      if (card.iconAsset) {
-        preloadPromises.push(this.preloadImage(card.iconAsset))
-      }
-      if (card.artAsset) {
-        preloadPromises.push(this.preloadImage(card.artAsset))
-      }
-    })
-
-    await Promise.allSettled(preloadPromises)
-  }
-
-  private async preloadImage(url: string): Promise<void> {
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.onload = () => {
-        this.assetCache.set(url, url)
-        resolve()
-      }
-      img.onerror = () => {
-        console.warn(`Failed to preload image: ${url}`)
-        resolve()
-      }
-      img.src = url
-    })
-  }
-
-  async getAssetUrl(themeId: string, assetPath: string): Promise<string> {
-    const fullUrl = `/themes/${themeId}/assets/${assetPath}`
-    
-    try {
-      const response = await fetch(fullUrl, { method: 'HEAD' })
-      if (response.ok) {
-        return fullUrl
-      }
-    } catch {
-      console.warn(`Asset not found: ${fullUrl}`)
+// Create asset resolver for a theme with fallback to default
+export function createAssetResolver(theme: GameTheme, defaultTheme?: GameTheme): AssetResolver {
+  return async (assetPath: string, fallbackPath?: string): Promise<string | null> => {
+    // Try the primary asset path
+    if (await assetExists(assetPath)) {
+      return assetPath
     }
     
-    return ''
-  }
-
-  clearCache(): void {
-    this.themeCache.clear()
-    this.assetCache.clear()
-  }
-
-  async assetExists(url: string): Promise<boolean> {
-    try {
-      const response = await fetch(url, { method: 'HEAD' })
-      return response.ok
-    } catch {
-      return false
+    // Try explicit fallback path if provided
+    if (fallbackPath && await assetExists(fallbackPath)) {
+      return fallbackPath
     }
+    
+    // Try to find equivalent asset in default theme
+    if (defaultTheme && theme.meta.id !== DEFAULT_THEME_ID) {
+      const defaultAssetPath = assetPath.replace(theme._assetBasePath!, defaultTheme._assetBasePath!)
+      if (await assetExists(defaultAssetPath)) {
+        return defaultAssetPath
+      }
+    }
+    
+    return null
   }
+}
+
+// Load default theme for fallbacks
+let defaultThemeCache: GameTheme | null = null
+
+export async function getDefaultTheme(): Promise<GameTheme> {
+  if (!defaultThemeCache) {
+    defaultThemeCache = await loadTheme(DEFAULT_THEME_ID)
+  }
+  return defaultThemeCache
+}
+
+// Get asset resolver with default theme fallback
+export async function getAssetResolver(theme: GameTheme): Promise<AssetResolver> {
+  if (theme.meta.id === DEFAULT_THEME_ID) {
+    // Default theme doesn't need fallbacks
+    return createAssetResolver(theme)
+  }
+  
+  const defaultTheme = await getDefaultTheme()
+  return createAssetResolver(theme, defaultTheme)
+}
+
+// Utility to check if an asset exists
+async function assetExists(path: string): Promise<boolean> {
+  try {
+    const response = await fetch(path, { method: 'HEAD' })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// Asset type detection
+export function getAssetType(assetPath: string): 'png' | 'svg' | 'unknown' {
+  const extension = assetPath.split('.').pop()?.toLowerCase()
+  if (extension === 'png' || extension === 'jpg' || extension === 'jpeg') return 'png'
+  if (extension === 'svg') return 'svg'
+  return 'unknown'
 } 
