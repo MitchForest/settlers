@@ -8,7 +8,7 @@ export type PlayerColor = 0 | 1 | 2 | 3
 // ============= Resource and Terrain Types =============
 
 export type ResourceType = 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep'
-export type TerrainType = 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert'
+export type TerrainType = 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | 'sea'
 
 export interface ResourceCards {
   wood: number

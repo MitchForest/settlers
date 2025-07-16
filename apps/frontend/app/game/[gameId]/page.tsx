@@ -3,9 +3,11 @@
 import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
+import { GameInterface } from '@/components/game/ui/GameInterface'
 import { generateBoard } from '@settlers/core'
-import type { Board } from '@settlers/core'
+import type { Board, GameAction } from '@settlers/core'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
 
 interface GamePageProps {
@@ -19,6 +21,7 @@ export default function GamePage({ params }: GamePageProps) {
   const { theme, loading: themeLoading, loadTheme } = useGameTheme()
   const [board, setBoard] = useState<Board | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [showInterface, setShowInterface] = useState(true)
 
   // Memoize the generateTestBoard function to fix useEffect dependency
   const generateTestBoard = useCallback(async () => {
@@ -62,6 +65,11 @@ export default function GamePage({ params }: GamePageProps) {
     generateTestBoard()
   }
 
+  const handleGameAction = (action: GameAction) => {
+    console.log('Game action:', action)
+    // TODO: Integrate with board interactions
+  }
+
   if (themeLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -91,6 +99,17 @@ export default function GamePage({ params }: GamePageProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+      {/* Toggle Interface Button */}
+      <div className="fixed top-4 right-4 z-50">
+        <Button
+          onClick={() => setShowInterface(!showInterface)}
+          variant="outline"
+          size="sm"
+        >
+          {showInterface ? 'Hide UI' : 'Show UI'}
+        </Button>
+      </div>
+
       {/* Game Board */}
       <div className="absolute inset-0">
         {board ? (
@@ -111,25 +130,57 @@ export default function GamePage({ params }: GamePageProps) {
         )}
       </div>
 
-      {/* Controls */}
-      {board && (
-        <div className="fixed top-4 left-4 space-y-2 z-40">
-          <Button 
-            onClick={regenerateBoard}
-            variant="outline"
-            disabled={isGenerating}
-          >
-            {isGenerating ? 'Generating...' : 'Regenerate Board'}
-          </Button>
+      {/* Game Interface Overlay */}
+      {showInterface && (
+        <div className="fixed inset-0 z-40 pointer-events-none">
+          <div className="h-full flex">
+            {/* Left side - Game Interface */}
+            <div className="w-1/3 max-w-md p-4 pointer-events-auto">
+              <div className="h-full overflow-y-auto">
+                <GameInterface onAction={handleGameAction} />
+              </div>
+            </div>
+            
+            {/* Right side - Board controls */}
+            <div className="flex-1 flex flex-col justify-between p-4">
+              {/* Top controls */}
+              <div className="flex justify-start">
+                {board && (
+                  <Button 
+                    onClick={regenerateBoard}
+                    variant="outline"
+                    disabled={isGenerating}
+                    className="pointer-events-auto"
+                  >
+                    {isGenerating ? 'Generating...' : 'Regenerate Board'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Bottom status */}
+              <div className="flex justify-end">
+                <Card className="bg-black/50 rounded-lg p-3 backdrop-blur-sm text-white text-sm pointer-events-auto">
+                  Game ID: {gameId} | 
+                  Theme: {theme.meta.name} |
+                  Board: {board ? 'Generated' : 'None'}
+                </Card>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Status Bar */}
-      <div className="fixed bottom-4 right-4 bg-black/50 rounded-lg p-3 backdrop-blur-sm text-white text-sm">
-        Game ID: {gameId} | 
-        Theme: {theme.meta.name} |
-        Board: {board ? 'Generated' : 'None'}
-      </div>
+      {/* Loading overlay for board generation */}
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="p-6 bg-white/10 backdrop-blur-sm border-white/20">
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+              <div className="text-white text-lg">Generating new board...</div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 } 

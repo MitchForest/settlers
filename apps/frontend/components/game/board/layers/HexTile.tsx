@@ -30,7 +30,8 @@ function getTerrainColor(terrain: string, resources: ResourceTheme[]): string {
     'fields': '#FFC107',    // Yellow for wheat
     'hills': '#D84315',     // Orange/red for brick
     'mountains': '#6A1B9A', // Purple for ore
-    'desert': '#F4E4BC'     // Tan/sand for desert
+    'desert': '#F4E4BC',    // Tan/sand for desert
+    'sea': '#1E40AF'        // Blue for ocean
   }
   return fallbackColors[terrain] || '#F4E4BC'
 }
@@ -91,7 +92,7 @@ export const HexTile: React.FC<HexTileProps> = ({
           {/* Number text */}
           <text
             x="0"
-            y="0"
+            y="-2"
             textAnchor="middle"
             dominantBaseline="central"
             fontSize="14"
@@ -107,13 +108,14 @@ export const HexTile: React.FC<HexTileProps> = ({
             <g>
               {Array.from({ length: getProbabilityDots(numberToken) }).map((_, i) => {
                 const totalDots = getProbabilityDots(numberToken)
-                const startX = -(totalDots - 1) * 1.5
+                const dotSpacing = 2.5
+                const startX = -(totalDots - 1) * (dotSpacing / 2)
                 return (
                   <circle
                     key={i}
-                    cx={startX + i * 3}
-                    cy="16"
-                    r="1.5"
+                    cx={startX + i * dotSpacing}
+                    cy="8"
+                    r="1"
                     fill={numberToken === 6 || numberToken === 8 ? '#DC2626' : '#000000'}
                     className="pointer-events-none"
                   />

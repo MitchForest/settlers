@@ -69,11 +69,18 @@
   --terrain-4: #EAB308;
   --terrain-5: #DC2626;
   --terrain-desert: #D2B48C;
+  --terrain-sea: #1E40AF;
 
   /* === GAME BACKGROUND COLORS (Set dynamically by theme loader) === */
   --game-bg-primary: #1e3a8a;
   --game-bg-secondary: #3730a3;
   --game-bg-accent: #065f46;
+
+  /* === PLAYER COLORS === */
+  --player-0: #E8E9EA;
+  --player-1: #EA4335;
+  --player-2: #FF8C00;
+  --player-3: #4285F4;
 
   /* === TAILWIND V4 COLORS === */
   --color-background: var(--background);
@@ -114,9 +121,14 @@
   --color-terrain-4: var(--terrain-4);
   --color-terrain-5: var(--terrain-5);
   --color-terrain-desert: var(--terrain-desert);
+  --color-terrain-sea: var(--terrain-sea);
   --color-game-bg-primary: var(--game-bg-primary);
   --color-game-bg-secondary: var(--game-bg-secondary);
   --color-game-bg-accent: var(--game-bg-accent);
+  --color-player-0: var(--player-0);
+  --color-player-1: var(--player-1);
+  --color-player-2: var(--player-2);
+  --color-player-3: var(--player-3);
   --radius: var(--radius-md);
 }
 

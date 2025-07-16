@@ -55,6 +55,14 @@
       "color": "#F4E4BC",
       "icon": "🏜️",
       "resourceProduced": null
+    },
+    {
+      "id": "sea",
+      "name": "Sea",
+      "description": "Ocean waters surrounding the island",
+      "color": "#1E40AF",
+      "icon": "🌊",
+      "resourceProduced": null
     }
   ],
   "resourceMapping": {

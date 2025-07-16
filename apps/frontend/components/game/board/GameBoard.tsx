@@ -3,6 +3,8 @@
 import { HexGridLayer } from './layers/HexGridLayer'
 import { ConnectionLayer } from './layers/ConnectionLayer'
 import { InteractionLayer } from './layers/InteractionLayer'
+import { PortLayer } from './layers/PortLayer'
+import { PieceLayer } from './layers/PieceLayer'
 import { GamePiece } from './pieces/GamePiece'
 import { useGameStore } from '@/stores/gameStore'
 import { useGameTheme } from '@/components/theme-provider'
@@ -113,13 +115,49 @@ export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, dis
       />
     </div>
     
-    {/* Game Pieces Layer - renders with geometric fallbacks if no theme */}
-    {testPieces.length > 0 && (
-      <div className="absolute inset-0 z-15 pointer-events-none">
+    {/* Port Layer - renders ports around the board */}
+    {board && (
+      <div className="absolute inset-0 z-12 pointer-events-none">
+        <svg
+          width="100%"
+          height="100%"
+          className="port-layer-svg"
+          style={{ background: 'transparent' }}
+          viewBox="-200 -200 400 400"
+        >
+          <PortLayer board={board} />
+        </svg>
+      </div>
+    )}
+
+    {/* Game Pieces Layer - renders settlements, cities, and roads */}
+    {board && (
+      <div className="absolute inset-0 z-15 pointer-events-auto">
         <svg
           width="100%"
           height="100%"
           className="game-pieces-svg"
+          style={{ background: 'transparent' }}
+          viewBox="-200 -200 400 400"
+        >
+          <PieceLayer 
+            board={board} 
+            gameState={gameState || undefined}
+            onSettlementClick={(vertexId: string) => console.log('Settlement clicked:', vertexId)}
+            onCityClick={(vertexId: string) => console.log('City clicked:', vertexId)}
+            onRoadClick={(edgeId: string) => console.log('Road clicked:', edgeId)}
+          />
+        </svg>
+      </div>
+    )}
+
+    {/* Test Pieces Layer - renders with geometric fallbacks if no theme */}
+    {testPieces.length > 0 && (
+      <div className="absolute inset-0 z-16 pointer-events-none">
+        <svg
+          width="100%"
+          height="100%"
+          className="test-pieces-svg"
           style={{ background: 'transparent' }}
         >
           {testPieces.map((piece, index) => (
