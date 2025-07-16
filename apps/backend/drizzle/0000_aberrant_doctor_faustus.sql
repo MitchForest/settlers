@@ -5,12 +5,6 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- CREATE TYPE "connection_type" AS ENUM('road');
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
  CREATE TYPE "development_card_type" AS ENUM('knight', 'victory', 'roadBuilding', 'yearOfPlenty', 'monopoly');
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -30,6 +24,18 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  CREATE TYPE "terrain_type" AS ENUM('forest', 'hills', 'mountains', 'fields', 'pasture', 'desert');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "trade_status" AS ENUM('pending', 'accepted', 'rejected', 'cancelled', 'expired');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "trade_type" AS ENUM('bank', 'port', 'player');
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -65,14 +71,17 @@ CREATE TABLE IF NOT EXISTS "games" (
 	"name" text NOT NULL,
 	"status" text DEFAULT 'waiting' NOT NULL,
 	"phase" "game_phase" DEFAULT 'setup1' NOT NULL,
-	"current_player_index" integer DEFAULT 0 NOT NULL,
+	"current_player" text NOT NULL,
 	"turn" integer DEFAULT 0 NOT NULL,
+	"game_code" text,
+	"host_player_id" text,
+	"game_state" json NOT NULL,
 	"settings" json NOT NULL,
-	"board" json NOT NULL,
-	"dice" json,
 	"winner" text,
+	"started_at" timestamp DEFAULT now() NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "games_game_code_unique" UNIQUE("game_code")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "placed_buildings" (
@@ -88,7 +97,7 @@ CREATE TABLE IF NOT EXISTS "placed_roads" (
 	"id" text PRIMARY KEY NOT NULL,
 	"game_id" text NOT NULL,
 	"player_id" text NOT NULL,
-	"type" "connection_type" DEFAULT 'road' NOT NULL,
+	"type" text DEFAULT 'road' NOT NULL,
 	"position" json NOT NULL,
 	"placed_at" timestamp DEFAULT now() NOT NULL
 );
@@ -113,12 +122,17 @@ CREATE TABLE IF NOT EXISTS "players" (
 CREATE TABLE IF NOT EXISTS "trades" (
 	"id" text PRIMARY KEY NOT NULL,
 	"game_id" text NOT NULL,
-	"from_player_id" text NOT NULL,
-	"to_player_id" text NOT NULL,
+	"type" "trade_type" NOT NULL,
+	"initiator" text NOT NULL,
+	"target" text,
 	"offering" json NOT NULL,
 	"requesting" json NOT NULL,
-	"status" text DEFAULT 'pending' NOT NULL,
+	"status" "trade_status" DEFAULT 'pending' NOT NULL,
+	"ratio" integer,
+	"port_type" text,
+	"is_open_offer" boolean DEFAULT false,
 	"created_at" timestamp DEFAULT now() NOT NULL,
+	"expires_at" timestamp,
 	"resolved_at" timestamp
 );
 --> statement-breakpoint
@@ -195,13 +209,13 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "trades" ADD CONSTRAINT "trades_from_player_id_players_id_fk" FOREIGN KEY ("from_player_id") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
+ ALTER TABLE "trades" ADD CONSTRAINT "trades_initiator_players_id_fk" FOREIGN KEY ("initiator") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "trades" ADD CONSTRAINT "trades_to_player_id_players_id_fk" FOREIGN KEY ("to_player_id") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
+ ALTER TABLE "trades" ADD CONSTRAINT "trades_target_players_id_fk" FOREIGN KEY ("target") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

@@ -1,5 +1,5 @@
 {
-  "id": "b4d1c9ec-fc46-45ff-9406-b661de7a115d",
+  "id": "e3dd76c1-1b28-4289-ac8f-51d94f823609",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
@@ -251,12 +251,11 @@
           "notNull": true,
           "default": "'setup1'"
         },
-        "current_player_index": {
-          "name": "current_player_index",
-          "type": "integer",
+        "current_player": {
+          "name": "current_player",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": true
         },
         "turn": {
           "name": "turn",
@@ -265,29 +264,42 @@
           "notNull": true,
           "default": 0
         },
+        "game_code": {
+          "name": "game_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "host_player_id": {
+          "name": "host_player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "game_state": {
+          "name": "game_state",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
         "settings": {
           "name": "settings",
           "type": "json",
           "primaryKey": false,
           "notNull": true
         },
-        "board": {
-          "name": "board",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dice": {
-          "name": "dice",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": false
-        },
         "winner": {
           "name": "winner",
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         },
         "created_at": {
           "name": "created_at",
@@ -307,7 +319,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {
+        "games_game_code_unique": {
+          "name": "games_game_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "game_code"
+          ]
+        }
+      }
     },
     "placed_buildings": {
       "name": "placed_buildings",
@@ -407,7 +427,7 @@
         },
         "type": {
           "name": "type",
-          "type": "connection_type",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'road'"
@@ -592,17 +612,23 @@
           "primaryKey": false,
           "notNull": true
         },
-        "from_player_id": {
-          "name": "from_player_id",
+        "type": {
+          "name": "type",
+          "type": "trade_type",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "initiator": {
+          "name": "initiator",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "to_player_id": {
-          "name": "to_player_id",
+        "target": {
+          "name": "target",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "offering": {
           "name": "offering",
@@ -618,10 +644,29 @@
         },
         "status": {
           "name": "status",
-          "type": "text",
+          "type": "trade_status",
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
+        },
+        "ratio": {
+          "name": "ratio",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "port_type": {
+          "name": "port_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_open_offer": {
+          "name": "is_open_offer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -629,6 +674,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "resolved_at": {
           "name": "resolved_at",
@@ -652,12 +703,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "trades_from_player_id_players_id_fk": {
-          "name": "trades_from_player_id_players_id_fk",
+        "trades_initiator_players_id_fk": {
+          "name": "trades_initiator_players_id_fk",
           "tableFrom": "trades",
           "tableTo": "players",
           "columnsFrom": [
-            "from_player_id"
+            "initiator"
           ],
           "columnsTo": [
             "id"
@@ -665,12 +716,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "trades_to_player_id_players_id_fk": {
-          "name": "trades_to_player_id_players_id_fk",
+        "trades_target_players_id_fk": {
+          "name": "trades_target_players_id_fk",
           "tableFrom": "trades",
           "tableTo": "players",
           "columnsFrom": [
-            "to_player_id"
+            "target"
           ],
           "columnsTo": [
             "id"
@@ -689,12 +740,6 @@
       "values": {
         "settlement": "settlement",
         "city": "city"
-      }
-    },
-    "connection_type": {
-      "name": "connection_type",
-      "values": {
-        "road": "road"
       }
     },
     "development_card_type": {
@@ -739,6 +784,24 @@
         "fields": "fields",
         "pasture": "pasture",
         "desert": "desert"
+      }
+    },
+    "trade_status": {
+      "name": "trade_status",
+      "values": {
+        "pending": "pending",
+        "accepted": "accepted",
+        "rejected": "rejected",
+        "cancelled": "cancelled",
+        "expired": "expired"
+      }
+    },
+    "trade_type": {
+      "name": "trade_type",
+      "values": {
+        "bank": "bank",
+        "port": "port",
+        "player": "player"
       }
     }
   },

@@ -1,105 +1,82 @@
 'use client'
 
-import { use, useEffect, useState, useCallback, useMemo } from 'react'
+import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { GameInterface } from '@/components/game/ui/GameInterface'
-import { Card } from '@/components/ui/card'
+
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Board, GameAction, GameFlowManager } from '@settlers/core'
+import { GameAction, GameFlowManager } from '@settlers/core'
 import { useGameStore } from '@/stores/gameStore'
+import { useRouter } from 'next/navigation'
 
 interface PageParams {
   gameId: string
 }
 
 export default function GamePage({ params }: { params: Promise<PageParams> }) {
-  const { gameId: _gameId } = use(params)
+  const { gameId } = use(params)
+  const router = useRouter()
   
   // Theme loading
   const { theme, loading: themeLoading, loadTheme } = useGameTheme()
-  const [_board, _setBoard] = useState<Board | null>(null)
   
   // Game state management - USE GAME STORE as single source of truth
-  const gameState = useGameStore(state => state.gameState) // Get state from store
+  const { 
+    gameState, 
+    connectionStatus,
+    connect,
+    disconnect,
+    updateGameState 
+  } = useGameStore()
+  
   const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
-  const updateGameState = useGameStore(state => state.updateGameState) // Store updater
-  const [localPlayerId, setLocalPlayerId] = useState<string | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
 
-  // State for game board generation
-  const [isGenerating, setIsGenerating] = useState(false)
+  // Get player ID from URL params or localStorage
+  const getPlayerIdForGame = useCallback(() => {
+    // Try URL params first
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlPlayerId = urlParams.get('playerId')
+    if (urlPlayerId) return urlPlayerId
 
-  // Player avatar mapping (for future use)
-  const _playerAvatars = useMemo(() => ({
-    'player1': { avatar: '👤', name: 'Player 1' },
-    'player2': { avatar: '🤖', name: 'Player 2' },
-    'player3': { avatar: '👨‍💻', name: 'Player 3' },
-    'player4': { avatar: '👩‍🚀', name: 'Player 4' }
-  }), [])
+    // Try localStorage for this specific game
+    const storedPlayerId = localStorage.getItem(`playerId_${gameId}`)
+    if (storedPlayerId) return storedPlayerId
 
-  // Demo board generation
-  const generateTestBoard = useCallback(async () => {
-    if (isGenerating) return
+    // No player ID found - redirect to home
+    return null
+  }, [gameId])
 
-    setIsGenerating(true)
-    try {
-      // Create a demo game state for testing
-      const demoGame = GameFlowManager.createGame({
-        playerNames: ['Player 1', 'Player 2', 'Player 3', 'Player 4'],
-        gameId: 'demo-game',
-        randomizePlayerOrder: false
-      })
-
-      const modifiedState = demoGame.getState()
-      
-      // Modify state to add some demo resources and buildings
-      const players = Array.from(modifiedState.players.values())
-      
-      if (players.length > 0) {
-        // Give player 1 some starting resources
-        players[0].resources = {
-          wood: 3,
-          brick: 2,
-          ore: 1,
-          wheat: 2,
-          sheep: 1
-        }
-        
-        // Give other players some resources too
-        if (players.length > 1) {
-          players[1].resources = {
-            wood: 1,
-            brick: 1,
-            ore: 2,
-            wheat: 1,
-            sheep: 2
-          }
-        }
-      }
-
-      setGameManager(demoGame)
-      updateGameState(modifiedState)
-
-      // Set local player as the first player
-      const playerIds = Array.from(modifiedState.players.keys())
-      setLocalPlayerId(playerIds[0])
-      
-      toast.success('Game loaded!')
-    } catch (error) {
-      console.error('Failed to create demo game:', error)
-      toast.error('Failed to create demo game')
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [updateGameState, isGenerating])
-
-  // Generate test board when theme is loaded
+  // Connect to backend game when theme is loaded
   useEffect(() => {
-    if (theme && !gameState && !isGenerating) {
-      generateTestBoard()
+    if (!theme || isConnecting || gameState) return
+
+    const playerId = getPlayerIdForGame()
+    if (!playerId) {
+      console.warn('No player ID found for game, redirecting to home')
+      router.push('/')
+      return
     }
-  }, [theme, gameState, isGenerating, generateTestBoard])
+
+    setIsConnecting(true)
+    connect(gameId, playerId)
+      .catch((error) => {
+        console.error('Failed to connect to game:', error)
+        toast.error('Failed to connect to game')
+        setIsConnecting(false)
+      })
+  }, [theme, gameId, connect, getPlayerIdForGame, isConnecting, gameState, router])
+
+  // Update game manager when state changes
+  useEffect(() => {
+    if (gameState) {
+      const manager = new GameFlowManager(gameState)
+      setGameManager(manager)
+      setIsConnecting(false)
+    }
+  }, [gameState])
 
   // Auto-load settlers theme when component mounts
   useEffect(() => {
@@ -126,6 +103,12 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     return () => clearInterval(interval)
   }, [gameManager, gameState, updateGameState])
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      disconnect()
+    }
+  }, [disconnect])
 
   const handleGameAction = (action: GameAction) => {
     if (!gameManager || !gameState) {
@@ -285,17 +268,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     }
   }
 
-  const _handleTurnTimeout = () => {
-    if (gameState && localPlayerId === gameState.currentPlayer) {
-      toast.warning('Time is up! Ending turn automatically.')
-      handleGameAction({
-        type: 'endTurn',
-        playerId: localPlayerId,
-        data: {}
-      })
-    }
-  }
-
+  // Handle loading states
   if (themeLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -323,50 +296,75 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     )
   }
 
+  // Handle connection states
+  if (connectionStatus === 'connecting' || isConnecting) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <div className="text-white text-lg">Connecting to game...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (connectionStatus === 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-white text-xl">Failed to connect to game</div>
+          <div className="flex gap-4">
+            <Button 
+              onClick={() => {
+                const playerId = getPlayerIdForGame()
+                if (playerId) {
+                  setIsConnecting(true)
+                  connect(gameId, playerId)
+                }
+              }}
+              variant="outline"
+            >
+              Retry Connection
+            </Button>
+            <Button 
+              onClick={() => router.push('/')}
+              variant="outline"
+            >
+              Back to Home
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!gameState || !gameManager) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <div className="text-white text-lg">Loading game...</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 relative">
       {/* Main board display */}
-      {gameState ? (
-        <div className="relative w-full h-full">
-          {/* Game Board */}
-          <GameBoard
-            board={gameState.board}
-            theme={theme}
-            onGameAction={handleGameAction}
-          />
-          
-          {/* Game Interface Overlay */}
-          <GameInterface
-            onGameAction={handleGameAction}
-          />
-
-        </div>
-      ) : (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="text-white text-xl">
-              {isGenerating ? 'Generating board...' : 'No board generated'}
-            </div>
-            {!isGenerating && (
-              <Button onClick={generateTestBoard} variant="outline">
-                Generate Board
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Loading overlay for board generation */}
-      {isGenerating && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="p-6 bg-white/10 backdrop-blur-sm border-white/20">
-            <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-              <div className="text-white text-lg">Generating new board...</div>
-            </div>
-          </Card>
-        </div>
-      )}
+      <div className="relative w-full h-full">
+        {/* Game Board */}
+        <GameBoard
+          board={gameState.board}
+          theme={theme}
+          onGameAction={handleGameAction}
+        />
+        
+        {/* Game Interface Overlay */}
+        <GameInterface
+          onGameAction={handleGameAction}
+        />
+      </div>
     </div>
   )
 } 

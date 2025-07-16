@@ -4,12 +4,23 @@ import { games, gameEvents, db } from '../db'
 import { eq } from 'drizzle-orm'
 import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
 
-// WebSocket data context
+// WebSocket data context - enhanced for lobby support
 export interface WSData {
   sessionId: string
   gameId?: string
   playerId?: string
   isSpectator?: boolean
+  isInLobby?: boolean // New field for lobby state
+}
+
+// Lobby room interface
+interface LobbyRoom {
+  gameId: string
+  gameCode: string
+  hostPlayerId: string
+  players: Set<ServerWebSocket<WSData>>
+  playerData: Map<string, { id: string; name: string; socket: ServerWebSocket<WSData> }>
+  lastUpdate: Date
 }
 
 // Game room management with proper type safety
@@ -18,6 +29,9 @@ const gameRooms = new Map<string, {
   sockets: Set<ServerWebSocket<WSData>>
   lastUpdate: Date
 }>()
+
+// Lobby room management - new functionality
+const lobbyRooms = new Map<string, LobbyRoom>()
 
 // Player socket tracking
 const playerSockets = new Map<string, ServerWebSocket<WSData>>()
@@ -36,7 +50,8 @@ export function upgradeWebSocket(req: Request, server: any): Response | undefine
       sessionId,
       gameId,
       playerId,
-      isSpectator: !playerId
+      isSpectator: !playerId,
+      isInLobby: false
     } satisfies WSData
   })
 
@@ -75,12 +90,16 @@ export const websocketHandler: WebSocketHandler<WSData> = {
   },
 
   async close(ws, code, reason) {
-    const { gameId, playerId } = ws.data
+    const { gameId, playerId, isInLobby } = ws.data
     
-    console.log(`WebSocket disconnected: ${playerId || 'spectator'} from game ${gameId}`)
+    console.log(`WebSocket disconnected: ${playerId || 'spectator'} from ${isInLobby ? 'lobby' : 'game'} ${gameId}`)
     
     if (gameId) {
-      await leaveGameRoom(ws, gameId)
+      if (isInLobby) {
+        await leaveLobbyRoom(ws, gameId)
+      } else {
+        await leaveGameRoom(ws, gameId)
+      }
     }
     
     if (playerId) {
@@ -90,12 +109,20 @@ export const websocketHandler: WebSocketHandler<WSData> = {
 }
 
 /**
- * Handle incoming WebSocket messages
+ * Handle incoming WebSocket messages - enhanced with lobby support
  */
 async function handleWebSocketMessage(ws: ServerWebSocket<WSData>, data: any) {
   const { type, ...payload } = data
   
   switch (type) {
+    case 'joinLobby':
+      await handleJoinLobby(ws, payload)
+      break
+      
+    case 'startGame':
+      await handleStartGame(ws, payload)
+      break
+      
     case 'joinGame':
       await handleJoinGame(ws, payload)
       break
@@ -117,6 +144,173 @@ async function handleWebSocketMessage(ws: ServerWebSocket<WSData>, data: any) {
 }
 
 /**
+ * Handle player joining a lobby - new functionality
+ */
+async function handleJoinLobby(ws: ServerWebSocket<WSData>, payload: { gameId: string; playerId: string }) {
+  const { gameId, playerId } = payload
+  
+  try {
+    // Update WebSocket data
+    ws.data.gameId = gameId
+    ws.data.playerId = playerId
+    ws.data.isInLobby = true
+    ws.data.isSpectator = false
+    
+    // Track player socket
+    playerSockets.set(playerId, ws)
+    
+    // Load or create lobby room
+    let lobbyRoom = lobbyRooms.get(gameId)
+    if (!lobbyRoom) {
+      // Load game from database to get lobby info
+      const gameRecord = await db
+        .select()
+        .from(games)
+        .where(eq(games.id, gameId))
+        .limit(1)
+      
+      if (gameRecord.length === 0) {
+        throw new Error('Game not found')
+      }
+      
+      const game = gameRecord[0]
+      if (game.status !== 'lobby') {
+        throw new Error('Game is not in lobby state')
+      }
+      
+      lobbyRoom = {
+        gameId,
+        gameCode: game.gameCode || '',
+        hostPlayerId: game.hostPlayerId || '',
+        players: new Set(),
+        playerData: new Map(),
+        lastUpdate: new Date()
+      }
+      
+      lobbyRooms.set(gameId, lobbyRoom)
+    }
+    
+    // Add player to lobby
+    lobbyRoom.players.add(ws)
+    lobbyRoom.lastUpdate = new Date()
+    
+    // Load current game state to get player list
+    const gameRecord = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1)
+    
+    const gameState = await loadGameStateFromDB(gameRecord[0])
+    const players = Array.from(gameState.players.values())
+    
+    // Send lobby state to joining player
+    ws.send(JSON.stringify({
+      type: 'lobbyJoined',
+      gameCode: lobbyRoom.gameCode,
+      players,
+      isHost: playerId === lobbyRoom.hostPlayerId,
+      canStart: players.length >= 3
+    }))
+    
+    // Broadcast player joined to other lobby members
+    broadcastToLobby(gameId, {
+      type: 'lobbyUpdate',
+      players,
+      canStart: players.length >= 3
+    }, ws)
+    
+    console.log(`✅ Player ${playerId} joined lobby ${gameId} (${lobbyRoom.gameCode})`)
+    
+  } catch (error) {
+    console.error('❌ Error joining lobby:', error)
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to join lobby'
+    }))
+  }
+}
+
+/**
+ * Handle host starting a game - new functionality
+ */
+async function handleStartGame(ws: ServerWebSocket<WSData>, payload: { gameId: string }) {
+  const { gameId } = payload
+  const { playerId } = ws.data
+  
+  if (!playerId) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'No player ID provided'
+    }))
+    return
+  }
+  
+  try {
+    const lobbyRoom = lobbyRooms.get(gameId)
+    if (!lobbyRoom) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Lobby not found'
+      }))
+      return
+    }
+    
+    // Verify player is the host
+    if (lobbyRoom.hostPlayerId !== playerId) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Only the host can start the game'
+      }))
+      return
+    }
+    
+    // Load current game state to check player count
+    const gameRecord = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1)
+    
+    if (gameRecord.length === 0) {
+      throw new Error('Game not found')
+    }
+    
+    const gameState = await loadGameStateFromDB(gameRecord[0])
+    if (gameState.players.size < 3) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Need at least 3 players to start'
+      }))
+      return
+    }
+    
+    // Update game status to playing
+    await db.update(games)
+      .set({ status: 'playing' })
+      .where(eq(games.id, gameId))
+    
+    // Broadcast game starting to all lobby members
+    broadcastToLobby(gameId, {
+      type: 'gameStarting',
+      gameId
+    })
+    
+    // Clean up lobby room
+    lobbyRooms.delete(gameId)
+    
+    console.log(`✅ Game ${gameId} started by host ${playerId}`)
+    
+  } catch (error) {
+    console.error('❌ Error starting game:', error)
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to start game'
+    }))
+  }
+}
+
+/**
  * Handle player joining a game
  */
 async function handleJoinGame(ws: ServerWebSocket<WSData>, payload: { gameId: string; playerId?: string }) {
@@ -125,6 +319,7 @@ async function handleJoinGame(ws: ServerWebSocket<WSData>, payload: { gameId: st
   try {
     // Update WebSocket data
     ws.data.gameId = gameId
+    ws.data.isInLobby = false // Ensure this is set to false for actual games
     if (playerId) {
       ws.data.playerId = playerId
       ws.data.isSpectator = false
@@ -307,6 +502,47 @@ async function leaveGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
 }
 
 /**
+ * Leave a lobby room - new functionality
+ */
+async function leaveLobbyRoom(ws: ServerWebSocket<WSData>, gameId: string) {
+  const lobbyRoom = lobbyRooms.get(gameId)
+  if (!lobbyRoom) return
+  
+  // Remove socket from lobby
+  lobbyRoom.players.delete(ws)
+  
+  // If this was the last player, clean up the lobby
+  if (lobbyRoom.players.size === 0) {
+    lobbyRooms.delete(gameId)
+    console.log(`Cleaned up empty lobby room: ${gameId}`)
+    return
+  }
+  
+  // Notify remaining players of the disconnection
+  try {
+    // Load current game state to get updated player list
+    const gameRecord = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1)
+    
+    if (gameRecord.length > 0) {
+      const gameState = await loadGameStateFromDB(gameRecord[0])
+      const players = Array.from(gameState.players.values())
+      
+      broadcastToLobby(gameId, {
+        type: 'lobbyUpdate',
+        players,
+        canStart: players.length >= 3
+      })
+    }
+  } catch (error) {
+    console.error('Error updating lobby after player left:', error)
+  }
+}
+
+/**
  * Broadcast message to all sockets in a game room
  */
 function broadcastToGameRoom(gameId: string, message: any, excludeSocket?: ServerWebSocket<WSData>) {
@@ -323,6 +559,28 @@ function broadcastToGameRoom(gameId: string, message: any, excludeSocket?: Serve
         console.error('Error broadcasting to socket:', error)
         // Remove broken socket
         gameRoom.sockets.delete(socket)
+      }
+    }
+  }
+}
+
+/**
+ * Broadcast message to all sockets in a lobby room - new functionality
+ */
+function broadcastToLobby(gameId: string, message: any, excludeSocket?: ServerWebSocket<WSData>) {
+  const lobbyRoom = lobbyRooms.get(gameId)
+  if (!lobbyRoom) return
+  
+  const messageStr = JSON.stringify(message)
+  
+  for (const socket of lobbyRoom.players) {
+    if (socket !== excludeSocket && socket.readyState === 1) {
+      try {
+        socket.send(messageStr)
+      } catch (error) {
+        console.error('Error broadcasting to lobby socket:', error)
+        // Remove broken socket
+        lobbyRoom.players.delete(socket)
       }
     }
   }
@@ -351,6 +609,13 @@ export function getActiveRoomsCount(): number {
 }
 
 /**
+ * Get active lobby rooms count - new functionality
+ */
+export function getActiveLobbyCount(): number {
+  return lobbyRooms.size
+}
+
+/**
  * Get connected players count
  */
 export function getConnectedPlayersCount(): number {
@@ -358,15 +623,42 @@ export function getConnectedPlayersCount(): number {
 }
 
 /**
- * Cleanup inactive game rooms (optional maintenance)
+ * Get lobby statistics - new functionality
+ */
+export function getLobbyStatistics() {
+  const lobbies = Array.from(lobbyRooms.values()).map(lobby => ({
+    gameId: lobby.gameId,
+    gameCode: lobby.gameCode,
+    hostPlayerId: lobby.hostPlayerId,
+    playerCount: lobby.players.size,
+    lastUpdate: lobby.lastUpdate
+  }))
+  
+  return {
+    totalLobbies: lobbyRooms.size,
+    lobbies
+  }
+}
+
+/**
+ * Cleanup inactive game rooms and lobbies (optional maintenance) - enhanced
  */
 export function cleanupInactiveRooms(maxAgeMinutes: number = 60) {
   const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000)
   
+  // Clean up inactive game rooms
   for (const [gameId, room] of gameRooms.entries()) {
     if (room.lastUpdate < cutoffTime && room.sockets.size === 0) {
       gameRooms.delete(gameId)
       console.log(`Cleaned up inactive game room: ${gameId}`)
+    }
+  }
+  
+  // Clean up inactive lobby rooms
+  for (const [gameId, lobby] of lobbyRooms.entries()) {
+    if (lobby.lastUpdate < cutoffTime && lobby.players.size === 0) {
+      lobbyRooms.delete(gameId)
+      console.log(`Cleaned up inactive lobby room: ${gameId}`)
     }
   }
 } 

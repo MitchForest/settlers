@@ -68,10 +68,14 @@ export const tradeTypeEnum = pgEnum('trade_type', [
 export const games = pgTable('games', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  status: text('status').notNull().default('waiting'), // waiting, playing, ended
+  status: text('status').notNull().default('waiting'), // waiting, lobby, playing, ended
   phase: gamePhaseEnum('phase').notNull().default('setup1'),
   currentPlayer: text('current_player').notNull(), // Changed from currentPlayerIndex to currentPlayer
   turn: integer('turn').notNull().default(0),
+  
+  // Game code for joining games
+  gameCode: text('game_code').unique(),
+  hostPlayerId: text('host_player_id'),
   
   // Game state data stored as JSON - flexible structure for complete GameState serialization
   gameState: json('game_state').notNull().$type<any>(),
