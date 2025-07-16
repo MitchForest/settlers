@@ -1,173 +1,32 @@
-// Core game types for Settlers
-// Theme-agnostic naming for extensibility
-
-import type { HexCoordinates, CubeCoordinates } from 'honeycomb-grid'
-
-// ============= Base Grid Types =============
-
-// Re-export Honeycomb coordinate types
-export type HexCoordinate = CubeCoordinates
-export type { HexCoordinates }
-
-// Base hexagonal grid - just coordinates, no content
-export interface BaseGrid {
-  hexes: HexCoordinate[]
-  ports: PortPlacement[]
-}
-
-// Port placement on the base grid
-export interface PortPlacement {
-  position: HexCoordinate
-  direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'
-  type: 'generic' | 'resource' // generic = 3:1, resource = 2:1
-  resourceType?: string // only for resource ports
-}
-
-// ============= Terrain Assignment Types =============
-
-// Terrain types for hex tiles (theme-agnostic)
-export type TerrainType = 
-  | 'tile-type-1'  // Resource type 1
-  | 'tile-type-2'  // Resource type 2
-  | 'tile-type-3'  // Resource type 3
-  | 'tile-type-4'  // Resource type 4
-  | 'tile-type-5'  // Resource type 5
-  | 'tile-type-6'  // Non-producing tile
-  // Legacy support
-  | 'terrain1'     // Forest (Lumber)
-  | 'terrain2'     // Pasture (Wool) 
-  | 'terrain3'     // Fields (Grain)
-  | 'terrain4'     // Hills (Brick)
-  | 'terrain5'     // Mountains (Ore)
-  | 'desert'       // No resources
-
-// Terrain assignment for the grid
-export interface TerrainAssignment {
-  [hexCoordKey: string]: TerrainType // key is "q,r,s"
-}
-
-// ============= Number Token Assignment Types =============
-
-// Number token assignment for the grid
-export interface NumberAssignment {
-  [hexCoordKey: string]: number | null // key is "q,r,s", null for desert/water
-}
-
-// ============= Complete Board Types =============
-
-// A hex tile with all information
-export interface Hex {
-  id: string
-  position: HexCoordinate
-  terrain: TerrainType | null
-  numberToken: number | null
-  hasBlocker: boolean
-}
-
-// Complete board state combining all layers
-export interface Board {
-  id: string
-  baseGrid: BaseGrid
-  terrainAssignment: TerrainAssignment
-  numberAssignment: NumberAssignment
-  // Computed for convenience
-  hexes: Hex[]
-  ports: Port[]
-  // Essential for game mechanics
-  vertices: Map<string, Vertex>
-  edges: Map<string, Edge>
-  blockerPosition: HexCoordinate // Robber position
-}
-
-// ============= Game Board Layouts =============
-
-// Predefined board layouts (base grids)
-export interface BoardLayout {
-  id: string
-  name: string
-  description: string
-  baseGrid: BaseGrid
-}
-
-// Standard board layouts
-export const STANDARD_LAYOUTS: BoardLayout[] = [
-  {
-    id: 'classic',
-    name: 'Classic Settlers',
-    description: 'Standard 19-hex board',
-    baseGrid: {
-      hexes: [], // Will be populated by board generator
-      ports: []  // Will be populated by board generator
-    }
-  }
-]
-
-// ============= Existing Types (updated) =============
-
-// Resource types for cards
-export type ResourceType = 
-  | 'resource1'  // Lumber
-  | 'resource2'  // Wool
-  | 'resource3'  // Grain
-  | 'resource4'  // Brick
-  | 'resource5'  // Ore
-
-// Vertex position (intersection of hexes)
-export interface VertexPosition {
-  hexes: HexCoordinate[]
-  direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'
-}
-
-// Edge position (between two vertices)
-export type EdgePosition = [VertexPosition, VertexPosition]
-
-// Port for trading
-export interface Port {
-  id: string
-  position: HexCoordinate
-  type: 'generic' | 'resource1' | 'resource2' | 'resource3' | 'resource4' | 'resource5'
-  ratio: number // 2:1 or 3:1
-}
-
-// Vertex (intersection where buildings can be placed)
-export interface Vertex {
-  id: string
-  position: VertexPosition
-  building: Building | null
-  port: Port | null
-}
-
-// Edge (where connections can be placed)
-export interface Edge {
-  id: string
-  position: EdgePosition
-  connection: Connection | null
-}
-
-// ============= Player Types =============
+// ============= Core Game Types =============
 
 export type PlayerId = string
 
-// Player colors
+// Player colors (0-3 for 4 players max)
 export type PlayerColor = 0 | 1 | 2 | 3
 
+// ============= Resource and Terrain Types =============
+
+export type ResourceType = 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep'
+export type TerrainType = 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert'
+
 export interface ResourceCards {
-  resource1: number  // Lumber
-  resource2: number  // Wool
-  resource3: number  // Grain
-  resource4: number  // Brick
-  resource5: number  // Ore
+  wood: number
+  brick: number
+  ore: number
+  wheat: number
+  sheep: number
 }
 
-// Development card types
+// ============= Development Cards =============
+
 export type DevelopmentCardType = 
   | 'knight'
   | 'victory'
-  | 'progress1'  // Road Building
-  | 'progress2'  // Year of Plenty
-  | 'progress3'  // Monopoly
+  | 'roadBuilding'
+  | 'yearOfPlenty'
+  | 'monopoly'
 
-// Development card
 export interface DevelopmentCard {
   id: string
   type: DevelopmentCardType
@@ -175,24 +34,108 @@ export interface DevelopmentCard {
   playedTurn?: number
 }
 
+// ============= Coordinate System =============
+
+export interface HexCoordinate {
+  q: number  // Column
+  r: number  // Row
+  s: number  // Computed: -(q + r)
+}
+
+export interface VertexPosition {
+  hexes: HexCoordinate[]  // Connected hexes (2-3 hexes)
+  direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'  // Direction from first hex
+}
+
+export interface EdgePosition {
+  hexes: HexCoordinate[]  // Two connected hexes
+  direction: 'NE' | 'E' | 'SE' | 'SW' | 'W' | 'NW'  // Direction between hexes
+}
+
+// ============= Board Structure =============
+
+export interface Hex {
+  id: string
+  position: HexCoordinate
+  terrain: TerrainType | null
+  numberToken: number | null
+  hasRobber: boolean
+}
+
+export interface Port {
+  id: string
+  position: EdgePosition
+  type: 'generic' | ResourceType  // 3:1 generic or 2:1 specific
+  ratio: number
+}
+
+export interface Vertex {
+  id: string
+  position: VertexPosition
+  building: Building | null
+  port: Port | null
+}
+
+export interface Edge {
+  id: string
+  position: EdgePosition
+  connection: Road | null
+}
+
+export interface Board {
+  hexes: Map<string, Hex>
+  vertices: Map<string, Vertex>
+  edges: Map<string, Edge>
+  ports: Port[]
+  robberPosition: HexCoordinate | null
+}
+
+export interface BoardLayout {
+  id: string
+  name: string
+  description: string
+  baseGrid: {
+    hexes: Hex[]
+    ports: Port[]
+  }
+}
+
+export const STANDARD_LAYOUTS: BoardLayout[] = [
+  {
+    id: 'classic',
+    name: 'Classic Settlers',
+    description: 'Standard 19-hex board',
+    baseGrid: {
+      hexes: [],
+      ports: []
+    }
+  }
+]
+
+// ============= Game Pieces =============
+
+export type BuildingType = 'settlement' | 'city'
+
 export interface Building {
-  type: 'settlement' | 'city'
+  type: BuildingType
   owner: PlayerId
   position: VertexPosition
 }
 
-export interface Connection {
+export interface Road {
+  type: 'road'
   owner: PlayerId
   position: EdgePosition
 }
 
 export interface BuildingInventory {
-  settlements: number  // 5 max
-  cities: number      // 4 max
-  connections: number // 15 max
+  settlements: number    // Settlements (5 max)
+  cities: number         // Cities (4 max)
+  roads: number          // Roads (15 max)
 }
 
-// Score tracking
+// ============= Player Types =============
+
 export interface Score {
   public: number    // Visible to all
   hidden: number    // Victory point cards
@@ -208,8 +151,8 @@ export interface Player {
   score: Score
   buildings: BuildingInventory
   knightsPlayed: number
-  hasLongestPath: boolean
-  hasLargestForce: boolean  // Largest army
+  hasLongestRoad: boolean
+  hasLargestArmy: boolean
   isConnected: boolean
   isAI: boolean
 }
@@ -217,41 +160,48 @@ export interface Player {
 // ============= Game State Types =============
 
 export type GamePhase = 
-  | 'setup1'      // First settlement + road
-  | 'setup2'      // Second settlement + road (reverse order)
+  | 'setup1'      // First placement round
+  | 'setup2'      // Second placement round
   | 'roll'        // Roll dice
-  | 'actions'     // Trade, build, play cards
-  | 'discard'     // Discard half when 7 rolled
-  | 'moveBlocker' // Move robber
+  | 'actions'     // Main turn actions
+  | 'discard'     // Discard cards (7 rolled)
+  | 'moveRobber' // Move robber
   | 'steal'       // Steal from player
   | 'ended'       // Game over
 
 export interface DiceRoll {
-  die1: number  // 1-6
-  die2: number  // 1-6
-  sum: number   // 2-12
+  die1: number
+  die2: number
+  sum: number
+  timestamp: number
 }
 
-export interface Trade {
+export interface GameState {
   id: string
-  from: PlayerId
-  to: PlayerId | 'bank' | 'port'
-  offering: Partial<ResourceCards>
-  requesting: Partial<ResourceCards>
-  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
-  createdAt: number
+  phase: GamePhase
+  turn: number
+  currentPlayer: PlayerId
+  players: Map<PlayerId, Player>
+  board: Board
+  dice: DiceRoll | null
+  developmentDeck: DevelopmentCard[]
+  discardPile: DevelopmentCard[]
+  winner: PlayerId | null
+  startedAt: Date
+  updatedAt: Date
 }
 
-// Game actions
+// ============= Game Actions =============
+
 export type ActionType = 
   | 'roll'
-  | 'placeSettlement'
-  | 'placeConnection'
+  | 'placeBuilding'
+  | 'placeRoad'
   | 'build'
   | 'trade'
   | 'playCard'
   | 'buyCard'
-  | 'moveBlocker'
+  | 'moveRobber'
   | 'stealResource'
   | 'discard'
   | 'endTurn'
@@ -259,113 +209,37 @@ export type ActionType =
 export interface GameAction {
   type: ActionType
   playerId: PlayerId
-  data: any  // Action-specific data
-  timestamp: number
+  data: any
 }
 
-// Game settings
-export interface GameSettings {
-  victoryPoints: number
-  boardLayout: string
-  randomizeBoard: boolean
-  randomizePlayerOrder: boolean
-  allowUndo: boolean
-  turnTimerSeconds: number
-  privateTradeEnabled: boolean
-  developmentCardLimit: number
-}
+// ============= Trading System =============
 
-// Complete game state
-export interface GameState {
+export interface Trade {
   id: string
-  phase: GamePhase
-  turn: number
-  currentPlayerIndex: number
-  players: Map<PlayerId, Player>
-  playerOrder: PlayerId[]
-  board: Board
-  developmentDeck: DevelopmentCard[]
-  dice: DiceRoll | null
-  trades: Trade[]
-  winner: PlayerId | null
-  settings: GameSettings
-  createdAt: number
-  updatedAt: number
-  discardingPlayers?: PlayerId[]
-  endedAt?: number
+  initiator: PlayerId
+  target: PlayerId | null  // null for bank trade
+  offering: Partial<ResourceCards>
+  requesting: Partial<ResourceCards>
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  ratio?: number  // For bank trades (3:1, 4:1, etc.)
 }
 
-// ============= Validation Types =============
-
-export interface PlacementValidation {
-  isValid: boolean
-  reason?: string
-}
-
-export interface BuildingCosts {
-  settlement: ResourceCards
-  city: Partial<ResourceCards>      // Only some resources needed
-  connection: ResourceCards
-  developmentCard: ResourceCards
-}
-
-// ============= Event Types =============
-
-export type GameEventType =
-  | 'gameCreated'
-  | 'playerJoined'
-  | 'gameStarted'
-  | 'diceRolled'
-  | 'resourcesDistributed'
-  | 'buildingPlaced'
-  | 'connectionBuilt'
-  | 'tradeProposed'
-  | 'tradeCompleted'
-  | 'cardPurchased'
-  | 'cardPlayed'
-  | 'blockerMoved'
-  | 'resourceStolen'
-  | 'turnEnded'
-  | 'gameEnded'
+// ============= Events =============
 
 export interface GameEvent {
   id: string
+  type: string
   gameId: string
-  type: GameEventType
   playerId?: PlayerId
   data: any
-  timestamp: number
+  timestamp: Date
 }
 
-// ============= UI State Types =============
+// ============= Victory Conditions =============
 
-export interface UIState {
-  selectedHex: string | null
-  selectedVertex: string | null
-  selectedEdge: string | null
-  highlightedElements: {
-    hexes: string[]
-    vertices: string[]
-    edges: string[]
-  }
-  showTradePanel: boolean
-  showCardsPanel: boolean
-  animations: AnimationState[]
-}
-
-export interface AnimationState {
-  id: string
-  type: 'resource' | 'dice' | 'card' | 'building'
-  from?: { x: number; y: number }
-  to?: { x: number; y: number }
-  duration: number
-  startTime: number
-}
-
-// ============= Helper Types =============
-
-export type Nullable<T> = T | null
-export type Optional<T> = T | undefined
-export type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P]
+export interface VictoryCondition {
+  type: 'points' | 'longestRoad' | 'largestArmy' | 'custom'
+  description: string
+  points: number
+  achieved: boolean
 } 

@@ -1,54 +1,33 @@
-// Game constants for Settlers
-// Theme-agnostic values for easy customization
+// Game constants for Settlers (Catan) implementation
+// All identifiers use standard Settlers terminology
 
-import { ResourceCards, BuildingCosts, TerrainType } from './types'
-import type { GameSettings } from './types'
+import { ResourceCards, DevelopmentCardType } from './types'
+import { createEmptyResources } from './calculations'
 
-// ============= Board Configuration =============
+// ============= Terrain Distribution =============
 
-export const BOARD_SIZE = {
-  standard: {
-    hexCount: 19,
-    rows: [3, 4, 5, 4, 3]  // Hexes per row
-  }
+// Standard Catan terrain distribution (19 hexes total)
+export const TERRAIN_DISTRIBUTION = {
+  forest: 4,    // Wood
+  pasture: 4,   // Sheep
+  fields: 4,    // Wheat
+  hills: 3,     // Brick
+  mountains: 3, // Ore
+  desert: 1     // No resource
 }
 
-// Standard board terrain distribution
-export const TERRAIN_COUNTS: Record<TerrainType, number> = {
-  // New theme-agnostic types
-  'tile-type-1': 4,  // Resource type 1
-  'tile-type-2': 4,  // Resource type 2  
-  'tile-type-3': 4,  // Resource type 3
-  'tile-type-4': 3,  // Resource type 4
-  'tile-type-5': 3,  // Resource type 5
-  'tile-type-6': 1,  // Non-producing tile
-  // Legacy support
-  terrain1: 4,  // Forest (Lumber)
-  terrain2: 4,  // Pasture (Wool)
-  terrain3: 4,  // Fields (Grain)
-  terrain4: 3,  // Hills (Brick)
-  terrain5: 3,  // Mountains (Ore)
-  desert: 1
-}
+// ============= Number Token Distribution =============
 
-// Number token distribution (excluding 7)
-export const NUMBER_TOKENS = [
-  2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12
-]
+// Standard number distribution (exclude 7, desert gets no number)
+export const NUMBER_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
 
-// Dice roll probabilities (out of 36)
-export const ROLL_PROBABILITIES: Record<number, number> = {
-  2: 1,
-  3: 2,
-  4: 3,
-  5: 4,
-  6: 5,
-  7: 6,  // Triggers blocker
-  8: 5,
-  9: 4,
-  10: 3,
-  11: 2,
-  12: 1
+// Probability of rolling each number
+export const NUMBER_PROBABILITIES: Record<number, number> = {
+  2: 1, 12: 1,
+  3: 2, 11: 2,
+  4: 3, 10: 3,
+  5: 4, 9: 4,
+  6: 5, 8: 5
 }
 
 // Red numbers (most likely to roll)
@@ -64,242 +43,122 @@ export const GAME_RULES = {
   // Building limits per player
   maxSettlements: 5,
   maxCities: 4,
-  maxConnections: 15,
+  maxRoads: 15,
   
   // Special achievements
-  longestPathMinimum: 5,
-  largestForceMinimum: 3,
+  longestRoadMinimum: 5,
+  largestArmyMinimum: 3,
   
   // Resource limits
   handLimitBeforeDiscard: 7,
-  discardAmount: 0.5,  // Discard half (rounded down)
+  maxTradeRatio: 4,  // 4:1 default trade ratio
   
-  // Trading ratios
-  bankTradeRatio: 4,     // 4:1 with bank
-  genericPortRatio: 3,   // 3:1 at generic port
-  specialPortRatio: 2,   // 2:1 at specific port
+  // Development cards
+  maxDevelopmentCards: 25,
+  playCardDelay: 1  // Cannot play card same turn it was bought
 }
 
 // ============= Building Costs =============
 
-export const BUILDING_COSTS: BuildingCosts = {
+export const BUILDING_COSTS = {
   settlement: {
-    resource1: 1,  // Lumber
-    resource2: 1,  // Wool
-    resource3: 1,  // Grain
-    resource4: 1,  // Brick
-    resource5: 0   // Ore
-  },
+    wood: 1,
+    brick: 1,
+    wheat: 1,
+    sheep: 1,
+    ore: 0
+  } as ResourceCards,
+  
   city: {
-    resource3: 2,  // Grain
-    resource5: 3   // Ore
-  },
-  connection: {
-    resource1: 1,  // Lumber
-    resource2: 0,  // Wool
-    resource3: 0,  // Grain
-    resource4: 1,  // Brick
-    resource5: 0   // Ore
-  },
+    wood: 0,
+    brick: 0,
+    wheat: 2,
+    sheep: 0,
+    ore: 3
+  } as ResourceCards,
+  
+  road: {
+    wood: 1,
+    brick: 1,
+    wheat: 0,
+    sheep: 0,
+    ore: 0
+  } as ResourceCards,
+  
   developmentCard: {
-    resource1: 0,  // Lumber
-    resource2: 1,  // Wool
-    resource3: 1,  // Grain
-    resource4: 0,  // Brick
-    resource5: 1   // Ore
-  }
+    wood: 0,
+    brick: 0,
+    wheat: 1,
+    sheep: 1,
+    ore: 1
+  } as ResourceCards
 }
-
-// ============= Development Cards =============
-
-export const DEVELOPMENT_CARD_COUNTS = {
-  knight: 14,
-  progress1: 2,    // Road Building
-  progress2: 2,    // Year of Plenty
-  progress3: 2,    // Monopoly
-  victory: 5
-}
-
-export const TOTAL_DEVELOPMENT_CARDS = 25
-
-// ============= Resource Cards =============
-
-export const RESOURCE_CARD_COUNT = 19  // Per resource type
-export const TOTAL_RESOURCE_CARDS = 95
 
 // ============= Victory Points =============
 
 export const VICTORY_POINTS = {
   settlement: 1,
   city: 2,
-  longestPath: 2,
-  largestForce: 2,
-  developmentCard: 1  // Victory point cards
+  victoryCard: 1,
+  longestRoad: 2,
+  largestArmy: 2
 }
 
-// ============= Port Configuration =============
+// ============= Development Card Distribution =============
 
-export const PORT_LOCATIONS = 9  // Total number of ports
-export const GENERIC_PORTS = 4
-export const SPECIAL_PORTS = 5   // One for each resource
-
-// ============= Animation Durations (ms) =============
-
-export const ANIMATION_DURATIONS = {
-  diceRoll: 1000,
-  resourceCollection: 600,
-  buildingPlacement: 400,
-  cardFlip: 600,
-  cardPlay: 800,
-  turnTransition: 300,
-  tradeSlide: 250,
-  blockerMove: 500,
-  victoryReveal: 2000
+export const DEVELOPMENT_CARD_COUNTS: Record<DevelopmentCardType, number> = {
+  knight: 14,
+  victory: 5,
+  roadBuilding: 2,
+  yearOfPlenty: 2,
+  monopoly: 2
 }
 
-// ============= Sound Keys =============
+// ============= Resource Creation Helpers =============
 
-export const SOUND_KEYS = {
-  diceRoll: 'dice-roll',
-  diceHit: 'dice-hit',
-  resourceCollect: 'resource-collect',
-  buildPlace: 'build-place',
-  cardDraw: 'card-draw',
-  cardPlay: 'card-play',
-  tradeComplete: 'trade-complete',
-  turnStart: 'turn-start',
-  blockerPlace: 'blocker-place',
-  victoryFanfare: 'victory-fanfare',
-  buttonClick: 'button-click',
-  errorBuzz: 'error-buzz'
+export function createResourceCards(
+  wood: number = 0,
+  brick: number = 0,
+  ore: number = 0,
+  wheat: number = 0,
+  sheep: number = 0
+): ResourceCards {
+  return { wood, brick, ore, wheat, sheep }
 }
-
-// ============= UI Constants =============
-
-export const UI_CONSTANTS = {
-  hexSize: 60,  // Base hex size in pixels
-  hexSpacing: 2,
-  
-  // Z-index layers
-  zIndex: {
-    board: 1,
-    connections: 2,
-    buildings: 3,
-    blocker: 4,
-    cards: 5,
-    ui: 10,
-    modal: 20,
-    toast: 30
-  },
-  
-  // Touch targets
-  minTouchTarget: 44,  // Minimum touch target size (px)
-  
-  // Responsive breakpoints
-  breakpoints: {
-    mobile: 768,
-    tablet: 1024,
-    desktop: 1440
-  }
-}
-
-// ============= Timing Constants =============
-
-export const TIMING = {
-  turnTimeout: 90000,        // 90 seconds per turn
-  tradeTimeout: 30000,       // 30 seconds to respond to trade
-  discardTimeout: 60000,     // 60 seconds to discard
-  reconnectTimeout: 30000,   // 30 seconds to reconnect
-  
-  // Delays
-  aiThinkingDelay: 2000,     // AI "thinking" time
-  resourceDistributionDelay: 100,  // Delay between resource animations
-}
-
-// ============= Initial Resources =============
-
-// Resources given for second settlement in setup
-export const SETUP_RESOURCE_MULTIPLIER = 1
 
 // ============= Error Messages =============
 
 export const ERROR_MESSAGES = {
+  invalidPlayer: 'Invalid player',
+  notPlayerTurn: 'Not your turn',
+  invalidPhase: 'Invalid game phase for this action',
+  insufficientResources: 'Insufficient resources',
   invalidPlacement: 'Invalid placement location',
-  insufficientResources: 'Not enough resources',
-  notYourTurn: 'It\'s not your turn',
-  gameNotStarted: 'Game has not started yet',
-  gameFull: 'Game is full',
-  disconnected: 'Connection lost',
-  invalidTrade: 'Invalid trade offer',
-  cantBuildMore: 'Building limit reached',
-  mustDiscard: 'You must discard cards first',
-  noValidTargets: 'No valid targets for this action'
+  buildingLimitReached: 'Building limit reached',
+  noCardsToPlay: 'No cards available to play',
+  gameEnded: 'Game has ended',
+  cardPlayDelay: 'Cannot play card on same turn it was purchased'
 }
 
-// ============= Success Messages =============
+// ============= Animation Durations (ms) =============
 
-export const SUCCESS_MESSAGES = {
-  gameCreated: 'Game created successfully',
-  gameJoined: 'Joined game successfully',
-  buildingPlaced: 'Building placed successfully',
-  tradeCompleted: 'Trade completed',
-  cardPurchased: 'Development card purchased',
-  turnEnded: 'Turn ended',
-  gameWon: 'Congratulations! You won!'
-} 
-
-// ============= Board Layouts =============
-export const BOARD_LAYOUTS = {
-  standard: {
-    name: 'Standard',
-    hexes: [
-      // Center hex (1)
-      { q: 0, r: 0, terrain: 'desert', number: null },
-      
-      // Inner ring (6 hexes)
-      { q: 1, r: -1, terrain: 'terrain1', number: 11 },
-      { q: 1, r: 0, terrain: 'terrain2', number: 12 },
-      { q: 0, r: 1, terrain: 'terrain3', number: 9 },
-      { q: -1, r: 1, terrain: 'terrain4', number: 4 },
-      { q: -1, r: 0, terrain: 'terrain5', number: 6 },
-      { q: 0, r: -1, terrain: 'terrain1', number: 5 },
-      
-      // Outer ring (12 hexes)
-      { q: 2, r: -2, terrain: 'terrain2', number: 10 },
-      { q: 2, r: -1, terrain: 'terrain3', number: 8 },
-      { q: 2, r: 0, terrain: 'terrain4', number: 3 },
-      { q: 1, r: 1, terrain: 'terrain5', number: 11 },
-      { q: 0, r: 2, terrain: 'terrain1', number: 4 },
-      { q: -1, r: 2, terrain: 'terrain2', number: 8 },
-      { q: -2, r: 2, terrain: 'terrain3', number: 10 },
-      { q: -2, r: 1, terrain: 'terrain4', number: 9 },
-      { q: -2, r: 0, terrain: 'terrain5', number: 3 },
-      { q: -1, r: -1, terrain: 'terrain1', number: 5 },
-      { q: 0, r: -2, terrain: 'terrain2', number: 2 },
-      { q: 1, r: -2, terrain: 'terrain3', number: 6 }
-    ],
-    ports: [
-      { position: { q: -3, r: 1, s: 2 }, type: 'generic', ratio: 3 },
-      { position: { q: -2, r: -1, s: 3 }, type: 'resource1', ratio: 2 },
-      { position: { q: 1, r: -1, s: 0 }, type: 'resource2', ratio: 2 },
-      { position: { q: 3, r: 1, s: -4 }, type: 'generic', ratio: 3 },
-      { position: { q: 3, r: 3, s: -6 }, type: 'resource4', ratio: 2 },
-      { position: { q: 1, r: 5, s: -6 }, type: 'generic', ratio: 3 },
-      { position: { q: -1, r: 5, s: -4 }, type: 'resource5', ratio: 2 },
-      { position: { q: -3, r: 3, s: 0 }, type: 'resource3', ratio: 2 },
-      { position: { q: -3, r: 2, s: 1 }, type: 'generic', ratio: 3 }
-    ]
-  }
+export const ANIMATION_DURATIONS = {
+  diceRoll: 1200,
+  resourceCollection: 600,
+  cardDraw: 400,
+  buildingPlace: 800,
+  connectionPlace: 600,
+  robberMove: 1000
 }
 
-// ============= Default Game Settings =============
-export const DEFAULT_GAME_SETTINGS: GameSettings = {
-  victoryPoints: 10,
-  boardLayout: 'standard',
-  randomizeBoard: true,
-  randomizePlayerOrder: true,
-  allowUndo: false,
-  turnTimerSeconds: 0, // 0 = no timer
-  privateTradeEnabled: true,
-  developmentCardLimit: 0 // 0 = no limit
+// ============= Port Configuration =============
+
+export const PORT_TYPES = ['generic', 'wood', 'brick', 'ore', 'wheat', 'sheep'] as const
+export const PORT_RATIOS = {
+  generic: 3,  // 3:1 any resource
+  wood: 2,     // 2:1 wood
+  brick: 2,    // 2:1 brick
+  ore: 2,      // 2:1 ore
+  wheat: 2,    // 2:1 wheat
+  sheep: 2     // 2:1 sheep
 } 

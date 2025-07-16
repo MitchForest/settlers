@@ -2,150 +2,181 @@
   "meta": {
     "id": "settlers",
     "name": "Settlers Classic",
-    "description": "Classic Catan-style settlers theme with terrain textures",
-    "version": "1.0.0",
+    "description": "Classic Catan-style settlers theme with CSS colors",
+    "version": "3.0.0",
     "author": "Settlers Team",
-    "useCustomIcons": true
+    "useCustomIcons": false
   },
   "resources": [
     {
-      "id": "terrain1",
-      "name": "Wood",
+      "id": "forest",
+      "name": "Forest",
+      "description": "Dense woodlands that produce lumber",
       "color": "#2D5016",
       "icon": "🌲",
-      "terrainTexture": "forest.png"
+      "resourceProduced": "wood"
     },
     {
-      "id": "terrain2", 
-      "name": "Sheep",
+      "id": "pasture", 
+      "name": "Pasture",
+      "description": "Rolling hills where sheep graze",
       "color": "#7CB342",
       "icon": "🐑",
-      "terrainTexture": "pasture.png"
+      "resourceProduced": "sheep"
     },
     {
-      "id": "terrain3",
-      "name": "Wheat",
+      "id": "fields",
+      "name": "Fields",
+      "description": "Fertile farmland growing wheat",
       "color": "#FFC107",
       "icon": "🌾",
-      "terrainTexture": "wheat.png"
+      "resourceProduced": "wheat"
     },
     {
-      "id": "terrain4",
-      "name": "Brick",
+      "id": "hills",
+      "name": "Hills",
+      "description": "Clay hills perfect for making brick",
       "color": "#D84315",
       "icon": "🧱",
-      "terrainTexture": "brick.png"
+      "resourceProduced": "brick"
     },
     {
-      "id": "terrain5",
-      "name": "Ore",
+      "id": "mountains",
+      "name": "Mountains",
+      "description": "Rocky peaks rich with ore",
       "color": "#6A1B9A",
       "icon": "⛰️",
-      "terrainTexture": "ore.png"
+      "resourceProduced": "ore"
     },
     {
       "id": "desert",
       "name": "Desert",
+      "description": "Barren wasteland that produces nothing",
       "color": "#F4E4BC",
       "icon": "🏜️",
-      "terrainTexture": "desert.png"
+      "resourceProduced": null
     }
   ],
-  "structures": {
-    "settlement": {
-      "name": "Settlement",
-      "plural": "Settlements",
-      "description": "Basic settlement for resource production",
-      "icon": "🏠",
-      "color": "#primary"
+  "resourceMapping": {
+    "wood": {
+      "displayName": "Wood",
+      "description": "Lumber from the forests",
+      "icon": "🪵",
+      "color": "#8B4513"
     },
-    "city": {
-      "name": "City",
-      "plural": "Cities", 
-      "description": "Advanced city for double resource production",
-      "icon": "🏢",
-      "color": "#primary"
+    "sheep": {
+      "displayName": "Wool",
+      "description": "Soft wool from sheep",
+      "icon": "🧶",
+      "color": "#F5F5DC"
     },
-    "road": {
-      "name": "Road",
-      "plural": "Roads",
-      "description": "Connection between settlements",
-      "width": 4,
-      "style": "solid"
+    "wheat": {
+      "displayName": "Wheat",
+      "description": "Golden grain from the fields",
+      "icon": "🌾",
+      "color": "#DAA520"
+    },
+    "brick": {
+      "displayName": "Brick",
+      "description": "Clay bricks from the hills",
+      "icon": "🧱",
+      "color": "#CD5C5C"
+    },
+    "ore": {
+      "displayName": "Ore",
+      "description": "Metal ore from the mountains",
+      "icon": "⚱️",
+      "color": "#696969"
     }
   },
-  "players": {
-    "colors": [
-      {
-        "id": "red",
-        "name": "Red",
-        "primary": "#DC2626",
-        "secondary": "#FCA5A5",
-        "accent": "#991B1B"
-      },
-      {
-        "id": "blue", 
-        "name": "Blue",
-        "primary": "#2563EB",
-        "secondary": "#93C5FD",
-        "accent": "#1D4ED8"
-      },
-      {
-        "id": "white",
-        "name": "White",
-        "primary": "#FFFFFF",
-        "secondary": "#F3F4F6", 
-        "accent": "#D1D5DB"
-      },
-      {
-        "id": "orange",
-        "name": "Orange",
-        "primary": "#EA580C",
-        "secondary": "#FED7AA",
-        "accent": "#C2410C"
-      }
-    ]
+  "gameElements": {
+    "roads": {
+      "displayName": "Roads",
+      "description": "Wooden paths connecting settlements",
+      "icon": "🛤️",
+      "color": "#8B4513"
+    },
+    "settlements": {
+      "displayName": "Settlements",
+      "description": "Small houses where settlers live",
+      "icon": "🏘️",
+      "color": "#DEB887"
+    },
+    "cities": {
+      "displayName": "Cities",
+      "description": "Large buildings representing communities",
+      "icon": "🏛️",
+      "color": "#CD853F"
+    }
   },
   "developmentCards": {
     "knight": {
-      "name": "Knight",
-      "description": "Move the robber",
+      "displayName": "Knight",
+      "description": "Move the robber and steal a resource",
       "icon": "⚔️",
-      "color": "#8B5CF6"
+      "color": "#FF6B6B"
     },
     "victory": {
-      "name": "Victory Point",
-      "description": "Counts toward victory",
-      "icon": "🏆", 
-      "color": "#F59E0B"
+      "displayName": "Victory Point",
+      "description": "Adds one victory point to your total",
+      "icon": "🏆",
+      "color": "#FFD93D"
     },
-    "progress1": {
-      "name": "Road Building",
-      "description": "Build 2 roads for free",
-      "icon": "🛤️",
-      "color": "#10B981"
+    "roadBuilding": {
+      "displayName": "Road Building",
+      "description": "Build two roads for free",
+      "icon": "🛣️",
+      "color": "#6BCF7F"
     },
-    "progress2": {
-      "name": "Year of Plenty", 
-      "description": "Take 2 resource cards",
+    "yearOfPlenty": {
+      "displayName": "Year of Plenty",
+      "description": "Take any two resources from the bank",
+      "icon": "🌾",
+      "color": "#4ECDC4"
+    },
+    "monopoly": {
+      "displayName": "Monopoly", 
+      "description": "All players give you all of one resource type",
       "icon": "💰",
-      "color": "#3B82F6"
-    },
-    "progress3": {
-      "name": "Monopoly",
-      "description": "Take all cards of one type",
-      "icon": "💎",
-      "color": "#8B5CF6"
+      "color": "#45B7D1"
     }
   },
-  "ui": {
-    "colors": {
-      "primary": "#1F2937",
-      "secondary": "#374151", 
-      "accent": "#6366F1",
-      "background": "#F9FAFB",
-      "surface": "#FFFFFF",
-      "text": "#111827"
+  "playerColors": [
+    {
+      "id": 0,
+      "name": "White",
+      "primary": "#E8E9EA",
+      "secondary": "#9AA0A6",
+      "accent": "#5F6368"
+    },
+    {
+      "id": 1,
+      "name": "Red",
+      "primary": "#EA4335",
+      "secondary": "#D93025",
+      "accent": "#B52D20"
+    },
+    {
+      "id": 2,
+      "name": "Orange",
+      "primary": "#FF8C00",
+      "secondary": "#FF7F00",
+      "accent": "#E76A00"
+    },
+    {
+      "id": 3,
+      "name": "Blue",
+      "primary": "#4285F4",
+      "secondary": "#1A73E8",
+      "accent": "#1557B0"
     }
+  ],
+  "ui": {
+    "boardBackground": "var(--game-bg-primary)",
+    "hexBorder": "#333333",
+    "hexBorderWidth": 2,
+    "numberTokenBackground": "#FFFFFF",
+    "numberTokenBorder": "#000000",
+    "robberColor": "#2C2C2C"
   }
 } 

@@ -1,54 +1,120 @@
 {
-  "id": "96d14cbb-e942-4fb4-9dc9-3948014c5c00",
+  "id": "b4d1c9ec-fc46-45ff-9406-b661de7a115d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
   "tables": {
-    "game_events": {
-      "name": "game_events",
+    "development_cards": {
+      "name": "development_cards",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "game_id": {
           "name": "game_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "player_id": {
           "name": "player_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "event_data": {
-          "name": "event_data",
-          "type": "jsonb",
+        "type": {
+          "name": "type",
+          "type": "development_card_type",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
+          "notNull": true
         },
-        "turn": {
-          "name": "turn",
+        "purchased_turn": {
+          "name": "purchased_turn",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "phase": {
-          "name": "phase",
+        "played_turn": {
+          "name": "played_turn",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "development_cards_game_id_games_id_fk": {
+          "name": "development_cards_game_id_games_id_fk",
+          "tableFrom": "development_cards",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "development_cards_player_id_players_id_fk": {
+          "name": "development_cards_player_id_players_id_fk",
+          "tableFrom": "development_cards",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "game_events": {
+      "name": "game_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
           "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "json",
           "primaryKey": false,
           "notNull": true
         },
@@ -60,22 +126,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "idx_game_events_game_id": {
-          "name": "idx_game_events_game_id",
-          "columns": [
-            "game_id"
-          ],
-          "isUnique": false
-        },
-        "idx_game_events_timestamp": {
-          "name": "idx_game_events_timestamp",
-          "columns": [
-            "timestamp"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "game_events_game_id_games_id_fk": {
           "name": "game_events_game_id_games_id_fk",
@@ -100,11 +151,74 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "game_players": {
+      "name": "game_players",
+      "schema": "",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "game_players_game_id_games_id_fk": {
+          "name": "game_players_game_id_games_id_fk",
+          "tableFrom": "game_players",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "game_players_player_id_players_id_fk": {
+          "name": "game_players_player_id_players_id_fk",
+          "tableFrom": "game_players",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "game_players_game_id_player_id_pk": {
+          "name": "game_players_game_id_player_id_pk",
+          "columns": [
+            "game_id",
+            "player_id"
+          ]
+        }
+      },
       "uniqueConstraints": {}
     },
     "games": {
@@ -113,52 +227,15 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
-        "state": {
-          "name": "state",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
-        },
-        "phase": {
-          "name": "phase",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'setup1'"
-        },
-        "turn": {
-          "name": "turn",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "current_player_index": {
-          "name": "current_player_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "max_players": {
-          "name": "max_players",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 4
-        },
-        "victory_points": {
-          "name": "victory_points",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 10
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -167,9 +244,48 @@
           "notNull": true,
           "default": "'waiting'"
         },
+        "phase": {
+          "name": "phase",
+          "type": "game_phase",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'setup1'"
+        },
+        "current_player_index": {
+          "name": "current_player_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "turn": {
+          "name": "turn",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "settings": {
+          "name": "settings",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "board": {
+          "name": "board",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dice": {
+          "name": "dice",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
         "winner": {
           "name": "winner",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -180,43 +296,165 @@
           "notNull": true,
           "default": "now()"
         },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_activity_at": {
-          "name": "last_activity_at",
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {
-        "idx_games_status": {
-          "name": "idx_games_status",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "placed_buildings": {
+      "name": "placed_buildings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
         },
-        "idx_games_phase": {
-          "name": "idx_games_phase",
-          "columns": [
-            "phase"
-          ],
-          "isUnique": false
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "building_type",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "placed_at": {
+          "name": "placed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "foreignKeys": {},
+      "indexes": {},
+      "foreignKeys": {
+        "placed_buildings_game_id_games_id_fk": {
+          "name": "placed_buildings_game_id_games_id_fk",
+          "tableFrom": "placed_buildings",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "placed_buildings_player_id_players_id_fk": {
+          "name": "placed_buildings_player_id_players_id_fk",
+          "tableFrom": "placed_buildings",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "placed_roads": {
+      "name": "placed_roads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "connection_type",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'road'"
+        },
+        "position": {
+          "name": "position",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "placed_at": {
+          "name": "placed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "placed_roads_game_id_games_id_fk": {
+          "name": "placed_roads_game_id_games_id_fk",
+          "tableFrom": "placed_roads",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "placed_roads_player_id_players_id_fk": {
+          "name": "placed_roads_player_id_players_id_fk",
+          "tableFrom": "placed_roads",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
     },
@@ -226,22 +464,15 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "game_id": {
           "name": "game_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "name": {
           "name": "name",
@@ -251,81 +482,12 @@
         },
         "color": {
           "name": "color",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "player_index": {
-          "name": "player_index",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "resource1": {
-          "name": "resource1",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "resource2": {
-          "name": "resource2",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "resource3": {
-          "name": "resource3",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "resource4": {
-          "name": "resource4",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "resource5": {
-          "name": "resource5",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "public_score": {
-          "name": "public_score",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "hidden_score": {
-          "name": "hidden_score",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "knights_played": {
-          "name": "knights_played",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "has_longest_path": {
-          "name": "has_longest_path",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "has_largest_force": {
-          "name": "has_largest_force",
+        "is_host": {
+          "name": "is_host",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -343,38 +505,59 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": true
+          "default": false
         },
-        "created_at": {
-          "name": "created_at",
+        "score": {
+          "name": "score",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"public\":0,\"hidden\":0,\"total\":0}'::json"
+        },
+        "resources": {
+          "name": "resources",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"wood\":0,\"brick\":0,\"sheep\":0,\"wheat\":0,\"ore\":0}'::json"
+        },
+        "buildings": {
+          "name": "buildings",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"settlements\":5,\"cities\":4,\"roads\":15}'::json"
+        },
+        "knights_played": {
+          "name": "knights_played",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "has_longest_road": {
+          "name": "has_longest_road",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "has_largest_army": {
+          "name": "has_largest_army",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "joined_at": {
+          "name": "joined_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "last_action_at": {
-          "name": "last_action_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
-      "indexes": {
-        "idx_players_game_id": {
-          "name": "idx_players_game_id",
-          "columns": [
-            "game_id"
-          ],
-          "isUnique": false
-        },
-        "idx_players_user_id": {
-          "name": "idx_players_user_id",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "players_game_id_games_id_fk": {
           "name": "players_game_id_games_id_fk",
@@ -393,204 +576,45 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
     },
-    "sessions": {
-      "name": "sessions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "game_id": {
-          "name": "game_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "player_id": {
-          "name": "player_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "socket_id": {
-          "name": "socket_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ip_address": {
-          "name": "ip_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "user_agent": {
-          "name": "user_agent",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "connected_at": {
-          "name": "connected_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "disconnected_at": {
-          "name": "disconnected_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_ping_at": {
-          "name": "last_ping_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_sessions_user_id": {
-          "name": "idx_sessions_user_id",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        },
-        "idx_sessions_game_id": {
-          "name": "idx_sessions_game_id",
-          "columns": [
-            "game_id"
-          ],
-          "isUnique": false
-        },
-        "idx_sessions_socket_id": {
-          "name": "idx_sessions_socket_id",
-          "columns": [
-            "socket_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "sessions_user_id_users_id_fk": {
-          "name": "sessions_user_id_users_id_fk",
-          "tableFrom": "sessions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "sessions_game_id_games_id_fk": {
-          "name": "sessions_game_id_games_id_fk",
-          "tableFrom": "sessions",
-          "tableTo": "games",
-          "columnsFrom": [
-            "game_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "sessions_player_id_players_id_fk": {
-          "name": "sessions_player_id_players_id_fk",
-          "tableFrom": "sessions",
-          "tableTo": "players",
-          "columnsFrom": [
-            "player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "sessions_socket_id_unique": {
-          "name": "sessions_socket_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "socket_id"
-          ]
-        }
-      }
-    },
     "trades": {
       "name": "trades",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "game_id": {
           "name": "game_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "from_player_id": {
           "name": "from_player_id",
-          "type": "uuid",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "to_player_id": {
           "name": "to_player_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "to_type": {
-          "name": "to_type",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "offering": {
           "name": "offering",
-          "type": "jsonb",
+          "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
+          "notNull": true
         },
         "requesting": {
           "name": "requesting",
-          "type": "jsonb",
+          "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -606,29 +630,14 @@
           "notNull": true,
           "default": "now()"
         },
-        "expires_at": {
-          "name": "expires_at",
+        "resolved_at": {
+          "name": "resolved_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         }
       },
-      "indexes": {
-        "idx_trades_game_id": {
-          "name": "idx_trades_game_id",
-          "columns": [
-            "game_id"
-          ],
-          "isUnique": false
-        },
-        "idx_trades_status": {
-          "name": "idx_trades_status",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "trades_game_id_games_id_fk": {
           "name": "trades_game_id_games_id_fk",
@@ -653,107 +662,86 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "trades_to_player_id_players_id_fk": {
+          "name": "trades_to_player_id_players_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "players",
+          "columnsFrom": [
+            "to_player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
+    }
+  },
+  "enums": {
+    "building_type": {
+      "name": "building_type",
+      "values": {
+        "settlement": "settlement",
+        "city": "city"
+      }
     },
-    "users": {
-      "name": "users",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "username": {
-          "name": "username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "avatar_url": {
-          "name": "avatar_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "games_played": {
-          "name": "games_played",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "games_won": {
-          "name": "games_won",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "idx_users_email": {
-          "name": "idx_users_email",
-          "columns": [
-            "email"
-          ],
-          "isUnique": false
-        },
-        "idx_users_username": {
-          "name": "idx_users_username",
-          "columns": [
-            "username"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "users_email_unique": {
-          "name": "users_email_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
-        },
-        "users_username_unique": {
-          "name": "users_username_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
-        }
+    "connection_type": {
+      "name": "connection_type",
+      "values": {
+        "road": "road"
+      }
+    },
+    "development_card_type": {
+      "name": "development_card_type",
+      "values": {
+        "knight": "knight",
+        "victory": "victory",
+        "roadBuilding": "roadBuilding",
+        "yearOfPlenty": "yearOfPlenty",
+        "monopoly": "monopoly"
+      }
+    },
+    "game_phase": {
+      "name": "game_phase",
+      "values": {
+        "setup1": "setup1",
+        "setup2": "setup2",
+        "roll": "roll",
+        "actions": "actions",
+        "discard": "discard",
+        "moveRobber": "moveRobber",
+        "steal": "steal",
+        "ended": "ended"
+      }
+    },
+    "resource_type": {
+      "name": "resource_type",
+      "values": {
+        "wood": "wood",
+        "brick": "brick",
+        "ore": "ore",
+        "wheat": "wheat",
+        "sheep": "sheep"
+      }
+    },
+    "terrain_type": {
+      "name": "terrain_type",
+      "values": {
+        "forest": "forest",
+        "hills": "hills",
+        "mountains": "mountains",
+        "fields": "fields",
+        "pasture": "pasture",
+        "desert": "desert"
       }
     }
   },
-  "enums": {},
   "schemas": {},
   "_meta": {
     "columns": {},

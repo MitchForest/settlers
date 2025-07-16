@@ -3,7 +3,6 @@
 
 import {
   GameState,
-  GameSettings,
   Player,
   PlayerId,
   GamePhase,
@@ -12,13 +11,12 @@ import {
   Board,
   GameAction,
   GameEvent,
-  PlayerColor
+  PlayerColor,
+  DevelopmentCardType
 } from '../types'
 import {
   GAME_RULES,
-  DEVELOPMENT_CARD_COUNTS,
-  BOARD_LAYOUTS,
-  DEFAULT_GAME_SETTINGS
+  DEVELOPMENT_CARD_COUNTS
 } from '../constants'
 import {
   createEmptyResources,
@@ -30,9 +28,9 @@ import { processAction, ProcessResult } from './action-processor'
 
 // Game creation options
 export interface CreateGameOptions {
-  settings?: Partial<GameSettings>
   playerNames: string[]
   gameId?: string
+  randomizePlayerOrder?: boolean
 }
 
 // Player info for game creation
@@ -59,11 +57,6 @@ export class GameFlowManager {
   // ============= Game Creation =============
   
   static createGame(options: CreateGameOptions): GameFlowManager {
-    const settings: GameSettings = {
-      ...DEFAULT_GAME_SETTINGS,
-      ...options.settings
-    }
-    
     // Validate player count
     if (options.playerNames.length < GAME_RULES.minPlayers || 
         options.playerNames.length > GAME_RULES.maxPlayers) {
@@ -72,25 +65,22 @@ export class GameFlowManager {
     
     // Create players
     const players = new Map<PlayerId, Player>()
-    const playerOrder: PlayerId[] = []
+    const playerIds: PlayerId[] = []
     
     options.playerNames.forEach((name, index) => {
       const playerId = generatePlayerId()
       const player = createPlayer(playerId, name, index)
       players.set(playerId, player)
-      playerOrder.push(playerId)
+      playerIds.push(playerId)
     })
     
-    // Shuffle player order if randomized
-    const finalPlayerOrder = settings.randomizePlayerOrder ? 
-      shuffleArray([...playerOrder]) : 
-      playerOrder
+    // Shuffle player order if requested
+    const finalPlayerOrder = options.randomizePlayerOrder ? 
+      shuffleArray([...playerIds]) : 
+      playerIds
     
     // Generate board
-    const board = generateBoard({
-      layout: 'classic',
-      id: `board-${Date.now()}`
-    })
+    const board = generateBoard(`board-${Date.now()}`)
     
     // Create development deck
     const developmentDeck = createDevelopmentDeck()
@@ -100,17 +90,15 @@ export class GameFlowManager {
       id: options.gameId || generateGameId(),
       phase: 'setup1',
       turn: 0,
-      currentPlayerIndex: 0,
+      currentPlayer: finalPlayerOrder[0],
       players,
-      playerOrder: finalPlayerOrder,
       board,
       developmentDeck,
+      discardPile: [],
       dice: null,
-      trades: [],
       winner: null,
-      settings,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      startedAt: new Date(),
+      updatedAt: new Date()
     }
     
     return new GameFlowManager(state)
@@ -131,12 +119,11 @@ export class GameFlowManager {
   }
   
   getCurrentPlayer(): Player {
-    const playerId = this.state.playerOrder[this.state.currentPlayerIndex]
-    return this.state.players.get(playerId)!
+    return this.state.players.get(this.state.currentPlayer)!
   }
   
   getCurrentPlayerId(): PlayerId {
-    return this.state.playerOrder[this.state.currentPlayerIndex]
+    return this.state.currentPlayer
   }
   
   getPlayer(playerId: PlayerId): Player | undefined {
@@ -155,7 +142,7 @@ export class GameFlowManager {
     if (!this.state.winner) return null
     return this.state.players.get(this.state.winner) || null
   }
-  
+
   // ============= Action Processing =============
   
   processAction(action: GameAction): ProcessResult {
@@ -168,7 +155,7 @@ export class GameFlowManager {
     if (result.success) {
       // Update state
       this.state = result.newState
-      this.state.updatedAt = Date.now()
+      this.state.updatedAt = new Date()
       
       // Store events
       this.eventHistory.push(...result.events)
@@ -181,7 +168,7 @@ export class GameFlowManager {
     
     return result
   }
-  
+
   // ============= Game Flow Helpers =============
   
   canUndo(): boolean {
@@ -207,8 +194,11 @@ export class GameFlowManager {
     
     switch (this.state.phase) {
       case 'setup1':
+        actions.push('placeBuilding', 'placeRoad')
+        break
+        
       case 'setup2':
-        actions.push('placeSettlement', 'placeConnection')
+        actions.push('placeBuilding', 'placeRoad')
         break
         
       case 'roll':
@@ -223,13 +213,11 @@ export class GameFlowManager {
         break
         
       case 'discard':
-        if (this.state.discardingPlayers?.includes(currentPlayerId)) {
-          actions.push('discard')
-        }
+        actions.push('discard')
         break
         
-      case 'moveBlocker':
-        actions.push('moveBlocker')
+      case 'moveRobber':
+        actions.push('moveRobber')
         break
         
       case 'steal':
@@ -245,16 +233,29 @@ export class GameFlowManager {
     const player = this.state.players.get(playerId)
     if (!player) return false
     
-    // Check resources
-    const cost = { resource3: 1, resource4: 1, resource5: 1 } // Grain, Wool, Ore
-    const hasResources = Object.entries(cost).every(([resource, amount]) => {
-      return player.resources[resource as keyof ResourceCards] >= amount
-    })
+    // Check resources (wheat + sheep + ore)
+    const hasWheat = player.resources.wheat >= 1
+    const hasSheep = player.resources.sheep >= 1
+    const hasOre = player.resources.ore >= 1
     
     // Check deck not empty
     const deckNotEmpty = this.state.developmentDeck.length > 0
     
-    return hasResources && deckNotEmpty
+    return hasWheat && hasSheep && hasOre && deckNotEmpty
+  }
+  
+  // Get all players in turn order
+  getPlayersInOrder(): Player[] {
+    const playerIds = Array.from(this.state.players.keys())
+    return playerIds.map(id => this.state.players.get(id)!)
+  }
+  
+  // Get next player in turn order
+  getNextPlayer(): Player {
+    const playerIds = Array.from(this.state.players.keys())
+    const currentIndex = playerIds.indexOf(this.state.currentPlayer)
+    const nextIndex = (currentIndex + 1) % playerIds.length
+    return this.state.players.get(playerIds[nextIndex])!
   }
   
   // Get game statistics
@@ -263,7 +264,7 @@ export class GameFlowManager {
       turn: this.state.turn,
       phase: this.state.phase,
       players: new Map<PlayerId, any>(),
-      gameTime: Date.now() - this.state.createdAt,
+      gameTime: Date.now() - this.state.startedAt.getTime(),
       totalResources: 0,
       totalBuildings: 0,
       totalDevelopmentCards: 0
@@ -272,24 +273,24 @@ export class GameFlowManager {
     this.state.players.forEach((player, playerId) => {
       const playerStats = {
         name: player.name,
-        score: player.score.public + player.score.hidden,
+        score: player.score.total,
         resources: Object.values(player.resources).reduce((a, b) => a + b, 0),
         buildings: {
           settlements: GAME_RULES.maxSettlements - player.buildings.settlements,
           cities: GAME_RULES.maxCities - player.buildings.cities,
-          connections: GAME_RULES.maxConnections - player.buildings.connections
+          roads: GAME_RULES.maxRoads - player.buildings.roads
         },
         developmentCards: player.developmentCards.length,
         knightsPlayed: player.knightsPlayed,
-        hasLongestPath: player.hasLongestPath,
-        hasLargestForce: player.hasLargestForce
+        hasLongestRoad: player.hasLongestRoad,
+        hasLargestArmy: player.hasLargestArmy
       }
       
       stats.players.set(playerId, playerStats)
       stats.totalResources += playerStats.resources
       stats.totalBuildings += playerStats.buildings.settlements + 
                               playerStats.buildings.cities + 
-                              playerStats.buildings.connections
+                              playerStats.buildings.roads
       stats.totalDevelopmentCards += playerStats.developmentCards
     })
     
@@ -313,25 +314,26 @@ export class GameFlowManager {
     manager.eventHistory = parsed.eventHistory || []
     return manager
   }
-  
+
   // ============= Private Helpers =============
   
   private createDefaultState(): GameState {
+    const board = generateBoard()
+    const firstPlayerId = generatePlayerId()
+    
     return {
       id: generateGameId(),
       phase: 'setup1',
       turn: 0,
-      currentPlayerIndex: 0,
+      currentPlayer: firstPlayerId,
       players: new Map(),
-      playerOrder: [],
-      board: generateBoard({ layout: 'classic' }),
+      board,
       developmentDeck: [],
+      discardPile: [],
       dice: null,
-      trades: [],
       winner: null,
-      settings: DEFAULT_GAME_SETTINGS,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      startedAt: new Date(),
+      updatedAt: new Date()
     }
   }
   
@@ -341,10 +343,12 @@ export class GameFlowManager {
       players: Array.from(state.players.entries()),
       board: {
         ...state.board,
-        hexes: state.board.hexes, // Already an array
+        hexes: Array.from(state.board.hexes.entries()),
         vertices: Array.from(state.board.vertices.entries()),
         edges: Array.from(state.board.edges.entries())
-      }
+      },
+      startedAt: state.startedAt.toISOString(),
+      updatedAt: state.updatedAt.toISOString()
     }
   }
   
@@ -354,10 +358,12 @@ export class GameFlowManager {
       players: new Map(data.players),
       board: {
         ...data.board,
-        hexes: data.board.hexes, // Already an array
+        hexes: new Map(data.board.hexes),
         vertices: new Map(data.board.vertices),
         edges: new Map(data.board.edges)
-      }
+      },
+      startedAt: new Date(data.startedAt),
+      updatedAt: new Date(data.updatedAt)
     }
   }
 }
@@ -374,7 +380,7 @@ function createPlayer(id: PlayerId, name: string, colorIndex: number): Player {
     buildings: {
       settlements: GAME_RULES.maxSettlements,
       cities: GAME_RULES.maxCities,
-      connections: GAME_RULES.maxConnections
+      roads: GAME_RULES.maxRoads
     },
     score: {
       public: 0,
@@ -382,8 +388,8 @@ function createPlayer(id: PlayerId, name: string, colorIndex: number): Player {
       total: 0
     },
     knightsPlayed: 0,
-    hasLongestPath: false,
-    hasLargestForce: false,
+    hasLongestRoad: false,
+    hasLargestArmy: false,
     isConnected: true,
     isAI: false
   }
@@ -403,18 +409,29 @@ function createDevelopmentDeck(): DevelopmentCard[] {
   }
   
   // Add progress cards
-  const progressTypes: Array<'progress1' | 'progress2' | 'progress3'> = 
-    ['progress1', 'progress2', 'progress3']
+  for (let i = 0; i < DEVELOPMENT_CARD_COUNTS.roadBuilding; i++) {
+    deck.push({
+      id: `card-${cardId++}`,
+      type: 'roadBuilding',
+      purchasedTurn: -1
+    })
+  }
   
-  progressTypes.forEach(type => {
-    for (let i = 0; i < DEVELOPMENT_CARD_COUNTS[type]; i++) {
-      deck.push({
-        id: `card-${cardId++}`,
-        type,
-        purchasedTurn: -1
-      })
-    }
-  })
+  for (let i = 0; i < DEVELOPMENT_CARD_COUNTS.yearOfPlenty; i++) {
+    deck.push({
+      id: `card-${cardId++}`,
+      type: 'yearOfPlenty',
+      purchasedTurn: -1
+    })
+  }
+  
+  for (let i = 0; i < DEVELOPMENT_CARD_COUNTS.monopoly; i++) {
+    deck.push({
+      id: `card-${cardId++}`,
+      type: 'monopoly',
+      purchasedTurn: -1
+    })
+  }
   
   // Add victory points
   for (let i = 0; i < DEVELOPMENT_CARD_COUNTS.victory; i++) {

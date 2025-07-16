@@ -1,172 +1,216 @@
-import { pgTable, uuid, text, timestamp, integer, jsonb, boolean, decimal, index, varchar } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, timestamp, json, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core'
 
-// Games table - stores complete game state
+// Settlers terrain types enum
+export const terrainTypeEnum = pgEnum('terrain_type', [
+  'forest',    // Produces wood
+  'hills',     // Produces brick
+  'mountains', // Produces ore
+  'fields',    // Produces wheat
+  'pasture',   // Produces sheep
+  'desert'     // Non-producing terrain with robber
+])
+
+// Settlers resource types enum
+export const resourceTypeEnum = pgEnum('resource_type', [
+  'wood',
+  'brick',
+  'ore',
+  'wheat',
+  'sheep'
+])
+
+// Settlers building types enum
+export const buildingTypeEnum = pgEnum('building_type', [
+  'settlement',
+  'city'
+])
+
+
+
+// Game phase enum
+export const gamePhaseEnum = pgEnum('game_phase', [
+  'setup1',      // First settlement + road
+  'setup2',      // Second settlement + road (reverse order)
+  'roll',        // Roll dice
+  'actions',     // Trade, build, play cards
+  'discard',     // Discard half when 7 rolled
+  'moveRobber',  // Move robber
+  'steal',       // Steal resource
+  'ended'        // Game over
+])
+
+// Development card types
+export const developmentCardTypeEnum = pgEnum('development_card_type', [
+  'knight',
+  'victory',
+  'roadBuilding',
+  'yearOfPlenty',
+  'monopoly'
+])
+
+// Games table
 export const games = pgTable('games', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  
-  // Game state
-  state: jsonb('state').notNull().default('{}'), // Complete GameState object
-  phase: text('phase').notNull().default('setup1'),
-  turn: integer('turn').notNull().default(0),
-  currentPlayerIndex: integer('current_player_index').notNull().default(0),
-  
-  // Game settings
-  maxPlayers: integer('max_players').notNull().default(4),
-  victoryPoints: integer('victory_points').notNull().default(10),
-  
-  // Status
-  status: text('status').notNull().default('waiting'), // waiting, active, completed
-  winner: uuid('winner'),
-  
-  // Timestamps
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  startedAt: timestamp('started_at'),
-  endedAt: timestamp('ended_at'),
-  lastActivityAt: timestamp('last_activity_at').defaultNow().notNull()
-}, (table) => ({
-  statusIdx: index('idx_games_status').on(table.status),
-  phaseIdx: index('idx_games_phase').on(table.phase)
-}))
-
-// Players table - individual player data
-export const players = pgTable('players', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  gameId: uuid('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
-  
-  // Player info
-  userId: uuid('user_id'), // null for AI players
+  id: text('id').primaryKey(),
   name: text('name').notNull(),
-  color: text('color').notNull(), // red, blue, green, yellow
-  playerIndex: integer('player_index').notNull(), // 0-3, turn order
-  
-  // Resources (denormalized for queries)
-  resource1: integer('resource1').notNull().default(0), // Lumber
-  resource2: integer('resource2').notNull().default(0), // Wool
-  resource3: integer('resource3').notNull().default(0), // Grain
-  resource4: integer('resource4').notNull().default(0), // Brick
-  resource5: integer('resource5').notNull().default(0), // Ore
-  
-  // Score
-  publicScore: integer('public_score').notNull().default(0),
-  hiddenScore: integer('hidden_score').notNull().default(0),
-  
-  // Achievements
-  knightsPlayed: integer('knights_played').notNull().default(0),
-  hasLongestPath: boolean('has_longest_path').notNull().default(false),
-  hasLargestForce: boolean('has_largest_force').notNull().default(false),
-  
-  // Status
+  status: text('status').notNull().default('waiting'), // waiting, playing, ended
+  phase: gamePhaseEnum('phase').notNull().default('setup1'),
+  currentPlayerIndex: integer('current_player_index').notNull().default(0),
+  turn: integer('turn').notNull().default(0),
+  settings: json('settings').notNull().$type<{
+    victoryPoints: number
+    boardLayout: string
+    randomizePlayerOrder: boolean
+    randomizeTerrain: boolean
+    randomizeNumbers: boolean
+  }>(),
+  board: json('board').notNull().$type<{
+    hexes: Array<{
+      id: string
+      position: { q: number, r: number, s: number }
+      terrain: 'forest' | 'hills' | 'mountains' | 'fields' | 'pasture' | 'desert' | null
+      numberToken: number | null
+      hasRobber: boolean
+    }>
+    ports: Array<{
+      id: string
+      position: { q: number, r: number, s: number }
+      type: 'generic' | 'resource'
+      ratio: number
+      resourceType?: 'wood' | 'brick' | 'ore' | 'wheat' | 'sheep'
+    }>
+    robberPosition: { q: number, r: number, s: number }
+  }>(),
+  dice: json('dice').$type<{
+    die1: number
+    die2: number
+    sum: number
+  }>(),
+  winner: text('winner'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow()
+})
+
+// Players table
+export const players = pgTable('players', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: integer('color').notNull(), // 0-3 for player colors
+  isHost: boolean('is_host').notNull().default(false),
   isAI: boolean('is_ai').notNull().default(false),
-  isConnected: boolean('is_connected').notNull().default(true),
-  
-  // Timestamps
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  lastActionAt: timestamp('last_action_at')
-}, (table) => ({
-  gameIdx: index('idx_players_game_id').on(table.gameId),
-  userIdx: index('idx_players_user_id').on(table.userId)
-}))
+  isConnected: boolean('is_connected').notNull().default(false),
+  score: json('score').notNull().$type<{
+    public: number
+    hidden: number
+    total: number
+  }>().default({ public: 0, hidden: 0, total: 0 }),
+  resources: json('resources').notNull().$type<{
+    wood: number
+    brick: number
+    sheep: number
+    wheat: number
+    ore: number
+  }>().default({
+    wood: 0,
+    brick: 0,
+    sheep: 0,
+    wheat: 0,
+    ore: 0
+  }),
+  buildings: json('buildings').notNull().$type<{
+    settlements: number
+    cities: number
+    roads: number
+  }>().default({
+    settlements: 5,
+    cities: 4,
+    roads: 15
+  }),
+  knightsPlayed: integer('knights_played').notNull().default(0),
+  hasLongestRoad: boolean('has_longest_road').notNull().default(false),
+  hasLargestArmy: boolean('has_largest_army').notNull().default(false),
+  joinedAt: timestamp('joined_at').notNull().defaultNow()
+})
 
-// Game events - for history and recovery
-export const gameEvents = pgTable('game_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  gameId: uuid('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
-  
-  // Event data
-  type: text('event_type').notNull(),
-  playerId: uuid('player_id').references(() => players.id),
-  data: jsonb('event_data').notNull().default('{}'),
-  
-  // Metadata
-  turn: integer('turn').notNull(),
-  phase: text('phase').notNull(),
-  timestamp: timestamp('timestamp').defaultNow().notNull()
-}, (table) => ({
-  gameIdx: index('idx_game_events_game_id').on(table.gameId),
-  timestampIdx: index('idx_game_events_timestamp').on(table.timestamp)
-}))
+// Development cards table
+export const developmentCards = pgTable('development_cards', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').references(() => players.id, { onDelete: 'cascade' }),
+  type: developmentCardTypeEnum('type').notNull(),
+  purchasedTurn: integer('purchased_turn').notNull(),
+  playedTurn: integer('played_turn'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
 
-// Active trades - for real-time trading
+// Buildings table (placed on board)
+export const placedBuildings = pgTable('placed_buildings', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  type: buildingTypeEnum('type').notNull(),
+  position: json('position').notNull().$type<{
+    hexes: Array<{ q: number, r: number, s: number }>
+    direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'
+  }>(),
+  placedAt: timestamp('placed_at').notNull().defaultNow()
+})
+
+// Roads table (placed on board)
+export const placedRoads = pgTable('placed_roads', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  type: text('type').notNull().default('road'),
+  position: json('position').notNull().$type<{
+    hexes: [{ q: number, r: number, s: number }, { q: number, r: number, s: number }]
+    direction: 'N' | 'NE' | 'SE'
+  }>(),
+  placedAt: timestamp('placed_at').notNull().defaultNow()
+})
+
+// Trades table
 export const trades = pgTable('trades', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  gameId: uuid('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
-  
-  // Trade participants
-  fromPlayerId: uuid('from_player_id').notNull().references(() => players.id),
-  toPlayerId: uuid('to_player_id'), // null for bank/port trades
-  toType: text('to_type'), // 'player', 'bank', 'port'
-  
-  // Trade details
-  offering: jsonb('offering').notNull().default('{}'), // ResourceCards
-  requesting: jsonb('requesting').notNull().default('{}'), // ResourceCards
-  
-  // Status
-  status: text('status').notNull().default('pending'), // pending, accepted, rejected, cancelled
-  
-  // Timestamps
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  expiresAt: timestamp('expires_at').notNull()
-}, (table) => ({
-  gameIdx: index('idx_trades_game_id').on(table.gameId),
-  statusIdx: index('idx_trades_status').on(table.status)
-}))
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  fromPlayerId: text('from_player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  toPlayerId: text('to_player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  offering: json('offering').notNull().$type<{
+    wood: number
+    brick: number
+    ore: number
+    wheat: number
+    sheep: number
+  }>(),
+  requesting: json('requesting').notNull().$type<{
+    wood: number
+    brick: number
+    ore: number
+    wheat: number
+    sheep: number
+  }>(),
+  status: text('status').notNull().default('pending'), // pending, accepted, rejected
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at')
+})
 
-// Users table - for authentication (simplified for now)
-export const users = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  
-  // User info
-  email: text('email').notNull().unique(),
-  username: text('username').notNull().unique(),
-  avatarUrl: text('avatar_url'),
-  
-  // Stats
-  gamesPlayed: integer('games_played').notNull().default(0),
-  gamesWon: integer('games_won').notNull().default(0),
-  
-  // Timestamps
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  lastSeenAt: timestamp('last_seen_at')
-}, (table) => ({
-  emailIdx: index('idx_users_email').on(table.email),
-  usernameIdx: index('idx_users_username').on(table.username)
-}))
+// Game events table for audit/replay
+export const gameEvents = pgTable('game_events', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').references(() => players.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  data: json('data').notNull(),
+  timestamp: timestamp('timestamp').notNull().defaultNow()
+})
 
-// Sessions - for WebSocket connections
-export const sessions = pgTable('sessions', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  gameId: uuid('game_id').references(() => games.id, { onDelete: 'cascade' }),
-  playerId: uuid('player_id').references(() => players.id, { onDelete: 'cascade' }),
-  
-  // Connection info
-  socketId: text('socket_id').notNull().unique(),
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  
-  // Status
-  isActive: boolean('is_active').notNull().default(true),
-  
-  // Timestamps
-  connectedAt: timestamp('connected_at').defaultNow().notNull(),
-  disconnectedAt: timestamp('disconnected_at'),
-  lastPingAt: timestamp('last_ping_at').defaultNow().notNull()
-}, (table) => ({
-  userIdx: index('idx_sessions_user_id').on(table.userId),
-  gameIdx: index('idx_sessions_game_id').on(table.gameId),
-  socketIdx: index('idx_sessions_socket_id').on(table.socketId)
-}))
-
-// Type exports for use in application
-export type Game = typeof games.$inferSelect
-export type NewGame = typeof games.$inferInsert
-export type Player = typeof players.$inferSelect
-export type NewPlayer = typeof players.$inferInsert
-export type GameEvent = typeof gameEvents.$inferSelect
-export type NewGameEvent = typeof gameEvents.$inferInsert
-export type Trade = typeof trades.$inferSelect
-export type NewTrade = typeof trades.$inferInsert
-export type User = typeof users.$inferSelect
-export type NewUser = typeof users.$inferInsert
-export type Session = typeof sessions.$inferSelect
-export type NewSession = typeof sessions.$inferInsert 
+// Player-game relationship (for multi-table queries)
+export const gamePlayersRelation = pgTable('game_players', {
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull() // Turn order position
+}, (table) => {
+  return {
+    pk: primaryKey({ columns: [table.gameId, table.playerId] })
+  }
+}) 

@@ -10,7 +10,7 @@ import { getAssetResolver } from '@/lib/theme-loader'
 import { cn } from '@/lib/utils'
 import { Board } from '@settlers/core'
 import { useState, useEffect, useCallback } from 'react'
-import { AssetResolver } from '@/lib/theme-types'
+import { AssetResolver, GameTheme } from '@/lib/theme-types'
 
 interface TestPiece {
   type: 'settlement' | 'city' | 'road'
@@ -24,14 +24,18 @@ interface GameBoardProps {
   testPieces?: TestPiece[]
   onBoardClear?: (callback: () => void) => void
   disableTransitions?: boolean
+  forceTheme?: GameTheme | null
 }
 
-export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, disableTransitions = false }: GameBoardProps = {}) {
+export function GameBoard({ board: propBoard, testPieces = [], onBoardClear, disableTransitions = false, forceTheme }: GameBoardProps = {}) {
   const gameState = useGameStore(state => state.gameState)
   const placementMode = useGameStore(state => state.placementMode)
-  const { theme, loading } = useGameTheme()
+  const { theme: contextTheme, loading } = useGameTheme()
   const [assetResolver, setAssetResolver] = useState<AssetResolver | null>(null)
   const [selectedHexId, setSelectedHexId] = useState<string | undefined>(undefined)
+  
+  // Use forceTheme if provided, otherwise use context theme
+  const theme = forceTheme !== undefined ? forceTheme : contextTheme
   
   // Use prop board if provided, otherwise fall back to store
   const board = propBoard || gameState?.board

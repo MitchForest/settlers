@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { HexTileProps, ResourceTheme } from '@/lib/theme-types'
-import { getAssetType } from '@/lib/theme-loader'
 
 const HEX_RADIUS = 32
-const HEX_SIZE = 64
 
 // Generate hexagon path points for SVG
 function getHexPath(x: number, y: number, radius: number): string {
@@ -25,21 +23,14 @@ function getTerrainColor(terrain: string, resources: ResourceTheme[]): string {
   const resource = resources.find((r: ResourceTheme) => r.id === terrain)
   if (resource?.color) return resource.color
   
-  // Hardcoded fallback colors
+  // Universal fallback colors for universal terrain types
   const fallbackColors: Record<string, string> = {
-    'tile-type-1': '#2D5016', // Resource type 1 - dark green
-    'tile-type-2': '#7CB342', // Resource type 2 - light green  
-    'tile-type-3': '#FFC107', // Resource type 3 - yellow
-    'tile-type-4': '#D84315', // Resource type 4 - red
-    'tile-type-5': '#6A1B9A', // Resource type 5 - purple
-    'tile-type-6': '#F4E4BC', // Non-producing tile - tan/sand
-    // Legacy support for old names
-    terrain1: '#2D5016',
-    terrain2: '#7CB342', 
-    terrain3: '#FFC107',
-    terrain4: '#D84315',
-    terrain5: '#6A1B9A',
-    desert: '#F4E4BC'
+    'terrain-1': '#2D5016', // Most plentiful terrain - dark green
+    'terrain-2': '#7CB342', // Second most plentiful - light green  
+    'terrain-3': '#FFC107', // Third most plentiful - yellow
+    'terrain-4': '#D84315', // Fourth most plentiful - red/orange
+    'terrain-5': '#6A1B9A', // Least plentiful - purple
+    'terrain-6': '#F4E4BC'  // Non-producing terrain - tan/sand
   }
   return fallbackColors[terrain] || '#F4E4BC'
 }
@@ -68,7 +59,6 @@ export const HexTile: React.FC<HexTileProps> = ({
   disableTransitions = false
 }) => {
   const [resolvedAsset, setResolvedAsset] = useState<string | null>(null)
-  const [assetType, setAssetType] = useState<'png' | 'svg' | 'unknown'>('unknown')
   
   // Handle empty/null terrain
   const isEmptyTile = terrain === null || terrain === undefined || isEmpty
@@ -87,22 +77,6 @@ export const HexTile: React.FC<HexTileProps> = ({
     return 'scale(1)'
   }
 
-  // Get glow color based on state
-  const getGlowColor = () => {
-    if (isEmptyTile && isHovered) return 'rgba(148, 163, 184, 0.6)' // Gray for empty hover
-    if (isSelected) return '#10b981' // Emerald-500 for selected  
-    if (isHovered) return 'var(--game-bg-secondary, #8b5cf6)' // Purple for hover
-    return 'none'
-  }
-
-  // Get glow opacity
-  const getGlowOpacity = () => {
-    if (isEmptyTile && isHovered) return 0.4
-    if (isSelected) return 0.8
-    if (isHovered) return 0.6
-    return 0
-  }
-  
   // Resolve asset on mount/terrain change (only when theme and asset resolver exist)
   useEffect(() => {
     const resolveAsset = async () => {
@@ -112,182 +86,179 @@ export const HexTile: React.FC<HexTileProps> = ({
       }
       
       const resolved = await assetResolver(resource.hexAsset)
-      setResolvedAsset(resolved)
       
       if (resolved) {
-        const type = getAssetType(resource.hexAsset)
-        setAssetType(type)
+        setResolvedAsset(resolved)
+      } else {
+        console.warn(`Failed to resolve asset for terrain ${terrain}: ${resource.hexAsset}`)
+        setResolvedAsset(null)
       }
     }
     
     resolveAsset()
-  }, [terrain, useGeometricFallbacks, resource, assetResolver])
-  
-  const shouldUseAsset = resolvedAsset && !useGeometricFallbacks && resource && typeof resource !== 'string'
-  const isImageAsset = assetType === 'png'
-  
+  }, [terrain, theme, assetResolver, resource, useGeometricFallbacks])
+
+  const getOpacity = () => {
+    if (isEmptyTile) return 0.3
+    if (isSelected) return 1
+    if (isHovered) return 0.9
+    return 0.8
+  }
+
+  const getFillColor = () => {
+    // Use resolved asset if available, otherwise fallback color
+    if (resolvedAsset) {
+      return 'url(#hexPattern)'
+    }
+    return fallbackColor
+  }
+
   return (
-    <g 
-      transform={`translate(${position.x}, ${position.y}) ${getScaleTransform()}`}
-      className={`hex-tile ${isEmptyTile ? '' : 'cursor-pointer'} ${disableTransitions ? '' : 'transition-all duration-200 ease-out'}`}
-      style={{ 
-        filter: (isHovered || isSelected) && !isEmptyTile ? `drop-shadow(0 ${isSelected ? '6px 12px' : '4px 8px'} rgba(0,0,0,0.${isSelected ? '3' : '2'}))` : 'none'
-      }}
-    >
-      {/* Asset Rendering (only for non-default themes) */}
-      {shouldUseAsset ? (
-        <>
-          {/* Image Asset (PNG/JPG) */}
-          {isImageAsset ? (
-            <>
-              <image
-                href={resolvedAsset}
-                x={-HEX_SIZE / 2}
-                y={-HEX_SIZE / 2}
-                width={HEX_SIZE}
-                height={HEX_SIZE}
-                preserveAspectRatio="xMidYMid meet"
-                onError={() => {
-                  // Fallback to color on image error
-                  setResolvedAsset(null)
-                }}
-              />
-              
-              {/* Hex border for image */}
-              <path
-                d={hexPath}
-                fill="none"
-                stroke={isEmpty ? "#94a3b8" : "#374151"}
-                strokeWidth={isEmpty ? 1 : 2}
-                strokeDasharray="none"
-              />
-            </>
-          ) : (
-            /* SVG Asset */
-            <g>
-              {/* Background hex with fallback color */}
-              <path
-                d={hexPath}
-                fill={fallbackColor}
-                stroke={isEmpty ? "#94a3b8" : "#374151"}
-                strokeWidth={isEmpty ? 1 : 2}
-                strokeDasharray="none"
-              />
-              
-              {/* SVG asset overlay */}
-              <image
-                href={resolvedAsset}
-                x={-HEX_SIZE / 2}
-                y={-HEX_SIZE / 2}
-                width={HEX_SIZE}
-                height={HEX_SIZE}
-                preserveAspectRatio="xMidYMid meet"
-                opacity={0.8}
-                onError={() => {
-                  setResolvedAsset(null)
-                }}
-              />
-            </g>
-          )}
-        </>
-      ) : (
-        /* Default: Simple Colored Hex or Empty Board Slot */
+    <g transform={`translate(${position.x}, ${position.y})`}>
+      {/* Define pattern for this hex if we have an asset */}
+      {resolvedAsset && (
+        <defs>
+          <pattern
+            id="hexPattern"
+            x="0" y="0" width="100%" height="100%"
+            patternUnits="objectBoundingBox"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="xMidYMid slice"
+          >
+            <image
+              href={resolvedAsset}
+              x="0" y="0" width="100" height="100"
+              preserveAspectRatio="xMidYMid slice"
+              onError={() => {
+                console.warn(`Image failed to load: ${resolvedAsset}`)
+                setResolvedAsset(null)
+              }}
+            />
+          </pattern>
+        </defs>
+      )}
+
+      {/* Main hex shape */}
+      <g
+        className={!disableTransitions ? "transition-all duration-200 ease-in-out" : ""}
+        style={{
+          transform: getScaleTransform(),
+          transformOrigin: 'center'
+        }}
+      >
+        {/* Hex background */}
         <path
           d={hexPath}
-          fill={isEmptyTile ? (isHovered ? "rgba(148, 163, 184, 0.4)" : "rgba(255, 255, 255, 0.1)") : fallbackColor}
-          stroke={isEmptyTile ? (isHovered ? "rgba(148, 163, 184, 0.8)" : "#94a3b8") : (isSelected ? "#10b981" : (isHovered ? "#8b5cf6" : "#374151"))}
-          strokeWidth={isEmptyTile ? 1 : 2}
-          strokeDasharray="none"
-          opacity={1}
-          style={{ pointerEvents: 'all' }}
+          fill={getFillColor()}
+          stroke={isSelected ? "#FFD700" : isHovered && !isEmptyTile ? "#FFFFFF" : "#333333"}
+          strokeWidth={isSelected ? 3 : isHovered && !isEmptyTile ? 2 : 1}
+          opacity={getOpacity()}
+          className={!disableTransitions ? "transition-all duration-200" : ""}
         />
-      )}
-      
-      {/* Resource Icon (only for geometric fallbacks or when no asset) */}
-      {resource && typeof resource !== 'string' && resource.icon && (useGeometricFallbacks || !shouldUseAsset || isEmptyTile) && (
-        <text
-          x={0}
-          y={5}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={16}
-          style={{ pointerEvents: 'none' }}
-        >
-          {resource.icon}
-        </text>
-      )}
-      
 
-      
-      {/* Number token - cohesive unit with proper colors */}
-      {numberToken && !isEmptyTile && (
-        <g className={`number-token ${disableTransitions ? '' : 'transition-all duration-200'}`}>
-          {/* Token background - 5% off white */}
-          <circle
-            cx={0}
-            cy={0}
-            r={10}
-            fill="rgba(255, 255, 255, 0.95)"
-            stroke="rgba(0, 0, 0, 0.1)"
-            strokeWidth={1}
+        {/* Inner shadow/highlight for depth */}
+        {!isEmptyTile && (
+          <path
+            d={hexPath}
+            fill="none"
+            stroke="rgba(255, 255, 255, 0.3)"
+            strokeWidth="1"
+            opacity={0.6}
+            style={{
+              transform: 'translate(-1px, -1px)'
+            }}
           />
-          
-          {/* Number text - positioned in upper part of circle */}
-          <text
-            x={0}
-            y={-1}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={8}
-            fontWeight="bold"
-            fill={numberToken === 6 || numberToken === 8 ? "#dc2626" : "rgba(0, 0, 0, 0.9)"}
-          >
-            {numberToken}
-          </text>
-          
-          {/* Probability dots - inside circle at bottom */}
-          {probabilityDots > 0 && (
-            <g className="probability-dots">
-              {Array.from({ length: probabilityDots }, (_, i) => {
-                // Center the dots inside the circle bottom
-                const dotSpacing = 1.8
-                const totalWidth = (probabilityDots - 1) * dotSpacing
-                const startX = -totalWidth / 2
-                
-                return (
+        )}
+
+        {/* Number token */}
+        {numberToken && !isEmptyTile && (
+          <g className="number-token">
+            {/* Token background circle */}
+            <circle
+              r="18"
+              fill="#F5E6D3"
+              stroke="#8B4513"
+              strokeWidth="2"
+              opacity="0.95"
+            />
+            
+            {/* Number text */}
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="14"
+              fontWeight="bold"
+              fill={[6, 8].includes(numberToken) ? "#DC2626" : "#1F2937"}
+            >
+              {numberToken}
+            </text>
+            
+            {/* Probability dots */}
+            {probabilityDots > 0 && (
+              <g transform="translate(0, 12)">
+                {Array.from({ length: probabilityDots }).map((_, i) => (
                   <circle
                     key={i}
-                    cx={startX + (i * dotSpacing)}
-                    cy={6}
-                    r={0.5}
-                    fill={numberToken === 6 || numberToken === 8 ? "#dc2626" : "rgba(0, 0, 0, 0.9)"}
+                    cx={(i - (probabilityDots - 1) / 2) * 3}
+                    cy="0"
+                    r="1.5"
+                    fill={[6, 8].includes(numberToken) ? "#DC2626" : "#1F2937"}
                   />
-                )
-              })}
-            </g>
-          )}
-        </g>
-      )}
-      
+                ))}
+              </g>
+            )}
+          </g>
+        )}
 
+        {/* Empty tile indicator */}
+        {isEmptyTile && (
+          <g opacity="0.4">
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="12"
+              fill="#6B7280"
+              className="select-none"
+            >
+              Empty
+            </text>
+          </g>
+        )}
+
+        {/* Hover overlay */}
+        {isHovered && !isEmptyTile && (
+          <path
+            d={hexPath}
+            fill="rgba(255, 255, 255, 0.1)"
+            className="pointer-events-none"
+          />
+        )}
+
+        {/* Selection overlay */}
+        {isSelected && (
+          <path
+            d={hexPath}
+            fill="rgba(255, 215, 0, 0.2)"
+            className="pointer-events-none"
+          />
+        )}
+      </g>
     </g>
   )
 }
 
-// SVG filter definitions (should be defined once in parent SVG)
+// Shared filter definitions for hex tiles
 export const HexTileFilters: React.FC = () => (
   <defs>
-    <filter id="hoverGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-      <feMerge> 
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    {/* Drop shadow filter */}
+    <filter id="hexShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" floodOpacity="0.3" />
     </filter>
     
-    <filter id="selectedGlow" x="-50%" y="-50%" width="200%" height="200%">
+    {/* Glow filter for selections */}
+    <filter id="hexGlow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-      <feMerge> 
+      <feMerge>
         <feMergeNode in="coloredBlur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>

@@ -1,4 +1,4 @@
-// Theme system types for decoupled themeable Catan
+// Theme system types for Settlers game
 
 export interface ThemeMeta {
   id: string
@@ -12,78 +12,58 @@ export interface ThemeMeta {
 export interface ResourceTheme {
   id: string
   name: string
+  description: string
   color: string
   icon: string
-  // Asset paths (resolved by loader)
-  hexAsset?: string       // Path to hex tile asset (PNG, SVG, etc.)
-  iconAsset?: string      // Path to resource icon asset
+  resourceProduced: string | null
 }
 
-export interface PlayerColor {
-  id: string
-  name: string
-  primary: string
-  secondary: string
-  accent: string
+export interface ResourceMapping {
+  displayName: string
+  description: string
+  icon: string
+  color: string
 }
 
-export interface StructureTheme {
-  settlement: {
-    name: string
-    plural: string
-    description: string
-    icon: string
-    color: string
-    asset?: string // Path to settlement asset for each player color
-  }
-  city: {
-    name: string
-    plural: string
-    description: string
-    icon: string
-    color: string
-    asset?: string // Path to city asset for each player color
-  }
-  road: {
-    name: string
-    plural: string
-    description: string
-    width?: number
-    style?: string
-    asset?: string // Path to road asset for each player color
-  }
+export interface GameElement {
+  displayName: string
+  description: string
+  icon: string
+  color: string
 }
 
 export interface DevelopmentCardTheme {
-  name: string
+  displayName: string
   description: string
-  action?: string
   icon: string
-  color?: string
-  iconAsset?: string
-  artAsset?: string
+  color: string
 }
 
-export interface UIColors {
+export interface PlayerColor {
+  id: number
+  name: string
   primary: string
   secondary: string
   accent: string
-  background: string
-  surface: string
-  text: string
+}
+
+export interface UIConfig {
+  boardBackground: string
+  hexBorder: string
+  hexBorderWidth: number
+  numberTokenBackground: string
+  numberTokenBorder: string
+  robberColor: string
 }
 
 export interface GameTheme {
   meta: ThemeMeta
   resources: ResourceTheme[]
-  structures: StructureTheme
-  players: {
-    colors: PlayerColor[]
-  }
+  resourceMapping: Record<string, ResourceMapping>
+  gameElements: Record<string, GameElement>
   developmentCards: Record<string, DevelopmentCardTheme>
-  ui: {
-    colors: UIColors
-  }
+  playerColors: PlayerColor[]
+  ui: UIConfig
   _assetBasePath?: string
 } 
 

@@ -5,14 +5,12 @@ import {
   GameState,
   GameAction,
   GameEvent,
-  GameEventType,
   Player,
   PlayerId,
   ResourceCards,
   DevelopmentCard,
   Building,
-  Connection,
-  Trade,
+  Road,
   GamePhase,
   DiceRoll,
   EdgePosition
@@ -21,17 +19,15 @@ import {
   BUILDING_COSTS,
   VICTORY_POINTS,
   GAME_RULES,
-  DEVELOPMENT_CARD_COUNTS,
-  SUCCESS_MESSAGES
+  DEVELOPMENT_CARD_COUNTS
 } from '../constants'
 import {
   rollDice,
   subtractResources,
   addResources,
   createEmptyResources,
-  getTotalResources,
+  getTotalResourceCount,
   calculateDiscardCount,
-  hexToString,
   randomChoice,
   shuffleArray
 } from '../calculations'
@@ -66,18 +62,18 @@ export function processAction(
   switch (action.type) {
     case 'roll':
       return processRollDice(state, action)
-    case 'placeSettlement':
-      return processPlaceSettlement(state, action)
-    case 'placeConnection':
-      return processPlaceConnection(state, action)
+    case 'placeBuilding':
+              return processBuilding(state, action)
+    case 'placeRoad':
+      return processPlaceRoad(state, action)
     case 'build':
       return processBuildAction(state, action)
     case 'trade':
       return processTradeAction(state, action)
     case 'playCard':
       return processPlayCard(state, action)
-    case 'moveBlocker':
-      return processMoveBlocker(state, action)
+    case 'moveRobber':
+      return processMoveRobber(state, action)
     case 'stealResource':
       return processStealResource(state, action)
     case 'discard':
@@ -94,31 +90,17 @@ export function processAction(
   }
 }
 
-// ============= Action Validators =============
+// ============= Action Validation =============
 
-function validateAction(state: GameState, action: GameAction): { isValid: boolean; reason?: string } {
-  // Basic validation - is it player's turn?
-  if (action.type !== 'discard' && !validator.isPlayerTurn(state, action.playerId)) {
+function validateAction(state: GameState, action: GameAction): { isValid: boolean, reason?: string } {
+  // Check if it's the player's turn
+  const currentPlayerId = state.currentPlayer
+  if (action.playerId !== currentPlayerId) {
     return { isValid: false, reason: 'Not your turn' }
   }
 
-  // Action-specific validation
-  switch (action.type) {
-    case 'roll':
-      return validator.canPerformAction(state, action.playerId, 'roll')
-    case 'placeSettlement':
-      return validator.canPlaceSettlement(state, action.playerId, action.data.vertexId)
-    case 'placeConnection':
-      return validator.canPlaceConnection(state, action.playerId, action.data.edgeId)
-    case 'moveBlocker':
-      return validator.canMoveBlocker(state, action.playerId, action.data.hexId)
-    case 'stealResource':
-      return validator.canStealFrom(state, action.playerId, action.data.targetId)
-    case 'discard':
-      return validator.canDiscard(state, action.playerId, action.data.resources)
-    default:
-      return { isValid: true }
-  }
+  // Phase-specific validation would go here
+  return { isValid: true }
 }
 
 // ============= Roll Dice =============
@@ -139,7 +121,7 @@ function processRollDice(state: GameState, action: GameAction): ProcessResult {
     const playersToDiscard: PlayerId[] = []
     
     state.players.forEach((player, playerId) => {
-      const total = getTotalResources(player.resources)
+      const total = getTotalResourceCount(player.resources)
       if (total > GAME_RULES.handLimitBeforeDiscard) {
         playersToDiscard.push(playerId)
       }
@@ -147,9 +129,8 @@ function processRollDice(state: GameState, action: GameAction): ProcessResult {
 
     if (playersToDiscard.length > 0) {
       newState.phase = 'discard'
-      newState.discardingPlayers = playersToDiscard
     } else {
-      newState.phase = 'moveBlocker'
+      newState.phase = 'moveRobber'
     }
   } else {
     // Distribute resources
@@ -175,248 +156,157 @@ function processRollDice(state: GameState, action: GameAction): ProcessResult {
   }
 }
 
-// ============= Place Settlement =============
+// ============= Place Building =============
 
-function processPlaceSettlement(state: GameState, action: GameAction): ProcessResult {
-  const { vertexId } = action.data
+function processBuilding(state: GameState, action: GameAction): ProcessResult {
+  const { buildingType, vertexId } = action.data
   const player = state.players.get(action.playerId)!
   const events: GameEvent[] = []
   
-  // Deep clone state for immutability
   let newState = deepCloneState(state)
-  
-  // Place the settlement
-  const vertex = newState.board.vertices.get(vertexId)!
-  vertex.building = {
-    type: 'settlement',
-    owner: action.playerId,
-    position: vertex.position
-  }
-
-  // Update player's building inventory
   const newPlayer = { ...player }
-  newPlayer.buildings.settlements -= 1
   
-  // Deduct resources (unless in setup)
-  if (state.phase !== 'setup1' && state.phase !== 'setup2') {
-    newPlayer.resources = subtractResources(
-      newPlayer.resources,
-      BUILDING_COSTS.settlement
-    )
+  // Deduct resources for building cost
+  const cost = BUILDING_COSTS[buildingType as keyof typeof BUILDING_COSTS]
+  newPlayer.resources = subtractResources(player.resources, cost)
+  
+  // Update building inventory
+  if (buildingType === 'settlement') {
+    newPlayer.buildings.settlements -= 1
+    newPlayer.score = {
+      ...newPlayer.score,
+      public: newPlayer.score.public + VICTORY_POINTS.settlement
+    }
+  } else if (buildingType === 'city') {
+    newPlayer.buildings.cities -= 1
+    newPlayer.score = {
+      ...newPlayer.score,
+      public: newPlayer.score.public + VICTORY_POINTS.city
+    }
   }
   
-  // Update score
-  newPlayer.score = {
-    ...newPlayer.score,
-    public: newPlayer.score.public + VICTORY_POINTS.settlement
+  newPlayer.score.total = newPlayer.score.public + newPlayer.score.hidden
+  
+  // Place building on board
+  const vertex = newState.board.vertices.get(vertexId)
+  if (vertex) {
+    vertex.building = {
+      type: buildingType,
+      owner: action.playerId,
+      position: vertex.position
+    }
   }
   
   newState.players.set(action.playerId, newPlayer)
-
-  // Create event
-  events.push(createEvent(state, 'buildingPlaced', action.playerId, {
-    type: 'settlement',
-    vertexId,
-    position: vertex.position
+  
+  events.push(createEvent(state, 'buildingPlaced', action.playerId, { 
+    buildingType, 
+    vertexId 
   }))
-
-  // Check for victory
+  
+  // Check for victory and update achievements
   newState = checkVictoryCondition(newState)
-
-  // Handle setup phase resource distribution
-  if (state.phase === 'setup2') {
-    const resources = collectSetupResources(newState, vertexId)
-    if (Object.values(resources).some(v => v > 0)) {
-      const updatedPlayer = { ...newState.players.get(action.playerId)! }
-      updatedPlayer.resources = addResources(updatedPlayer.resources, resources)
-      newState.players.set(action.playerId, updatedPlayer)
-      
-      events.push(createEvent(state, 'resourcesDistributed', action.playerId, { resources }))
-    }
+  newState = updateLongestRoad(newState)
+  
+  // Handle setup phase progression
+  if (state.phase === 'setup1' || state.phase === 'setup2') {
+    newState = progressSetupPhase(newState)
   }
-
+  
   return {
     success: true,
     newState,
     events,
-    message: SUCCESS_MESSAGES.buildingPlaced
+    message: 'Building placed successfully'
   }
 }
 
-// ============= Place Connection =============
+// ============= Place Road =============
 
-function processPlaceConnection(state: GameState, action: GameAction): ProcessResult {
+function processPlaceRoad(state: GameState, action: GameAction): ProcessResult {
   const { edgeId } = action.data
   const player = state.players.get(action.playerId)!
   const events: GameEvent[] = []
   
   let newState = deepCloneState(state)
-  
-  // Place the connection
-  const edge = newState.board.edges.get(edgeId)!
-  edge.connection = {
-    owner: action.playerId,
-    position: edge.position
-  }
-
-  // Update player
   const newPlayer = { ...player }
-  newPlayer.buildings.connections -= 1
   
-  // Deduct resources (unless in setup)
+  // Deduct resources for road cost (only if not in setup)
   if (state.phase !== 'setup1' && state.phase !== 'setup2') {
-    newPlayer.resources = subtractResources(
-      newPlayer.resources,
-      BUILDING_COSTS.connection
-    )
+    const cost = BUILDING_COSTS.road
+    newPlayer.resources = subtractResources(player.resources, cost)
+  }
+  
+  // Update building inventory
+  newPlayer.buildings.roads -= 1
+  
+  // Place road on board
+  const edge = newState.board.edges.get(edgeId)
+  if (edge) {
+    edge.connection = {
+      type: 'road',
+      owner: action.playerId,
+      position: edge.position
+    }
   }
   
   newState.players.set(action.playerId, newPlayer)
-
-  // Create event
-  events.push(createEvent(state, 'connectionBuilt', action.playerId, {
-    edgeId,
-    position: edge.position as EdgePosition
+  
+  events.push(createEvent(state, 'roadPlaced', action.playerId, { 
+    edgeId 
   }))
-
-  // Check for longest path
-  newState = updateLongestPath(newState)
-
-  // Check for victory
-  newState = checkVictoryCondition(newState)
-
+  
+  // Update longest road
+  newState = updateLongestRoad(newState)
+  
   // Handle setup phase progression
   if (state.phase === 'setup1' || state.phase === 'setup2') {
     newState = progressSetupPhase(newState)
   }
-
+  
   return {
     success: true,
     newState,
     events,
-    message: 'Connection built'
+    message: 'Road placed successfully'
   }
 }
 
-// ============= Build Action (City) =============
+// ============= Build Action =============
 
 function processBuildAction(state: GameState, action: GameAction): ProcessResult {
-  const { buildingType, location } = action.data
+  const { buildingType, position } = action.data
   
-  if (buildingType === 'city') {
-    return processUpgradeToCity(state, action.playerId, location)
+  // Route to specific building placement handlers
+  if (buildingType === 'settlement' || buildingType === 'city') {
+    return processBuilding(state, {
+      ...action,
+      data: { buildingType, vertexId: position }
+    })
+  } else if (buildingType === 'road') {
+    return processPlaceRoad(state, {
+      ...action,
+      data: { edgeId: position }
+    })
   }
   
-  // Other building types would be handled here
   return {
     success: false,
     newState: state,
     events: [],
-    error: 'Unknown building type'
-  }
-}
-
-function processUpgradeToCity(state: GameState, playerId: PlayerId, vertexId: string): ProcessResult {
-  const player = state.players.get(playerId)!
-  const events: GameEvent[] = []
-  
-  let newState = deepCloneState(state)
-  
-  // Upgrade the settlement
-  const vertex = newState.board.vertices.get(vertexId)!
-  vertex.building = {
-    type: 'city',
-    owner: playerId,
-    position: vertex.position
-  }
-
-  // Update player
-  const newPlayer = { ...player }
-  newPlayer.buildings.settlements += 1  // Return settlement to inventory
-  newPlayer.buildings.cities -= 1
-  newPlayer.resources = subtractResources(newPlayer.resources, BUILDING_COSTS.city)
-  
-  // Update score (city worth 2, settlement was worth 1, so +1)
-  newPlayer.score = {
-    ...newPlayer.score,
-    public: newPlayer.score.public + 1
-  }
-  
-  newState.players.set(playerId, newPlayer)
-
-  // Create event
-  events.push(createEvent(state, 'buildingPlaced', playerId, {
-    type: 'city',
-    vertexId,
-    position: vertex.position
-  }))
-
-  // Check for victory
-  newState = checkVictoryCondition(newState)
-
-  return {
-    success: true,
-    newState,
-    events,
-    message: 'City built'
+    error: 'Invalid building type'
   }
 }
 
 // ============= Trade Action =============
 
 function processTradeAction(state: GameState, action: GameAction): ProcessResult {
-  const trade = action.data.trade as Trade
-  const events: GameEvent[] = []
-  
-  let newState = deepCloneState(state)
-  
-  if (trade.to === 'bank' || trade.to === 'port') {
-    // Maritime trade
-    return processMaritimeTrade(newState, action.playerId, trade)
-  } else {
-    // Player trade - just record the proposal
-    newState.trades.push({
-      ...trade,
-      id: generateId(),
-      status: 'pending',
-      createdAt: Date.now()
-    })
-    
-    events.push(createEvent(state, 'tradeProposed', action.playerId, { trade }))
-    
-    return {
-      success: true,
-      newState,
-      events,
-      message: 'Trade proposed'
-    }
-  }
-}
-
-function processMaritimeTrade(state: GameState, playerId: PlayerId, trade: Trade): ProcessResult {
-  const player = state.players.get(playerId)!
-  const events: GameEvent[] = []
-  
-  // Calculate trade ratio
-  const ratio = trade.to === 'port' ? 
-    GAME_RULES.specialPortRatio : 
-    GAME_RULES.bankTradeRatio
-  
-  // Execute trade
-  const newPlayer = { ...player }
-  newPlayer.resources = subtractResources(newPlayer.resources, trade.offering)
-  newPlayer.resources = addResources(newPlayer.resources, trade.requesting)
-  
-  const newState = { ...state }
-  newState.players.set(playerId, newPlayer)
-  
-  events.push(createEvent(state, 'tradeCompleted', playerId, { trade }))
-  
+  // Trade implementation would go here
   return {
-    success: true,
-    newState,
-    events,
-    message: SUCCESS_MESSAGES.tradeCompleted
+    success: false,
+    newState: state,
+    events: [],
+    error: 'Trade not implemented yet'
   }
 }
 
@@ -442,30 +332,31 @@ function processPlayCard(state: GameState, action: GameAction): ProcessResult {
   switch (card.type) {
     case 'knight':
       newPlayer.knightsPlayed += 1
-      newState.phase = 'moveBlocker'
+      newState.phase = 'moveRobber'
       newState = updateLargestArmy(newState)
       break
       
-    case 'progress1': // Road Building
+    case 'roadBuilding':
       // Would need UI to select where to build 2 roads
       break
       
-    case 'progress2': // Year of Plenty
+    case 'yearOfPlenty':
       // Would need UI to select 2 resources
       break
       
-    case 'progress3': // Monopoly
+    case 'monopoly':
       // Would need UI to select resource type
       break
       
     case 'victory':
       newPlayer.score = {
         ...newPlayer.score,
-        hidden: newPlayer.score.hidden + VICTORY_POINTS.developmentCard
+        hidden: newPlayer.score.hidden + VICTORY_POINTS.victoryCard
       }
       break
   }
   
+  newPlayer.score.total = newPlayer.score.public + newPlayer.score.hidden
   newState.players.set(action.playerId, newPlayer)
   
   events.push(createEvent(state, 'cardPlayed', action.playerId, { 
@@ -480,81 +371,82 @@ function processPlayCard(state: GameState, action: GameAction): ProcessResult {
     success: true,
     newState,
     events,
-    message: SUCCESS_MESSAGES.cardPurchased
+    message: 'Development card played'
   }
 }
 
-// ============= Move Blocker =============
+// ============= Move Robber =============
 
-function processMoveBlocker(state: GameState, action: GameAction): ProcessResult {
-  const { hexId } = action.data
+function processMoveRobber(state: GameState, action: GameAction): ProcessResult {
+  const { hexPosition } = action.data
+  let newState = deepCloneState(state)
   const events: GameEvent[] = []
   
-  let newState = deepCloneState(state)
+  // Move robber to new position
+  newState.board.robberPosition = hexPosition
   
-  // Update blocker position
-  const targetHex = newState.board.hexes.find(hex => hex.id === hexId)!
-  newState.board.blockerPosition = targetHex.position
-  
-  // Update hex states
-  newState.board.hexes.forEach(hex => {
-    hex.hasBlocker = hexToString(hex.position) === hexId
+  // Remove robber from old hex, add to new hex
+  Array.from(newState.board.hexes.values()).forEach(hex => {
+    hex.hasRobber = (hex.position.q === hexPosition.q && 
+                      hex.position.r === hexPosition.r && 
+                      hex.position.s === hexPosition.s)
   })
   
-  events.push(createEvent(state, 'blockerMoved', action.playerId, {
-    from: state.board.blockerPosition,
-    to: targetHex.position
+  events.push(createEvent(state, 'robberMoved', action.playerId, { 
+    hexPosition 
   }))
   
-  // Move to steal phase
-  newState.phase = 'steal'
+  // Move to steal phase if there are adjacent players
+  const adjacentPlayers = getPlayersAdjacentToHex(state, hexPosition)
+  if (adjacentPlayers.length > 0) {
+    newState.phase = 'steal'
+  } else {
+    newState.phase = 'actions'
+  }
   
   return {
     success: true,
     newState,
     events,
-    message: 'Blocker moved'
+    message: 'Robber moved'
   }
 }
 
 // ============= Steal Resource =============
 
 function processStealResource(state: GameState, action: GameAction): ProcessResult {
-  const { targetId } = action.data
-  const thief = state.players.get(action.playerId)!
-  const target = state.players.get(targetId)!
-  const events: GameEvent[] = []
+  const { targetPlayerId } = action.data
+  const currentPlayer = state.players.get(action.playerId)!
+  const targetPlayer = state.players.get(targetPlayerId)!
   
   let newState = deepCloneState(state)
+  const events: GameEvent[] = []
   
-  // Get random resource from target
-  const targetResources: string[] = []
-  Object.entries(target.resources).forEach(([resource, count]) => {
-    for (let i = 0; i < count; i++) {
-      targetResources.push(resource)
-    }
-  })
+  // Get random resource from target player
+  const availableResources = Object.entries(targetPlayer.resources)
+    .filter(([_, count]) => count > 0)
+    .flatMap(([resource, count]) => Array(count).fill(resource))
   
-  if (targetResources.length > 0) {
-    const stolenResource = randomChoice(targetResources)!
+  if (availableResources.length > 0) {
+    const stolenResource = randomChoice(availableResources) as keyof ResourceCards
     
     // Transfer resource
-    const newThief = { ...thief }
-    const newTarget = { ...target }
+    const newCurrentPlayer = { ...currentPlayer }
+    const newTargetPlayer = { ...targetPlayer }
     
-    newTarget.resources[stolenResource as keyof ResourceCards] -= 1
-    newThief.resources[stolenResource as keyof ResourceCards] += 1
+    newCurrentPlayer.resources[stolenResource] += 1
+    newTargetPlayer.resources[stolenResource] -= 1
     
-    newState.players.set(action.playerId, newThief)
-    newState.players.set(targetId, newTarget)
+    newState.players.set(action.playerId, newCurrentPlayer)
+    newState.players.set(targetPlayerId, newTargetPlayer)
     
-    events.push(createEvent(state, 'resourceStolen', action.playerId, {
-      targetId,
-      resource: stolenResource
+    events.push(createEvent(state, 'resourceStolen', action.playerId, { 
+      targetPlayerId,
+      resourceType: stolenResource
     }))
   }
   
-  // Move to actions phase
+  // Return to actions phase
   newState.phase = 'actions'
   
   return {
@@ -565,35 +457,32 @@ function processStealResource(state: GameState, action: GameAction): ProcessResu
   }
 }
 
-// ============= Discard =============
+// ============= Discard Cards =============
 
 function processDiscard(state: GameState, action: GameAction): ProcessResult {
   const { resources } = action.data
   const player = state.players.get(action.playerId)!
-  const events: GameEvent[] = []
   
   let newState = deepCloneState(state)
+  const events: GameEvent[] = []
   
-  // Discard resources
+  // Remove discarded resources
   const newPlayer = { ...player }
-  newPlayer.resources = subtractResources(newPlayer.resources, resources)
+  newPlayer.resources = subtractResources(player.resources, resources)
   newState.players.set(action.playerId, newPlayer)
   
-  // Remove from discarding list
-  newState.discardingPlayers = newState.discardingPlayers?.filter(
-    id => id !== action.playerId
-  ) || []
+  // Move to move robber phase after discarding
+  newState.phase = 'moveRobber'
   
-  // Check if all players have discarded
-  if (newState.discardingPlayers.length === 0) {
-    newState.phase = 'moveBlocker'
-  }
+  events.push(createEvent(state, 'resourcesDiscarded', action.playerId, { 
+    discardedResources: resources
+  }))
   
   return {
     success: true,
     newState,
     events,
-    message: 'Resources discarded'
+    message: 'Cards discarded'
   }
 }
 
@@ -603,163 +492,149 @@ function processEndTurn(state: GameState, action: GameAction): ProcessResult {
   const events: GameEvent[] = []
   let newState = deepCloneState(state)
   
+  // Get all player IDs in order
+  const playerIds = Array.from(state.players.keys())
+  const currentIndex = playerIds.indexOf(state.currentPlayer)
+  const nextIndex = (currentIndex + 1) % playerIds.length
+  
   // Move to next player
-  newState.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.playerOrder.length
+  newState.currentPlayer = playerIds[nextIndex]
   newState.turn += 1
   newState.phase = 'roll'
   newState.dice = null
   
   events.push(createEvent(state, 'turnEnded', action.playerId, {
-    nextPlayer: newState.playerOrder[newState.currentPlayerIndex]
+    nextPlayer: newState.currentPlayer
   }))
   
   return {
     success: true,
     newState,
     events,
-    message: SUCCESS_MESSAGES.turnEnded
+    message: 'Turn ended'
   }
 }
 
 // ============= Helper Functions =============
 
 function createEvent(
-  state: GameState,
-  type: GameEventType,
-  playerId?: PlayerId,
+  state: GameState, 
+  type: string, 
+  playerId?: PlayerId, 
   data: any = {}
 ): GameEvent {
   return {
-    id: generateId(),
-    gameId: state.id,
+    id: `event-${Date.now()}-${Math.random()}`,
     type,
+    gameId: state.id,
     playerId,
     data,
-    timestamp: Date.now()
+    timestamp: new Date()
   }
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
 function deepCloneState(state: GameState): GameState {
-  // Deep clone with proper Map handling
   return {
     ...state,
+    players: new Map(Array.from(state.players.entries()).map(([id, player]) => [
+      id, 
+      { ...player, resources: { ...player.resources } }
+    ])),
     board: {
       ...state.board,
-      hexes: [...state.board.hexes], // Clone array
+      hexes: new Map(state.board.hexes),
       vertices: new Map(state.board.vertices),
       edges: new Map(state.board.edges)
-    },
-    players: new Map(state.players),
-    playerOrder: [...state.playerOrder],
-    developmentDeck: [...state.developmentDeck],
-    trades: [...state.trades]
+    }
   }
 }
 
-function calculateResourceDistribution(
-  state: GameState,
-  diceSum: number
-): Map<PlayerId, Partial<ResourceCards>> {
-  const distribution = new Map<PlayerId, Partial<ResourceCards>>()
+function calculateResourceDistribution(state: GameState, diceSum: number): Map<PlayerId, ResourceCards> {
+  const distribution = new Map<PlayerId, ResourceCards>()
   
-  // Find all hexes with this number
-  state.board.hexes.forEach(hex => {
-    if (hex.numberToken === diceSum && !hex.hasBlocker) {
-      // Find all buildings adjacent to this hex
-      // (Simplified - would need proper adjacency check)
-      state.board.vertices.forEach(vertex => {
-        if (vertex.building && hex.terrain) {
-          const playerId = vertex.building.owner
-          const resourceType = getResourceForTerrain(hex.terrain)
-          
-          if (resourceType) {
-            const current = distribution.get(playerId) || createEmptyResources()
-            const amount = vertex.building.type === 'city' ? 2 : 1
-            current[resourceType] = (current[resourceType] || 0) + amount
-            distribution.set(playerId, current)
+  // Terrain to resource mapping
+  const terrainToResource: Record<string, keyof ResourceCards | undefined> = {
+    'forest': 'wood',
+    'hills': 'brick', 
+    'pasture': 'sheep',
+    'fields': 'wheat',
+    'mountains': 'ore',
+    'desert': undefined
+  }
+  
+  // Find hexes that produce this dice roll
+  Array.from(state.board.hexes.values()).forEach(hex => {
+    if (hex.numberToken === diceSum && hex.terrain && !hex.hasRobber) {
+      const resourceType = terrainToResource[hex.terrain]
+      if (resourceType) {
+        // Find players with buildings adjacent to this hex
+        const adjacentPlayers = getPlayersAdjacentToHex(state, hex.position)
+        
+        adjacentPlayers.forEach(({ playerId, buildingType }) => {
+          if (!distribution.has(playerId)) {
+            distribution.set(playerId, createEmptyResources())
           }
-        }
-      })
+          
+          const playerResources = distribution.get(playerId)!
+          const amount = buildingType === 'city' ? 2 : 1 // Cities produce 2, settlements produce 1
+          playerResources[resourceType] += amount
+        })
+      }
     }
   })
   
   return distribution
 }
 
-function distributeResources(
-  state: GameState,
-  distribution: Map<PlayerId, Partial<ResourceCards>>
-): GameState {
+function distributeResources(state: GameState, distribution: Map<PlayerId, ResourceCards>): GameState {
   const newState = { ...state }
   
   distribution.forEach((resources, playerId) => {
-    const player = newState.players.get(playerId)!
-    const newPlayer = {
-      ...player,
-      resources: addResources(player.resources, resources)
+    const player = newState.players.get(playerId)
+    if (player) {
+      const newPlayer = { ...player }
+      newPlayer.resources = addResources(player.resources, resources)
+      newState.players.set(playerId, newPlayer)
     }
-    newState.players.set(playerId, newPlayer)
   })
   
   return newState
 }
 
-function getResourceForTerrain(terrain: string): keyof ResourceCards | null {
-  const terrainToResource: Record<string, keyof ResourceCards> = {
-    terrain1: 'resource1',  // Forest -> Lumber
-    terrain2: 'resource2',  // Pasture -> Wool
-    terrain3: 'resource3',  // Fields -> Grain
-    terrain4: 'resource4',  // Hills -> Brick
-    terrain5: 'resource5',  // Mountains -> Ore
-  }
-  return terrainToResource[terrain] || null
+function getPlayersAdjacentToHex(state: GameState, hexPosition: any): Array<{ playerId: PlayerId, buildingType: string }> {
+  const adjacentPlayers: Array<{ playerId: PlayerId, buildingType: string }> = []
+  
+  // Implementation would check vertices adjacent to hex for buildings
+  // This is a simplified version
+  
+  return adjacentPlayers
 }
 
-function collectSetupResources(state: GameState, vertexId: string): Partial<ResourceCards> {
-  const resources: Partial<ResourceCards> = {}
-  
-  // Find hexes adjacent to this vertex
-  // (Simplified - would need proper adjacency check)
-  state.board.hexes.forEach(hex => {
-    if (hex.terrain) {
-      const resourceType = getResourceForTerrain(hex.terrain)
-      if (resourceType) {
-        resources[resourceType] = (resources[resourceType] || 0) + 1
-      }
-    }
-  })
-  
-  return resources
-}
-
-function updateLongestPath(state: GameState): GameState {
-  // Calculate longest path for each player
+function updateLongestRoad(state: GameState): GameState {
+  // Calculate longest road for each player
   // (Simplified - would need graph algorithm)
   let longestPlayer: PlayerId | null = null
   let longestLength = 0
   
   state.players.forEach((player, playerId) => {
     const pathLength = 5 // TODO: Calculate actual path length
-    if (pathLength >= GAME_RULES.longestPathMinimum && pathLength > longestLength) {
+    if (pathLength >= GAME_RULES.longestRoadMinimum && pathLength > longestLength) {
       longestPlayer = playerId
       longestLength = pathLength
     }
   })
   
-  // Update longest path holder
+  // Update longest road holder
   const newState = { ...state }
   newState.players.forEach((player, playerId) => {
     const hasLongest = playerId === longestPlayer
-    if (player.hasLongestPath !== hasLongest) {
-      const newPlayer = { ...player, hasLongestPath: hasLongest }
+    if (player.hasLongestRoad !== hasLongest) {
+      const newPlayer = { ...player, hasLongestRoad: hasLongest }
       newPlayer.score = {
         ...newPlayer.score,
         public: newPlayer.score.public + (hasLongest ? 2 : -2)
       }
+      newPlayer.score.total = newPlayer.score.public + newPlayer.score.hidden
       newState.players.set(playerId, newPlayer)
     }
   })
@@ -773,7 +648,7 @@ function updateLargestArmy(state: GameState): GameState {
   let largestCount = 0
   
   state.players.forEach((player, playerId) => {
-    if (player.knightsPlayed >= GAME_RULES.largestForceMinimum && 
+    if (player.knightsPlayed >= GAME_RULES.largestArmyMinimum && 
         player.knightsPlayed > largestCount) {
       largestPlayer = playerId
       largestCount = player.knightsPlayed
@@ -784,12 +659,13 @@ function updateLargestArmy(state: GameState): GameState {
   const newState = { ...state }
   newState.players.forEach((player, playerId) => {
     const hasLargest = playerId === largestPlayer
-    if (player.hasLargestForce !== hasLargest) {
-      const newPlayer = { ...player, hasLargestForce: hasLargest }
+    if (player.hasLargestArmy !== hasLargest) {
+      const newPlayer = { ...player, hasLargestArmy: hasLargest }
       newPlayer.score = {
         ...newPlayer.score,
         public: newPlayer.score.public + (hasLargest ? 2 : -2)
       }
+      newPlayer.score.total = newPlayer.score.public + newPlayer.score.hidden
       newState.players.set(playerId, newPlayer)
     }
   })
@@ -800,12 +676,11 @@ function updateLargestArmy(state: GameState): GameState {
 function checkVictoryCondition(state: GameState): GameState {
   const newState = { ...state }
   
+  // Check if any player has reached victory points
   state.players.forEach((player, playerId) => {
-    const totalScore = player.score.public + player.score.hidden
-    if (totalScore >= state.settings.victoryPoints && !state.winner) {
+    if (player.score.total >= GAME_RULES.victoryPoints) {
       newState.winner = playerId
       newState.phase = 'ended'
-      newState.endedAt = Date.now()
     }
   })
   
@@ -814,23 +689,25 @@ function checkVictoryCondition(state: GameState): GameState {
 
 function progressSetupPhase(state: GameState): GameState {
   const newState = { ...state }
-  const playerCount = state.playerOrder.length
+  const playerIds = Array.from(state.players.keys())
+  const playerCount = playerIds.length
+  const currentIndex = playerIds.indexOf(state.currentPlayer)
   
   if (state.phase === 'setup1') {
     // Move to next player or switch to setup2
-    if (state.currentPlayerIndex === playerCount - 1) {
+    if (currentIndex === playerCount - 1) {
       newState.phase = 'setup2'
       // Don't change player - they place first in setup2
     } else {
-      newState.currentPlayerIndex += 1
+      newState.currentPlayer = playerIds[currentIndex + 1]
     }
   } else if (state.phase === 'setup2') {
     // Move backwards or start main game
-    if (state.currentPlayerIndex === 0) {
+    if (currentIndex === 0) {
       newState.phase = 'roll'
       newState.turn = 1
     } else {
-      newState.currentPlayerIndex -= 1
+      newState.currentPlayer = playerIds[currentIndex - 1]
     }
   }
   

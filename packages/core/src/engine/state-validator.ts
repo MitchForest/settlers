@@ -5,12 +5,11 @@ import {
   Player,
   PlayerId,
   Building,
-  Connection,
+  Road,
   Vertex,
   VertexPosition,
   EdgePosition,
   ResourceCards,
-  PlacementValidation,
   HexCoordinate,
   GamePhase,
   Trade
@@ -22,16 +21,26 @@ import {
 } from '../constants'
 import {
   hasResources,
-  getTotalResources,
-  calculateDiscardCount,
-  hexToString
+  getTotalResourceCount,
+  calculateDiscardCount
 } from '../calculations'
+
+// Validation result interface
+interface PlacementValidation {
+  isValid: boolean
+  reason?: string
+}
+
+// Helper function for hex coordinate string conversion
+function hexToString(coord: HexCoordinate | null): string {
+  if (!coord) return 'null'
+  return `${coord.q},${coord.r},${coord.s}`
+}
 
 // ============= Turn Validation =============
 
 export function isPlayerTurn(state: GameState, playerId: PlayerId): boolean {
-  const currentPlayer = state.playerOrder[state.currentPlayerIndex]
-  return currentPlayer === playerId
+  return state.currentPlayer === playerId
 }
 
 export function canPerformAction(
@@ -40,7 +49,7 @@ export function canPerformAction(
   phase: GamePhase
 ): PlacementValidation {
   if (!isPlayerTurn(state, playerId)) {
-    return { isValid: false, reason: ERROR_MESSAGES.notYourTurn }
+    return { isValid: false, reason: ERROR_MESSAGES.notPlayerTurn }
   }
   
   if (state.phase !== phase) {
@@ -84,7 +93,7 @@ export function canPlaceSettlement(
   // Check building limit
   const settlementsBuilt = countPlayerBuildings(state, playerId, 'settlement')
   if (settlementsBuilt >= GAME_RULES.maxSettlements) {
-    return { isValid: false, reason: ERROR_MESSAGES.cantBuildMore }
+    return { isValid: false, reason: ERROR_MESSAGES.buildingLimitReached }
   }
   
   // During setup, no resource check needed
@@ -130,7 +139,7 @@ export function canPlaceCity(
   // Check building limit
   const citiesBuilt = countPlayerBuildings(state, playerId, 'city')
   if (citiesBuilt >= GAME_RULES.maxCities) {
-    return { isValid: false, reason: ERROR_MESSAGES.cantBuildMore }
+    return { isValid: false, reason: ERROR_MESSAGES.buildingLimitReached }
   }
   
   // Check resources
@@ -141,7 +150,7 @@ export function canPlaceCity(
   return { isValid: true }
 }
 
-export function canPlaceConnection(
+export function canPlaceRoad(
   state: GameState,
   playerId: PlayerId,
   edgeId: string
@@ -158,19 +167,19 @@ export function canPlaceConnection(
   
   // Check if edge is occupied
   if (edge.connection) {
-    return { isValid: false, reason: 'Edge already has a connection' }
+    return { isValid: false, reason: 'Edge already has a road' }
   }
   
   // Check building limit
-  const connectionsBuilt = countPlayerConnections(state, playerId)
-  if (connectionsBuilt >= GAME_RULES.maxConnections) {
-    return { isValid: false, reason: ERROR_MESSAGES.cantBuildMore }
+  const roadsBuilt = countPlayerRoads(state, playerId)
+  if (roadsBuilt >= GAME_RULES.maxRoads) {
+    return { isValid: false, reason: ERROR_MESSAGES.buildingLimitReached }
   }
   
   // During setup, must be connected to the settlement just placed
   if (state.phase === 'setup1' || state.phase === 'setup2') {
     // Check if connected to player's most recent settlement
-    return checkSetupConnectionPlacement(state, playerId, edgeId)
+    return checkSetupRoadPlacement(state, playerId, edgeId)
   }
   
   // Check if connected to player's network
@@ -179,7 +188,7 @@ export function canPlaceConnection(
   }
   
   // Check resources
-  if (!hasResources(player.resources, BUILDING_COSTS.connection)) {
+  if (!hasResources(player.resources, BUILDING_COSTS.road)) {
     return { isValid: false, reason: ERROR_MESSAGES.insufficientResources }
   }
   
@@ -202,9 +211,18 @@ export function canProposeTrade(
     return { isValid: false, reason: 'Can only trade during actions phase' }
   }
   
-  // Check if player has resources to offer
-  if (trade.offering && !hasResources(player.resources, trade.offering)) {
-    return { isValid: false, reason: ERROR_MESSAGES.insufficientResources }
+  // Check if player has resources to offer (convert Partial to full ResourceCards)
+  if (trade.offering) {
+    const offeringResources: ResourceCards = {
+      wood: trade.offering.wood || 0,
+      brick: trade.offering.brick || 0,
+      ore: trade.offering.ore || 0,
+      wheat: trade.offering.wheat || 0,
+      sheep: trade.offering.sheep || 0
+    }
+    if (!hasResources(player.resources, offeringResources)) {
+      return { isValid: false, reason: ERROR_MESSAGES.insufficientResources }
+    }
   }
   
   // Check if trade is valid (not trading nothing for nothing)
@@ -214,7 +232,7 @@ export function canProposeTrade(
     Object.values(trade.requesting).reduce((sum, val) => sum + (val || 0), 0) : 0
   
   if (offeringCount === 0 || requestingCount === 0) {
-    return { isValid: false, reason: ERROR_MESSAGES.invalidTrade }
+    return { isValid: false, reason: 'Invalid trade: must offer and request resources' }
   }
   
   return { isValid: true }
@@ -286,25 +304,25 @@ export function canPlayDevelopmentCard(
   return { isValid: true }
 }
 
-// ============= Robber/Blocker Validation =============
+// ============= Robber Validation =============
 
-export function canMoveBlocker(
+export function canMoveRobber(
   state: GameState,
   playerId: PlayerId,
   hexId: string
 ): PlacementValidation {
-  if (state.phase !== 'moveBlocker') {
-    return { isValid: false, reason: 'Not in blocker movement phase' }
+  if (state.phase !== 'moveRobber') {
+    return { isValid: false, reason: 'Not in robber movement phase' }
   }
   
-  const hex = state.board.hexes.find(h => h.id === hexId)
+  const hex = Array.from(state.board.hexes.values()).find(h => h.id === hexId)
   if (!hex) {
     return { isValid: false, reason: 'Invalid hex' }
   }
   
   // Can't place on same hex
-  if (hexToString(hex.position) === hexToString(state.board.blockerPosition)) {
-    return { isValid: false, reason: 'Must move blocker to different hex' }
+  if (hexToString(hex.position) === hexToString(state.board.robberPosition)) {
+    return { isValid: false, reason: 'Must move robber to different hex' }
   }
   
   return { isValid: true }
@@ -330,23 +348,23 @@ export function canStealFrom(
   }
   
   // Target must have resources
-  if (getTotalResources(target.resources) === 0) {
+  if (getTotalResourceCount(target.resources) === 0) {
     return { isValid: false, reason: 'Target has no resources' }
   }
   
   // Target must have building adjacent to robber
-  const blockerPosString = hexToString(state.board.blockerPosition)
-  const blockerHex = state.board.hexes.find(h => h.id === blockerPosString)
-  if (!blockerHex) {
-    return { isValid: false, reason: 'Blocker position invalid' }
+  const robberPosString = hexToString(state.board.robberPosition)
+  const robberHex = Array.from(state.board.hexes.values()).find(h => h.id === robberPosString)
+  if (!robberHex) {
+    return { isValid: false, reason: 'Robber position invalid' }
   }
   
-  // Check if target has buildings adjacent to blocker hex
+  // Check if target has buildings adjacent to robber hex
   // (Simplified - would need proper adjacency check)
   const hasAdjacentBuilding = true // TODO: Implement proper check
   
   if (!hasAdjacentBuilding) {
-    return { isValid: false, reason: ERROR_MESSAGES.noValidTargets }
+    return { isValid: false, reason: 'No valid targets to steal from' }
   }
   
   return { isValid: true }
@@ -367,7 +385,7 @@ export function mustDiscard(
     return false
   }
   
-  const totalResources = getTotalResources(player.resources)
+  const totalResources = getTotalResourceCount(player.resources)
   return totalResources > GAME_RULES.handLimitBeforeDiscard
 }
 
@@ -385,13 +403,20 @@ export function canDiscard(
     return { isValid: false, reason: 'You do not need to discard' }
   }
   
-  // Check if player has resources to discard
-  if (!hasResources(player.resources, toDiscard)) {
+  // Check if player has resources to discard (convert Partial to full ResourceCards)
+  const discardResources: ResourceCards = {
+    wood: toDiscard.wood || 0,
+    brick: toDiscard.brick || 0,
+    ore: toDiscard.ore || 0,
+    wheat: toDiscard.wheat || 0,
+    sheep: toDiscard.sheep || 0
+  }
+  if (!hasResources(player.resources, discardResources)) {
     return { isValid: false, reason: 'You do not have those resources' }
   }
   
   // Check if discarding correct amount
-  const totalResources = getTotalResources(player.resources)
+  const totalResources = getTotalResourceCount(player.resources)
   const requiredDiscard = calculateDiscardCount(totalResources)
   const discardCount = Object.values(toDiscard).reduce((sum, val) => sum + (val || 0), 0)
   
@@ -435,7 +460,7 @@ function isEdgeConnectedToPlayer(
   return true // TODO: Implement proper connection check
 }
 
-function checkSetupConnectionPlacement(
+function checkSetupRoadPlacement(
   state: GameState,
   playerId: PlayerId,
   edgeId: string
@@ -461,7 +486,7 @@ function countPlayerBuildings(
   return count
 }
 
-function countPlayerConnections(
+function countPlayerRoads(
   state: GameState,
   playerId: PlayerId
 ): number {

@@ -9,11 +9,15 @@ const DEFAULT_THEME_ID = 'default'
 // Enhanced theme loader with asset-level fallback system
 export async function loadTheme(themeId: string): Promise<GameTheme> {
   const basePath = `/themes/${themeId}`
+  const configUrl = `${basePath}/config.json`
+  
+  console.log('Loading theme config from:', configUrl)
   
   try {
-    const configResponse = await fetch(`${basePath}/config.json`)
+    const configResponse = await fetch(configUrl)
+    console.log('Config response status:', configResponse.status, configResponse.statusText)
     if (!configResponse.ok) {
-      throw new Error(`Failed to load theme config: ${configResponse.status}`)
+      throw new Error(`Failed to load theme config: ${configResponse.status} from ${configUrl}`)
     }
     
     const theme: GameTheme = await configResponse.json()
@@ -26,7 +30,14 @@ export async function loadTheme(themeId: string): Promise<GameTheme> {
     
     return theme
   } catch (error) {
-    console.error(`Failed to load theme '${themeId}':`, error)
+    console.error(`Failed to load theme '${themeId}' from ${configUrl}:`, error)
+    console.error('Full error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      themeId,
+      basePath,
+      configUrl,
+      currentURL: typeof window !== 'undefined' ? window.location.href : 'SSR'
+    })
     throw error
   }
 }
@@ -37,8 +48,23 @@ async function resolveThemeAssets(theme: GameTheme): Promise<void> {
   
   // Process resources (terrain hex tiles)
   for (const resource of theme.resources) {
-    // Look for hex tile asset (try multiple formats)
+    // If hexAsset is explicitly defined in config, use it
+    if (resource.hexAsset) {
+      const explicitPath = `${basePath}/assets/${resource.hexAsset}`
+      if (await assetExists(explicitPath)) {
+        resource.hexAsset = explicitPath
+        continue
+      }
+    }
+    
+    // Otherwise, try to find assets automatically
     const hexAssetCandidates = [
+      // New tiles directory
+      `${basePath}/assets/tiles/hex-${resource.id}.png`,
+      `${basePath}/assets/tiles/hex-${resource.id}.svg`,
+      `${basePath}/assets/tiles/${resource.id}.png`,
+      `${basePath}/assets/tiles/${resource.id}.svg`,
+      // Legacy terrain directory (fallback)
       `${basePath}/assets/terrain/hex-${resource.id}.png`,
       `${basePath}/assets/terrain/hex-${resource.id}.svg`,
       `${basePath}/assets/terrain/${resource.id}.png`,

@@ -1,216 +1,195 @@
-// Core calculation utilities for Settlers
-// Uses Honeycomb library for hex grid calculations
+// Resource and scoring calculations for Settlers (Catan)
+// All functions use standard Settlers terminology
 
-import { defineHex, Direction, neighborOf, distance } from 'honeycomb-grid'
-import { 
-  HexCoordinate, 
-  ResourceCards, 
-  DiceRoll, 
-  PlayerId,
-  Vertex,
-  Edge,
-  VertexPosition,
-  EdgePosition
-} from './types'
+import { ResourceCards, Player } from './types'
 
-// Define our hex class with default settings
-export const GameHex = defineHex()
+// ============= Resource Management =============
 
-// ============= Game Utility Functions =============
+export function hasResources(playerResources: ResourceCards, requiredResources: ResourceCards): boolean {
+  return playerResources.wood >= requiredResources.wood &&
+         playerResources.brick >= requiredResources.brick &&
+         playerResources.ore >= requiredResources.ore &&
+         playerResources.wheat >= requiredResources.wheat &&
+         playerResources.sheep >= requiredResources.sheep
+}
 
-export function rollDice(): DiceRoll {
+export function subtractResources(from: ResourceCards, subtract: ResourceCards): ResourceCards {
+  return {
+    wood: from.wood - subtract.wood,
+    brick: from.brick - subtract.brick,
+    ore: from.ore - subtract.ore,
+    wheat: from.wheat - subtract.wheat,
+    sheep: from.sheep - subtract.sheep
+  }
+}
+
+export function addResources(to: ResourceCards, add: ResourceCards): ResourceCards {
+  return {
+    wood: to.wood + add.wood,
+    brick: to.brick + add.brick,
+    ore: to.ore + add.ore,
+    wheat: to.wheat + add.wheat,
+    sheep: to.sheep + add.sheep
+  }
+}
+
+export function getTotalResourceCount(resources: ResourceCards): number {
+  return resources.wood + resources.brick + resources.ore + resources.wheat + resources.sheep
+}
+
+export function getResourceByType(resources: ResourceCards, type: string): number {
+  switch (type) {
+    case 'wood': return resources.wood
+    case 'brick': return resources.brick
+    case 'ore': return resources.ore
+    case 'wheat': return resources.wheat
+    case 'sheep': return resources.sheep
+    default: return 0
+  }
+}
+
+export function setResourceByType(resources: ResourceCards, type: string, amount: number): ResourceCards {
+  const newResources = { ...resources }
+  switch (type) {
+    case 'wood': newResources.wood = amount; break
+    case 'brick': newResources.brick = amount; break
+    case 'ore': newResources.ore = amount; break
+    case 'wheat': newResources.wheat = amount; break
+    case 'sheep': newResources.sheep = amount; break
+  }
+  return newResources
+}
+
+// ============= Utility Functions =============
+
+export function createEmptyResources(): ResourceCards {
+  return {
+    wood: 0,
+    brick: 0,
+    ore: 0,
+    wheat: 0,
+    sheep: 0
+  }
+}
+
+export function rollDice() {
   const die1 = Math.floor(Math.random() * 6) + 1
   const die2 = Math.floor(Math.random() * 6) + 1
   return {
     die1,
     die2,
-    sum: die1 + die2
+    sum: die1 + die2,
+    timestamp: Date.now()
   }
 }
+
+export function shuffleArray<T>(array: T[]): T[] {
+  const result = [...array]
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
+export function randomChoice<T>(array: T[]): T | null {
+  if (array.length === 0) return null
+  return array[Math.floor(Math.random() * array.length)]
+}
+
+export function generatePlayerId(): string {
+  return `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+// ============= Discard Calculations =============
 
 export function calculateDiscardCount(totalResources: number): number {
   return Math.floor(totalResources / 2)
 }
 
-export function randomChoice<T>(array: T[]): T | undefined {
-  if (array.length === 0) return undefined
-  return array[Math.floor(Math.random() * array.length)]
+export function isValidDiscardSelection(
+  playerResources: ResourceCards,
+  discardSelection: Partial<ResourceCards>,
+  requiredDiscardCount: number
+): boolean {
+  // Check if player has enough resources to discard
+  const wood = discardSelection.wood || 0
+  const brick = discardSelection.brick || 0
+  const ore = discardSelection.ore || 0
+  const wheat = discardSelection.wheat || 0
+  const sheep = discardSelection.sheep || 0
+  
+  if (wood > playerResources.wood ||
+      brick > playerResources.brick ||
+      ore > playerResources.ore ||
+      wheat > playerResources.wheat ||
+      sheep > playerResources.sheep) {
+    return false
+  }
+  
+  // Check if discard count matches requirement
+  const totalDiscard = wood + brick + ore + wheat + sheep
+  return totalDiscard === requiredDiscardCount
 }
 
-export function generatePlayerId(): string {
-  return Math.random().toString(36).substring(2, 15)
+// ============= Trade Calculations =============
+
+export function getDefaultTradeRatio(): number {
+  return 4  // 4:1 default bank trade
 }
 
-// ============= Resource Management =============
+export function getPortTradeRatio(portType: string, resourceType: string): number {
+  if (portType === 'generic') return 3  // 3:1 for any resource
+  if (portType === resourceType) return 2  // 2:1 for matching resource
+  return getDefaultTradeRatio()  // 4:1 default
+}
 
-export function createEmptyResources(): ResourceCards {
+export function canAffordTrade(
+  playerResources: ResourceCards,
+  offeringType: string,
+  offeringAmount: number
+): boolean {
+  const available = getResourceByType(playerResources, offeringType)
+  return available >= offeringAmount
+}
+
+// ============= Victory Point Calculations =============
+
+export function calculateVictoryPoints(player: Player): number {
+  let points = 0
+  
+  // Buildings
+  points += player.buildings.settlements * 1  // 1 point per settlement
+  points += player.buildings.cities * 2       // 2 points per city
+  
+  // Development cards (victory point cards)
+  points += player.developmentCards.filter(card => card.type === 'victory').length * 1
+  
+  // Special achievements
+  if (player.hasLongestRoad) points += 2
+  if (player.hasLargestArmy) points += 2
+  
+  return points
+}
+
+// ============= Building Availability =============
+
+export function canBuildSettlement(player: Player): boolean {
+  return player.buildings.settlements > 0
+}
+
+export function canBuildCity(player: Player): boolean {
+  return player.buildings.cities > 0
+}
+
+export function canBuildRoad(player: Player): boolean {
+  return player.buildings.roads > 0
+}
+
+export function getRemainingBuildings(player: Player) {
   return {
-    resource1: 0,
-    resource2: 0, 
-    resource3: 0,
-    resource4: 0,
-    resource5: 0
+    settlements: player.buildings.settlements,
+    cities: player.buildings.cities,
+    roads: player.buildings.roads
   }
-}
-
-export function addResources(a: Partial<ResourceCards>, b: Partial<ResourceCards>): ResourceCards {
-  return {
-    resource1: (a.resource1 || 0) + (b.resource1 || 0),
-    resource2: (a.resource2 || 0) + (b.resource2 || 0),
-    resource3: (a.resource3 || 0) + (b.resource3 || 0),
-    resource4: (a.resource4 || 0) + (b.resource4 || 0),
-    resource5: (a.resource5 || 0) + (b.resource5 || 0)
-  }
-}
-
-export function subtractResources(a: ResourceCards, b: Partial<ResourceCards>): ResourceCards {
-  return {
-    resource1: Math.max(0, a.resource1 - (b.resource1 || 0)),
-    resource2: Math.max(0, a.resource2 - (b.resource2 || 0)),
-    resource3: Math.max(0, a.resource3 - (b.resource3 || 0)),
-    resource4: Math.max(0, a.resource4 - (b.resource4 || 0)),
-    resource5: Math.max(0, a.resource5 - (b.resource5 || 0))
-  }
-}
-
-export function hasResources(available: ResourceCards, required: Partial<ResourceCards>): boolean {
-  return Object.entries(required).every(([key, value]) => {
-    const resourceKey = key as keyof ResourceCards
-    return available[resourceKey] >= (value || 0)
-  })
-}
-
-export function getTotalResources(resources: ResourceCards): number {
-  return Object.values(resources).reduce((sum, count) => sum + count, 0)
-}
-
-export function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-  return shuffled
-}
-
-// ============= Hex Coordinate Calculations =============
-
-export function hexToString(hex: HexCoordinate): string {
-  return `${hex.q},${hex.r},${hex.s}`
-}
-
-export function stringToHex(str: string): HexCoordinate {
-  const [q, r, s] = str.split(',').map(Number)
-  return { q, r, s }
-}
-
-export function getAdjacentHexes(hex: HexCoordinate): HexCoordinate[] {
-  const gameHex = new GameHex(hex)
-  const directions = [Direction.E, Direction.SE, Direction.SW, Direction.W, Direction.NW, Direction.NE]
-  
-  return directions.map(direction => {
-    const neighbor = neighborOf(gameHex, direction)
-    return { q: neighbor.q, r: neighbor.r, s: neighbor.s }
-  })
-}
-
-export function hexDistance(a: HexCoordinate, b: HexCoordinate): number {
-  const hexA = new GameHex(a)
-  const hexB = new GameHex(b)
-  return distance(GameHex.settings, hexA, hexB)
-}
-
-// TODO: Implement based on vertex ID scheme
-export function getVerticesForHex(hex: HexCoordinate): VertexPosition[] {
-  // Returns the 6 vertices around a hex
-  // Each vertex is defined by its direction from the hex center
-  const directions: ('N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW')[] = ['N', 'NE', 'SE', 'S', 'SW', 'NW']
-  
-  return directions.map(direction => ({
-    hexes: [hex], // This vertex belongs to this hex (and potentially others)
-    direction
-  }))
-}
-
-// TODO: Implement based on edge ID scheme  
-export function getEdgesForHex(hex: HexCoordinate): EdgePosition[] {
-  // Returns the 6 edges around a hex
-  // Each edge connects two adjacent vertices
-  const vertices = getVerticesForHex(hex)
-  const edges: EdgePosition[] = []
-  
-  for (let i = 0; i < vertices.length; i++) {
-    const currentVertex = vertices[i]
-    const nextVertex = vertices[(i + 1) % vertices.length]
-    edges.push([currentVertex, nextVertex])
-  }
-  
-  return edges
-}
-
-// Generate vertex ID from position
-export function vertexToString(position: VertexPosition): string {
-  const hexStrings = position.hexes.map(hex => hexToString(hex)).sort()
-  return `${hexStrings.join('|')}:${position.direction}`
-}
-
-// Generate edge ID from position
-export function edgeToString(position: EdgePosition): string {
-  const [vertex1, vertex2] = position
-  const v1String = vertexToString(vertex1)
-  const v2String = vertexToString(vertex2)
-  // Sort to ensure consistent edge IDs regardless of direction
-  return [v1String, v2String].sort().join('<->')
-}
-
-// Generate all vertices for a board
-export function generateVerticesFromHexes(hexes: HexCoordinate[]): Map<string, Vertex> {
-  const vertexMap = new Map<string, Vertex>()
-  
-  hexes.forEach(hex => {
-    const hexVertices = getVerticesForHex(hex)
-    hexVertices.forEach(vertexPos => {
-      const vertexId = vertexToString(vertexPos)
-      
-      if (!vertexMap.has(vertexId)) {
-        // Create new vertex
-        vertexMap.set(vertexId, {
-          id: vertexId,
-          position: vertexPos,
-          building: null,
-          port: null
-        })
-      } else {
-        // Add this hex to existing vertex
-        const existingVertex = vertexMap.get(vertexId)!
-        if (!existingVertex.position.hexes.some((h: HexCoordinate) => hexToString(h) === hexToString(hex))) {
-          existingVertex.position.hexes.push(hex)
-        }
-      }
-    })
-  })
-  
-  return vertexMap
-}
-
-// Generate all edges for a board
-export function generateEdgesFromHexes(hexes: HexCoordinate[]): Map<string, Edge> {
-  const edgeMap = new Map<string, Edge>()
-  
-  hexes.forEach(hex => {
-    const hexEdges = getEdgesForHex(hex)
-    hexEdges.forEach(edgePos => {
-      const edgeId = edgeToString(edgePos)
-      
-      if (!edgeMap.has(edgeId)) {
-        edgeMap.set(edgeId, {
-          id: edgeId,
-          position: edgePos,
-          connection: null
-        })
-      }
-    })
-  })
-  
-  return edgeMap
 } 
