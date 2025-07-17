@@ -12,47 +12,149 @@ function AuthCallbackContent() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      // Set a timeout to prevent infinite hanging
+      const timeoutId = setTimeout(() => {
+        console.warn('Auth callback timed out after 10 seconds')
+        setStatus('error')
+        setTimeout(() => router.push('/?auth=timeout'), 3000)
+      }, 10000)
       try {
-        // Get the hash from the URL which contains the auth tokens
+        console.log('Starting auth callback process...')
+        console.log('Current URL:', window.location.href)
+        
+        // Check for PKCE flow first (code in query params)
+        const urlParams = new URLSearchParams(window.location.search)
+        const authCode = urlParams.get('code')
+        const error = urlParams.get('error')
+        const errorDescription = urlParams.get('error_description')
+        
+        console.log('URL params - code:', !!authCode, 'error:', error)
+        
+        if (error) {
+          console.error('Auth error from URL params:', { error, errorDescription })
+          setStatus('error')
+          setTimeout(() => router.push('/?auth=error'), 3000)
+          return
+        }
+        
+        if (authCode) {
+          console.log('PKCE flow detected, waiting for auth state change...')
+          
+          // For PKCE flow, listen for auth state changes instead of polling
+          const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state change in callback:', event, session?.user?.email)
+            
+            if (event === 'SIGNED_IN' && session) {
+              console.log('PKCE authentication successful for user:', session.user.email)
+              setStatus('success')
+              
+              // Clear the code from URL
+              window.history.replaceState({}, document.title, window.location.pathname)
+              
+              const redirectTo = searchParams.get('redirect_to') || '/'
+              console.log('Redirecting to:', redirectTo)
+              
+              // Cleanup listener
+              authListener.subscription.unsubscribe()
+              
+              setTimeout(() => router.push(redirectTo), 1500)
+            } else if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+              console.error('Authentication failed or user signed out')
+              authListener.subscription.unsubscribe()
+              setStatus('error')
+              setTimeout(() => router.push('/?auth=error'), 3000)
+            }
+          })
+          
+          // Also check if there's already a session (race condition)
+          const { data, error: sessionError } = await supabase.auth.getSession()
+          if (!sessionError && data.session) {
+            console.log('Session already exists:', data.session.user.email)
+            authListener.subscription.unsubscribe()
+            setStatus('success')
+            
+            window.history.replaceState({}, document.title, window.location.pathname)
+            const redirectTo = searchParams.get('redirect_to') || '/'
+            setTimeout(() => router.push(redirectTo), 1500)
+          }
+          
+          return
+        }
+        
+        // Fallback: Check for legacy hash-based flow
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const authError = hashParams.get('error')
+        const errorCode = hashParams.get('error_code')
+        const hashErrorDescription = hashParams.get('error_description')
+        
+        if (authError) {
+          console.error('Auth error from hash:', { authError, errorCode, hashErrorDescription })
+          
+          if (errorCode === 'otp_expired') {
+            setStatus('error')
+            setTimeout(() => router.push('/?auth=expired'), 3000)
+            return
+          }
+          
+          setStatus('error')
+          setTimeout(() => router.push('/?auth=error'), 3000)
+          return
+        }
+        
+        // Get auth tokens from hash (legacy implicit flow)
         const accessToken = hashParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token')
         
+        console.log('Hash params - access_token:', !!accessToken, 'refresh_token:', !!refreshToken)
+        
         if (accessToken && refreshToken) {
-          // Set the session using the tokens from the URL
-          const { data, error } = await supabase.auth.setSession({
+          console.log('Setting session with hash tokens...')
+          
+          // Set the session directly with the tokens
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
           
-          if (error) {
-            console.error('Auth callback error:', error)
+          console.log('Set session result:', sessionData, sessionError)
+          
+          if (sessionError) {
+            console.error('Error setting session:', sessionError)
             setStatus('error')
             setTimeout(() => router.push('/?auth=error'), 3000)
             return
           }
           
-          if (data.user) {
+          if (sessionData.session && sessionData.user) {
+            console.log('Session set successfully for user:', sessionData.user.email)
             setStatus('success')
-            // Check if there's a redirect URL in the search params
+            
+            // Clear the hash from URL to clean it up
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+            
             const redirectTo = searchParams.get('redirect_to') || '/'
-            // Redirect after a brief success message
+            console.log('Redirecting to:', redirectTo)
             setTimeout(() => router.push(redirectTo), 1500)
           } else {
+            console.error('No user in session data')
             setStatus('error')
             setTimeout(() => router.push('/?auth=error'), 3000)
           }
         } else {
-          // Fallback to getSession if no hash params
-          const { data: { session }, error } = await supabase.auth.getSession()
+          console.log('No hash tokens found, checking existing session...')
           
-          if (error || !session) {
-            console.error('Auth callback error:', error)
+          // Fallback: check if there's already a valid session
+          const { data, error } = await supabase.auth.getSession()
+          console.log('Existing session check:', data, error)
+          
+          if (error || !data.session) {
+            console.log('No valid session found')
             setStatus('error')
             setTimeout(() => router.push('/?auth=error'), 3000)
             return
           }
           
+          console.log('Found existing session for user:', data.session.user.email)
           setStatus('success')
           const redirectTo = searchParams.get('redirect_to') || '/'
           setTimeout(() => router.push(redirectTo), 1500)
@@ -62,6 +164,9 @@ function AuthCallbackContent() {
         console.error('Unexpected auth error:', error)
         setStatus('error')
         setTimeout(() => router.push('/?auth=error'), 3000)
+      } finally {
+        // Clear the timeout
+        clearTimeout(timeoutId)
       }
     }
 
@@ -92,11 +197,11 @@ function AuthCallbackContent() {
         {status === 'error' && (
           <>
             <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
-              <span className="text-2xl">❌</span>
+              <span className="text-2xl">⏰</span>
             </div>
-            <h1 className="text-xl font-semibold text-white mb-2">Authentication Failed</h1>
+            <h1 className="text-xl font-semibold text-white mb-2">Magic Link Expired</h1>
             <p className="text-white/60">
-              There was an issue with your magic link. Redirecting to homepage...
+              Your magic link has expired. Please request a new one from the homepage.
             </p>
           </>
         )}

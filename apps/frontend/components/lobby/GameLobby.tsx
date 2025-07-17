@@ -91,20 +91,20 @@ export function GameLobby({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] p-4">
       <div className="container mx-auto max-w-4xl">
         <div className="space-y-6">
           {/* Header */}
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold text-white">Game Lobby</h1>
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-white">Game Code:</span>
+            <div className={ds(designSystem.glass.primary, 'inline-flex items-center gap-2 rounded-lg px-4 py-2')}>
+              <span className={designSystem.text.body}>Game Code:</span>
               <code className="text-2xl font-mono font-bold text-yellow-400">{gameCode}</code>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={copyGameCode}
-                className="text-white hover:bg-white/20"
+                className={ds(designSystem.interactive.subtle.base, designSystem.interactive.subtle.hover, 'rounded-md')}
               >
                 {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
@@ -145,7 +145,9 @@ export function GameLobby({
                     className={ds(
                       designSystem.glass.secondary,
                       'flex items-center gap-3 p-3 rounded-lg border-white/10',
-                      designSystem.animation.normal
+                      designSystem.animation.normal,
+                      'hover:bg-white/10 hover:border-white/20 hover:scale-[1.02]',
+                      'transition-all duration-200 cursor-pointer'
                     )}
                   >
                     <div className={ds(
@@ -201,7 +203,9 @@ export function GameLobby({
                     className={ds(
                       designSystem.glass.tertiary,
                       'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
-                      designSystem.animation.normal
+                      designSystem.animation.normal,
+                      'hover:bg-white/5 hover:border-white/20 hover:scale-[1.01]',
+                      'transition-all duration-200 cursor-pointer'
                     )}
                   >
                     <div className={ds(
@@ -219,7 +223,9 @@ export function GameLobby({
                     key={`empty-${i}`}
                     className={ds(
                       designSystem.glass.tertiary,
-                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10'
+                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
+                      'hover:bg-white/5 hover:border-white/15',
+                      'transition-all duration-200'
                     )}
                   >
                     <div className={ds(
@@ -244,7 +250,11 @@ export function GameLobby({
                 onClick={onStartGame}
                 disabled={!canStart}
                 size="lg"
-                className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                className={ds(
+                  componentStyles.buttonPrimary,
+                  'bg-green-500/20 border-green-400/30 hover:bg-green-500/30',
+                  !canStart && 'opacity-50 cursor-not-allowed'
+                )}
               >
                 {canStart ? 'Start Game' : `Need ${3 - players.length} more players`}
               </Button>
@@ -258,14 +268,14 @@ export function GameLobby({
               onClick={onLeave}
               variant="outline"
               size="lg"
-              className="border-white/20 text-white hover:bg-white/10"
+              className={componentStyles.buttonSecondary}
             >
               Leave Lobby
             </Button>
           </div>
 
           {/* Instructions */}
-          <Card className="bg-white/5 backdrop-blur-sm border-white/10">
+          <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
             <CardContent className="pt-6">
               <div className="text-center space-y-2">
                 <h3 className="text-white font-medium">Game Rules</h3>

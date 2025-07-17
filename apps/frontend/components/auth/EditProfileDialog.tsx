@@ -149,25 +149,27 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
               </PopoverTrigger>
               <PopoverContent className={ds(
                 componentStyles.glassCard,
-                'w-80 p-4'
+                'w-80 p-4 max-h-96'
               )}>
                 <div className="space-y-3">
                   <h4 className={ds(designSystem.text.body, 'font-medium')}>Choose Avatar</h4>
-                  <div className="grid grid-cols-8 gap-2">
-                    {AVATAR_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => setSelectedAvatar(emoji)}
-                        className={ds(
-                          componentStyles.avatarButton,
-                          selectedAvatar === emoji 
-                            ? ds(designSystem.accents.blue.subtle, designSystem.accents.blue.hover)
-                            : ds(designSystem.interactive.primary.base, designSystem.interactive.primary.hover)
-                        )}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                  <div className="max-h-72 overflow-y-auto pr-2 -mr-2">
+                    <div className="grid grid-cols-8 gap-2">
+                      {AVATAR_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => setSelectedAvatar(emoji)}
+                          className={ds(
+                            componentStyles.avatarButton,
+                            selectedAvatar === emoji 
+                              ? ds(designSystem.accents.blue.subtle, designSystem.accents.blue.hover)
+                              : ds(designSystem.interactive.primary.base, designSystem.interactive.primary.hover)
+                          )}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </PopoverContent>

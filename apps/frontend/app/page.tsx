@@ -61,12 +61,13 @@ export default function Home() {
     }
   }
 
-  const handleGameCreated = async (gameCode: string, gameId: string) => {
-    // Get the host player ID from localStorage
-    const hostPlayerId = localStorage.getItem('hostPlayerId')
+  const handleGameCreated = async (gameCode: string, gameId: string, hostPlayerId?: string) => {
     if (hostPlayerId) {
       connectToLobby(gameId, hostPlayerId)
       router.push(`/lobby/${gameId}`)
+    } else {
+      console.error('No host player ID provided to handleGameCreated')
+      toast.error('Failed to join lobby - missing player ID')
     }
   }
 
@@ -216,7 +217,7 @@ export default function Home() {
           {/* Title */}
           <div className="space-y-4">
             <h1 className="text-7xl md:text-8xl font-bold text-white drop-shadow-2xl tracking-tight">
-              Builders
+              Settlers
             </h1>
             <div className="max-w-2xl mx-auto space-y-2">
               <p className="text-xl md:text-2xl text-white/90 font-medium">
@@ -233,7 +234,7 @@ export default function Home() {
             <Button 
               onClick={() => handleGameAction('create')}
               size="lg"
-              disabled={!isSystemConnected || authLoading}
+              disabled={!isSystemConnected}
               className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
             >
               Create
@@ -242,7 +243,7 @@ export default function Home() {
             <Button 
               onClick={() => handleGameAction('join')}
               size="lg"
-              disabled={!isSystemConnected || authLoading}
+              disabled={!isSystemConnected}
               className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
             >
               Join
@@ -251,7 +252,7 @@ export default function Home() {
             <Button 
               onClick={() => handleGameAction('observe')}
               size="lg"
-              disabled={!isSystemConnected || authLoading}
+              disabled={!isSystemConnected}
               className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
             >
               Observe

@@ -79,14 +79,32 @@ export const aiDifficultyEnum = pgEnum('ai_difficulty', [
   'hard'
 ])
 
-// Games table
+// User profiles table - linked to Supabase auth.users
+export const userProfiles = pgTable('user_profiles', {
+  id: uuid('id').primaryKey(), // References auth.users(id)
+  username: varchar('username', { length: 20 }).unique().notNull(),
+  avatarEmoji: varchar('avatar_emoji', { length: 10 }).notNull().default('🧙‍♂️'),
+  displayName: varchar('display_name', { length: 50 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  
+  // Game statistics
+  gamesPlayed: integer('games_played').notNull().default(0),
+  gamesWon: integer('games_won').notNull().default(0),
+  totalScore: integer('total_score').notNull().default(0),
+  longestRoadRecord: integer('longest_road_record').notNull().default(0),
+  largestArmyRecord: integer('largest_army_record').notNull().default(0),
+  
+  // Profile settings
+  isPublic: boolean('is_public').notNull().default(true),
+  preferredPlayerCount: integer('preferred_player_count').notNull().default(4)
+})
+
+// Games table - updated to support lobby/game separation
 export const games = pgTable('games', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  status: text('status').notNull().default('waiting'), // waiting, lobby, playing, ended
-  phase: gamePhaseEnum('phase').notNull().default('setup1'),
-  currentPlayer: text('current_player').notNull(), // Changed from currentPlayerIndex to currentPlayer
-  turn: integer('turn').notNull().default(0),
+  status: text('status').notNull().default('lobby'), // lobby, playing, ended
   
   // Game code for joining games
   gameCode: text('game_code').unique(),
@@ -98,10 +116,17 @@ export const games = pgTable('games', {
   isPublic: boolean('is_public').notNull().default(true),
   maxObservers: integer('max_observers').notNull().default(4),
   
-  // Game state data stored as JSON - flexible structure for complete GameState serialization
-  gameState: json('game_state').notNull().$type<any>(),
+  // Separate state storage - only one will be populated at a time
+  lobbyState: json('lobby_state').$type<any>(), // Populated when status = 'lobby'
+  gameState: json('game_state').$type<any>(),   // Populated when status = 'playing'
   
-  settings: json('settings').notNull().$type<{
+  // Game-specific fields (only used when status = 'playing')
+  phase: gamePhaseEnum('phase'),
+  currentPlayer: text('current_player'),
+  turn: integer('turn').default(0),
+  winner: text('winner'),
+  
+  settings: json('settings').$type<{
     victoryPoints: number
     boardLayout: string
     randomizePlayerOrder: boolean
@@ -109,7 +134,6 @@ export const games = pgTable('games', {
     randomizeNumbers: boolean
   }>(),
   
-  winner: text('winner'),
   startedAt: timestamp('started_at').notNull().defaultNow(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow()
@@ -122,10 +146,11 @@ export const players = pgTable('players', {
   userId: uuid('user_id'), // Reference to auth.users(id), null for AI players
   avatarEmoji: varchar('avatar_emoji').default('🧙‍♂️'), // Avatar emoji for the player
   name: text('name').notNull(),
-  color: integer('color').notNull(), // 0-3 for player colors
+  color: integer('color'), // 0-3 for player colors (nullable for lobby phase)
   isHost: boolean('is_host').notNull().default(false),
   isAI: boolean('is_ai').notNull().default(false),
   isConnected: boolean('is_connected').notNull().default(false),
+  joinedAt: timestamp('joined_at').notNull().defaultNow(), // When player joined lobby
   
   // AI Configuration
   aiPersonality: aiPersonalityEnum('ai_personality'),
@@ -164,8 +189,7 @@ export const players = pgTable('players', {
   }),
   knightsPlayed: integer('knights_played').notNull().default(0),
   hasLongestRoad: boolean('has_longest_road').notNull().default(false),
-  hasLargestArmy: boolean('has_largest_army').notNull().default(false),
-  joinedAt: timestamp('joined_at').notNull().defaultNow()
+  hasLargestArmy: boolean('has_largest_army').notNull().default(false)
 })
 
 // Development cards table

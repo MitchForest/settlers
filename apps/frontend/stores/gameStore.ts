@@ -102,7 +102,8 @@ export const useGameStore = create<GameStore>()(
         // Store player ID for this game
         localStorage.setItem(`playerId_${gameId}`, playerId)
 
-        const ws = new WebSocket(`ws://localhost:4000/ws?gameId=${gameId}&playerId=${playerId}`)
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
+        const ws = new WebSocket(`${wsUrl}/ws?gameId=${gameId}&playerId=${playerId}`)
         
         ws.onopen = () => {
           console.log('🔌 WebSocket connected to game:', gameId)
@@ -250,7 +251,15 @@ export const useGameStore = create<GameStore>()(
       },
 
       connectToLobby: (gameId, playerId) => {
-        const ws = new WebSocket(`ws://localhost:4000/ws?gameId=${gameId}&playerId=${playerId}`)
+        // Set the player ID immediately to prevent redirects
+        set({ 
+          localPlayerId: playerId,
+          connectionStatus: 'connecting',
+          lobbyState: 'joining'
+        })
+        
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
+        const ws = new WebSocket(`${wsUrl}/ws?gameId=${gameId}&playerId=${playerId}`)
         
         ws.onopen = () => {
           console.log('🔌 WebSocket connected to lobby:', gameId)
@@ -302,12 +311,27 @@ export const useGameStore = create<GameStore>()(
         
         ws.onerror = (error) => {
           console.error('❌ Lobby WebSocket error:', error)
-          set({ connectionStatus: 'error' })
+          set({ connectionStatus: 'error', lobbyState: 'idle' })
         }
         
-        ws.onclose = () => {
-          console.log('🔌 Lobby WebSocket closed')
-          set({ connectionStatus: 'disconnected', ws: null })
+        ws.onclose = (event) => {
+          console.log('🔌 Lobby WebSocket closed:', event.code, event.reason)
+          set({ 
+            connectionStatus: 'disconnected', 
+            ws: null,
+            lobbyState: 'idle'
+          })
+          
+          // Attempt reconnection if it wasn't a clean close
+          if (event.code !== 1000 && event.code !== 1001) {
+            console.log('🔄 Attempting to reconnect to lobby...')
+            setTimeout(() => {
+              const state = get()
+              if (state.localPlayerId && gameId) {
+                get().connectToLobby(gameId, state.localPlayerId)
+              }
+            }, 3000)
+          }
         }
         
         set({ ws, connectionStatus: 'connecting' })

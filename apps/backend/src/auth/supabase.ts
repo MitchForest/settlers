@@ -40,12 +40,60 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     
     if (error) {
       console.error('Error fetching user profile:', error)
+      
+      // If profile doesn't exist, try to create one
+      if (error.code === 'PGRST116') { // No rows returned
+        console.log(`Profile not found for ${userId}, attempting to create one`)
+        return await createUserProfile(userId)
+      }
+      
       return null
     }
     
     return data
   } catch (error) {
     console.error('Error in getUserProfile:', error)
+    return null
+  }
+}
+
+// Create a user profile if it doesn't exist
+async function createUserProfile(userId: string): Promise<UserProfile | null> {
+  try {
+    // Get user info from auth.users
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId)
+    
+    if (authError || !authUser.user) {
+      console.error('Could not fetch auth user:', authError)
+      return null
+    }
+    
+    const user = authUser.user
+    const username = `Player${userId.substring(0, 8)}`
+    const displayName = user.email || 'New Player'
+    
+    console.log(`Creating profile for ${userId} with username: ${username}`)
+    
+    const { data, error } = await supabaseAdmin
+      .from('user_profiles')
+      .insert({
+        id: userId,
+        username,
+        display_name: displayName,
+        avatar_emoji: '🧙‍♂️'
+      })
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Error creating user profile:', error)
+      return null
+    }
+    
+    console.log(`Profile created successfully for ${userId}:`, data)
+    return data
+  } catch (error) {
+    console.error('Error in createUserProfile:', error)
     return null
   }
 } 

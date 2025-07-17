@@ -276,7 +276,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   // Handle loading states
   if (themeLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
           <div className="text-white text-lg">Loading game theme...</div>
@@ -287,7 +287,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   if (!theme) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Failed to load game theme</div>
           <Button 
@@ -358,7 +358,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   const isMyTurn = gameState.currentPlayer === localPlayerId
 
   return (
-    <div className="h-screen bg-slate-900 relative overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] relative overflow-hidden">
       {/* Main game display */}
       <div className="relative w-full h-full">
         {/* Game Board */}

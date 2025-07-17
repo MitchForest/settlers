@@ -1,10 +1,19 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { GameFlowManager, GameAction, ActionType } from '@settlers/core'
+import { 
+  GameFlowManager, 
+  GameAction, 
+  ActionType,
+  LobbyManager,
+  LobbyPlayer,
+  LobbySettings
+} from '@settlers/core'
 import { games, players, gameEvents, gameObservers, db } from '../db'
 import { desc, eq, and, count } from 'drizzle-orm'
 import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
+import { saveLobbyToDB, loadLobbyFromDatabase } from '../db/lobby-serializer'
+import { loadGameOrLobbyState } from '../db/game-lobby-loader'
 import { 
   generateUniqueGameCode, 
   findActiveGameByCode, 
@@ -114,12 +123,22 @@ app.get('/:id', async (c) => {
       }, 404)
     }
 
-    const gameState = await loadGameStateFromDB(gameRecord[0])
+    const loaded = await loadGameOrLobbyState(gameId)
     
-    return c.json({ 
-      success: true,
-      game: gameState 
-    })
+    // Return appropriate response based on state type
+    if (loaded.type === 'lobby') {
+      return c.json({ 
+        success: true,
+        type: 'lobby',
+        lobby: loaded.state
+      })
+    } else {
+      return c.json({ 
+        success: true,
+        type: 'game', 
+        game: loaded.state 
+      })
+    }
   } catch (error) {
     console.error('Error fetching game:', error)
     return c.json({ 
@@ -160,57 +179,52 @@ app.post('/',
       // Generate unique game code
       const gameCode = await generateUniqueGameCode()
       
-      // Create game with host player using their display name
-      const hostPlayerName = userProfile.display_name || userProfile.username
-      const gameManager = GameFlowManager.createGame({
-        playerNames: [hostPlayerName],
-        gameId: crypto.randomUUID(),
-        randomizePlayerOrder: false // Will randomize when game starts
-      })
-
-      const gameState = gameManager.getState()
-      const hostPlayerId = Array.from(gameState.players.keys())[0]
-      const gameData = prepareGameStateForDB(gameState)
-
-      // Save to database with new observer features
-      await db.insert(games).values({
-        ...gameData,
-        gameCode,
-        hostPlayerId,
-        hostUserId: hostUserId,
-        name: `${hostPlayerName}'s Game`,
-        status: 'lobby',
-        allowObservers,
-        isPublic,
-        maxObservers: 4, // Fixed at 4 as requested
-        settings: {
-          victoryPoints: 10,
-          boardLayout: 'standard',
-          randomizePlayerOrder: true,
-          randomizeTerrain: true,
-          randomizeNumbers: true
-        }
-      })
-
-      // Update the host player record to include user information
-      await db.update(players)
-        .set({ 
-          userId: hostUserId,
-          avatarEmoji: userProfile.avatar_emoji
-        })
-        .where(eq(players.id, hostPlayerId))
-
-      console.log(`✅ Created lobby game ${gameState.id} with code ${gameCode} for user ${hostUserId}`)
-
-      return c.json({ 
-        success: true,
-        gameId: gameState.id,
-        gameCode,
-        hostPlayerId,
+             // Create proper lobby system - no more hacks!
+       
+       // Create host lobby player
+       const hostPlayer: LobbyPlayer = {
+        id: crypto.randomUUID(),
+        name: userProfile.display_name || userProfile.username,
+        userId: hostUserId,
+        avatarEmoji: userProfile.avatar_emoji,
+        isHost: true,
+        isAI: false,
+        isConnected: true,
+        joinedAt: new Date()
+      }
+      
+      // Create lobby settings
+      const lobbySettings: LobbySettings = {
         maxPlayers,
         allowObservers,
         isPublic,
-        hostPlayerName
+        gameSettings: {
+          victoryPoints: 10,
+          boardLayout: 'standard',
+          randomizePlayerOrder: true,
+          turnTimerSeconds: 0
+        }
+      }
+      
+      // Create lobby manager
+      const lobbyManager = LobbyManager.createLobby(hostPlayer, lobbySettings)
+      const lobbyState = lobbyManager.getState()
+      lobbyState.gameCode = gameCode // Set the game code
+      
+      // Save lobby to database
+      await saveLobbyToDB(lobbyState, gameCode)
+
+      console.log(`✅ Created lobby ${lobbyState.id} with code ${gameCode} for user ${hostUserId}`)
+
+      return c.json({ 
+        success: true,
+        gameId: lobbyState.id,
+        gameCode,
+        hostPlayerId: hostPlayer.id,
+        maxPlayers,
+        allowObservers,
+        isPublic,
+        hostPlayerName: hostPlayer.name
       }, 201)
     } catch (error) {
       console.error('❌ Failed to create lobby game:', error)
@@ -255,11 +269,19 @@ app.post('/join-by-code',
         }, 400)
       }
       
-      // Load current game state
-      const gameState = await loadGameStateFromDB(game)
+      // Load current lobby state
+      const loaded = await loadGameOrLobbyState(game.id)
+      if (loaded.type !== 'lobby') {
+        return c.json({ 
+          success: false, 
+          error: 'Game is not in lobby state' 
+        }, 400)
+      }
+      
+      const lobbyState = loaded.state
       
       // Check if room for more players
-      if (gameState.players.size >= 4) {
+      if (lobbyState.players.size >= lobbyState.settings.maxPlayers) {
         return c.json({ 
           success: false, 
           error: 'Game is full' 
@@ -267,7 +289,7 @@ app.post('/join-by-code',
       }
       
       // Check if player name is already taken
-      const existingNames = Array.from(gameState.players.values()).map(p => p.name.toLowerCase())
+      const existingNames = Array.from(lobbyState.players.values()).map(p => p.name.toLowerCase())
       if (existingNames.includes(playerName.toLowerCase())) {
         return c.json({ 
           success: false, 
@@ -275,40 +297,42 @@ app.post('/join-by-code',
         }, 400)
       }
       
-      // Add new player to game
-      const newPlayerId = crypto.randomUUID()
-      const newPlayer = {
-        id: newPlayerId,
+      // Create new lobby player
+      const newPlayer: LobbyPlayer = {
+        id: crypto.randomUUID(),
         name: playerName,
-        color: gameState.players.size as 0 | 1 | 2 | 3, // Assign next available color
-        score: { public: 0, hidden: 0, total: 0 },
-        resources: { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 },
-        developmentCards: [],
-        buildings: { settlements: 5, cities: 4, roads: 15 },
-        knightsPlayed: 0,
-        hasLongestRoad: false,
-        hasLargestArmy: false,
+        userId: undefined, // Guest player - no auth required for joining by code
+        avatarEmoji: '🧙‍♂️', // Default avatar
+        isHost: false,
+        isAI: false,
         isConnected: true,
-        isAI: false
+        joinedAt: new Date()
       }
       
-      gameState.players.set(newPlayerId, newPlayer)
+      // Use LobbyManager to add player
+      const lobbyManager = new LobbyManager(lobbyState)
+      const result = lobbyManager.addPlayer(newPlayer)
       
-      // Update database
-      const gameData = prepareGameStateForDB(gameState)
-      await db.update(games)
-        .set(gameData)
-        .where(eq(games.id, game.id))
+      if (!result.success) {
+        return c.json({ 
+          success: false, 
+          error: result.error 
+        }, 400)
+      }
+      
+      // Save updated lobby to database
+      const updatedLobbyState = lobbyManager.getState()
+      await saveLobbyToDB(updatedLobbyState, gameCode)
 
-      console.log(`✅ Player ${playerName} joined game ${game.id} (${gameCode})`)
+      console.log(`✅ Player ${playerName} joined lobby ${game.id} (${gameCode})`)
 
       return c.json({
         success: true,
         gameId: game.id,
-        playerId: newPlayerId,
-        players: Array.from(gameState.players.values()),
+        playerId: newPlayer.id,
+        players: Array.from(updatedLobbyState.players.values()),
         gameCode,
-        canStart: gameState.players.size >= 3
+        canStart: updatedLobbyState.status === 'ready'
       })
     } catch (error) {
       console.error('❌ Failed to join game:', error)
@@ -362,19 +386,39 @@ app.post('/:id/start',
         }, 400)
       }
       
-      // Load game state and check player count
-      const gameState = await loadGameStateFromDB(game)
-      if (gameState.players.size < 3) {
+      // Load lobby state and validate can start
+      const loaded = await loadGameOrLobbyState(gameId)
+      if (loaded.type !== 'lobby') {
         return c.json({ 
           success: false, 
-          error: 'Need at least 3 players to start' 
+          error: 'Game is not in lobby state' 
         }, 400)
       }
       
-      // Update game status to playing
+      const lobbyState = loaded.state
+      const lobbyManager = new LobbyManager(lobbyState)
+      const validation = lobbyManager.canStartGame()
+      
+      if (!validation.canStart) {
+        return c.json({ 
+          success: false, 
+          error: validation.reason || 'Cannot start game'
+        }, 400)
+      }
+      
+      // Convert lobby to game state
+      const gameState = lobbyManager.convertToGameState()
+      
+      // Save game state and transition from lobby to playing
+      const gameData = prepareGameStateForDB(gameState)
       await db.update(games)
         .set({ 
           status: 'playing',
+          phase: gameState.phase,
+          currentPlayer: gameState.currentPlayer,
+          turn: gameState.turn,
+          gameState: gameData.gameState,
+          lobbyState: null, // Clear lobby state
           startedAt: new Date()
         })
         .where(eq(games.id, gameId))
@@ -465,7 +509,17 @@ app.post('/:id/actions',
         }, 404)
       }
 
-      const gameState = await loadGameStateFromDB(gameRecord[0])
+      // Load state - this should be an active game, not a lobby
+      const loaded = await loadGameOrLobbyState(gameId)
+      
+      if (loaded.type !== 'game') {
+        return c.json({ 
+          success: false, 
+          error: 'Cannot process game actions on a lobby. Start the game first.' 
+        }, 400)
+      }
+      
+      const gameState = loaded.state
       
       // Create game manager and process action
       const gameManager = new GameFlowManager(gameState)

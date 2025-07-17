@@ -1,8 +1,17 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
-import { GameFlowManager, GameAction, ActionType, GameEvent } from '@settlers/core'
+import { 
+  GameFlowManager, 
+  GameAction, 
+  ActionType, 
+  GameEvent,
+  LobbyManager,
+  LobbyPlayer
+} from '@settlers/core'
 import { games, gameEvents, players, db } from '../db'
 import { eq } from 'drizzle-orm'
 import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
+import { loadGameOrLobbyState } from '../db/game-lobby-loader'
+import { saveLobbyToDB } from '../db/lobby-serializer'
 import { aiManager, handleAICommand, type AICommand } from './ai-handler'
 
 // WebSocket data context - enhanced for lobby support
@@ -212,15 +221,19 @@ async function handleJoinLobby(ws: ServerWebSocket<WSData>, payload: { gameId: s
     lobbyRoom.players.add(ws)
     lobbyRoom.lastUpdate = new Date()
     
-    // Load current game state to get player list
-    const gameRecord = await db
-      .select()
-      .from(games)
-      .where(eq(games.id, gameId))
-      .limit(1)
+    // Load current lobby state to get player list
+    const loaded = await loadGameOrLobbyState(gameId)
     
-    const gameState = await loadGameStateFromDB(gameRecord[0])
-    const players = Array.from(gameState.players.values())
+    if (loaded.type !== 'lobby') {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Game is not in lobby state'
+      }))
+      return
+    }
+    
+    const lobbyState = loaded.state
+    const players = Array.from(lobbyState.players.values())
     
     // Send lobby state to joining player
     ws.send(JSON.stringify({
@@ -228,14 +241,14 @@ async function handleJoinLobby(ws: ServerWebSocket<WSData>, payload: { gameId: s
       gameCode: lobbyRoom.gameCode,
       players,
       isHost: playerId === lobbyRoom.hostPlayerId,
-      canStart: players.length >= 3
+      canStart: lobbyState.status === 'ready'
     }))
     
     // Broadcast player joined to other lobby members
     broadcastToLobby(gameId, {
       type: 'lobbyUpdate',
       players,
-      canStart: players.length >= 3
+      canStart: lobbyState.status === 'ready'
     }, ws)
     
     console.log(`✅ Player ${playerId} joined lobby ${gameId} (${lobbyRoom.gameCode})`)
@@ -283,39 +296,62 @@ async function handleStartGame(ws: ServerWebSocket<WSData>, payload: { gameId: s
       return
     }
     
-    // Load current game state to check player count
-    const gameRecord = await db
-      .select()
-      .from(games)
-      .where(eq(games.id, gameId))
-      .limit(1)
+    // Load current lobby state to check if ready to start
+    const loaded = await loadGameOrLobbyState(gameId)
     
-    if (gameRecord.length === 0) {
-      throw new Error('Game not found')
-    }
-    
-    const gameState = await loadGameStateFromDB(gameRecord[0])
-    if (gameState.players.size < 3) {
+    if (loaded.type !== 'lobby') {
       ws.send(JSON.stringify({
         type: 'error',
-        error: 'Need at least 3 players to start'
+        error: 'Game is not in lobby state'
       }))
       return
     }
     
-    // Update game status to playing
+    const lobbyState = loaded.state
+    const lobbyManager = new LobbyManager(lobbyState)
+    const validation = lobbyManager.canStartGame()
+    
+    if (!validation.canStart) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: validation.reason || 'Cannot start game'
+      }))
+      return
+    }
+    
+    // Convert lobby to game state
+    const gameState = lobbyManager.convertToGameState()
+    const gameManager = new GameFlowManager(gameState)
+    
+    // Update database with game state
+    const gameData = prepareGameStateForDB(gameState)
     await db.update(games)
-      .set({ status: 'playing' })
+      .set({
+        status: 'playing',
+        phase: gameState.phase,
+        currentPlayer: gameState.currentPlayer,
+        turn: gameState.turn,
+        gameState: gameData.gameState,
+        lobbyState: null // Clear lobby state
+      })
       .where(eq(games.id, gameId))
     
-    // Broadcast game starting to all lobby members
-    broadcastToLobby(gameId, {
-      type: 'gameStarting',
-      gameId
-    })
+    // Move from lobby room to game room
+    const currentLobbyRoom = lobbyRooms.get(gameId)
+    if (currentLobbyRoom) {
+      gameRooms.set(gameId, {
+        manager: gameManager,
+        sockets: currentLobbyRoom.players, // LobbyRoom uses players set, not sockets
+        lastUpdate: new Date()
+      })
+      lobbyRooms.delete(gameId)
+    }
     
-    // Clean up lobby room
-    lobbyRooms.delete(gameId)
+    // Broadcast game starting to all members
+    broadcastToGameRoom(gameId, {
+      type: 'gameStarted',
+      gameState: gameState
+    })
     
     console.log(`✅ Game ${gameId} started by host ${playerId}`)
     
@@ -465,7 +501,14 @@ async function joinGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
       throw new Error('Game not found')
     }
     
-    const gameState = await loadGameStateFromDB(gameRecord[0])
+    // Load state - should be an active game for joining game room
+    const loaded = await loadGameOrLobbyState(gameId)
+    
+    if (loaded.type !== 'game') {
+      throw new Error('Cannot join game room - game is not active')
+    }
+    
+    const gameState = loaded.state
     const gameManager = new GameFlowManager(gameState)
     
     gameRoom = {
@@ -563,14 +606,18 @@ async function leaveLobbyRoom(ws: ServerWebSocket<WSData>, gameId: string) {
       .limit(1)
     
     if (gameRecord.length > 0) {
-      const gameState = await loadGameStateFromDB(gameRecord[0])
-      const players = Array.from(gameState.players.values())
+      const loaded = await loadGameOrLobbyState(gameId)
       
-      broadcastToLobby(gameId, {
-        type: 'lobbyUpdate',
-        players,
-        canStart: players.length >= 3
-      })
+      if (loaded.type === 'lobby') {
+        const lobbyState = loaded.state
+        const players = Array.from(lobbyState.players.values())
+        
+        broadcastToLobby(gameId, {
+          type: 'lobbyUpdate',
+          players,
+          canStart: lobbyState.status === 'ready'
+        })
+      }
     }
   } catch (error) {
     console.error('Error updating lobby after player left:', error)
@@ -720,11 +767,22 @@ async function handleAddAIBot(ws: ServerWebSocket<WSData>, payload: { gameId: st
       throw new Error('Game not found')
     }
     
-    const gameState = await loadGameStateFromDB(gameRecord[0])
-    if (gameState.players.size >= 4) {
+    // Load state - should be a lobby for adding AI bots
+    const loaded = await loadGameOrLobbyState(gameId)
+    
+    if (loaded.type !== 'lobby') {
       ws.send(JSON.stringify({
         type: 'error',
-        error: 'Game is full (maximum 4 players)'
+        error: 'Cannot add AI bots to active games'
+      }))
+      return
+    }
+    
+    const lobbyState = loaded.state
+    if (lobbyState.players.size >= lobbyState.settings.maxPlayers) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: `Lobby is full (maximum ${lobbyState.settings.maxPlayers} players)`
       }))
       return
     }
@@ -733,7 +791,7 @@ async function handleAddAIBot(ws: ServerWebSocket<WSData>, payload: { gameId: st
     const botName = generateAIBotName()
     const botAvatar = generateAIBotAvatar()
     const botPlayerId = `ai-${crypto.randomUUID()}`
-    const botColor = getNextAvailableColor(gameState)
+    const botColor = getNextAvailableColor(lobbyState)
     
     // Add AI player to database
     await db.insert(players).values({
@@ -864,9 +922,9 @@ function getDifficultyThinkingTime(difficulty: string): number {
   return timings[difficulty as keyof typeof timings] || timings.medium
 }
 
-function getNextAvailableColor(gameState: any): number {
+function getNextAvailableColor(state: any): number {
   const usedColors = new Set(
-    Array.from(gameState.players.values()).map((p: any) => p.color)
+    Array.from(state.players.values()).map((p: any) => p.color)
   )
   
   for (let color = 0; color < 4; color++) {

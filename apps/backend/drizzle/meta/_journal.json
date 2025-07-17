@@ -8,6 +8,20 @@
       "when": 1752730191080,
       "tag": "0000_open_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1752761994597,
+      "tag": "0001_lazy_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1752764500548,
+      "tag": "0002_black_puck",
+      "breakpoints": true
     }
   ]
 }

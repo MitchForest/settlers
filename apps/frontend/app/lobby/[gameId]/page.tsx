@@ -31,17 +31,23 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
   const [isStartingGame, setIsStartingGame] = useState(false)
 
   useEffect(() => {
-    if (!localPlayerId) {
-      // No player ID, redirect to home
-      router.push('/')
-      return
-    }
-    
-    // Connect to lobby
-    connectToLobby(gameId, localPlayerId)
+    // Add a small delay to allow store to initialize
+    const timer = setTimeout(() => {
+      if (!localPlayerId) {
+        console.warn('No localPlayerId found, redirecting to home')
+        router.push('/')
+        return
+      }
+      
+      // Connect to lobby
+      connectToLobby(gameId, localPlayerId)
+    }, 100)
     
     return () => {
-      disconnect()
+      clearTimeout(timer)
+      if (localPlayerId) {
+        disconnect()
+      }
     }
   }, [gameId, localPlayerId, connectToLobby, disconnect, router])
 
@@ -81,7 +87,7 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
 
   if (connectionStatus === 'connecting') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Connecting to lobby...</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
@@ -92,7 +98,7 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
 
   if (connectionStatus === 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Failed to connect to lobby</div>
           <Button 
@@ -115,7 +121,7 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
 
   if (!gameCode) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Loading lobby...</div>
           <div className="animate-pulse text-white/60">Please wait while we set up your game</div>
@@ -126,7 +132,7 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
 
   if (isStartingGame) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Starting game...</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>

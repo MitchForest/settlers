@@ -19,7 +19,8 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [showEditProfile, setShowEditProfile] = useState(false)
 
-  if (!user || !profile) {
+  // Show menu if user exists, even if profile is still loading
+  if (!user) {
     return null
   }
 
@@ -35,9 +36,9 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
     }
   }
 
-  // Calculate XP and win rate for display
-  const xp = profile.total_score || 0
-  const winRate = profile.games_played > 0 
+  // Calculate XP and win rate for display (fallback to 0 if profile not loaded yet)
+  const xp = profile?.total_score || 0
+  const winRate = profile && profile.games_played > 0 
     ? Math.round((profile.games_won / profile.games_played) * 100) 
     : 0
 
@@ -50,7 +51,7 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
             size="lg"
             className="h-16 w-16 p-0 bg-black/30 backdrop-blur-sm border border-white/20 hover:bg-black/40 hover:border-white/30 rounded-full transition-all duration-200"
           >
-            <span className="text-3xl">{profile.avatar_emoji}</span>
+            <span className="text-3xl">{profile?.avatar_emoji}</span>
           </Button>
         </DropdownMenuTrigger>
         
@@ -63,10 +64,10 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
           <div className="p-4 border-b border-white/20">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/20">
-                <span className="text-2xl">{profile.avatar_emoji}</span>
+                <span className="text-2xl">{profile?.avatar_emoji}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-white truncate">{profile.username}</p>
+                <p className="font-medium text-white truncate">{profile?.username}</p>
                 <p className="text-sm text-white/60 truncate">{user.email}</p>
               </div>
             </div>
@@ -76,11 +77,11 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
           <div className="p-4 border-b border-white/20">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="space-y-1 bg-white/5 rounded-lg p-2 border border-white/10">
-                <p className="text-lg font-bold text-white">{profile.games_played}</p>
+                <p className="text-lg font-bold text-white">{profile?.games_played || 0}</p>
                 <p className="text-xs text-white/60">Games</p>
               </div>
               <div className="space-y-1 bg-green-500/10 rounded-lg p-2 border border-green-400/20">
-                <p className="text-lg font-bold text-green-400">{profile.games_won}</p>
+                <p className="text-lg font-bold text-green-400">{profile?.games_won || 0}</p>
                 <p className="text-xs text-green-300/60">Wins</p>
               </div>
               <div className="space-y-1 bg-purple-500/10 rounded-lg p-2 border border-purple-400/20">
@@ -91,23 +92,23 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
             
             {/* Win Rate and Records */}
             <div className="mt-3 space-y-2">
-              {profile.games_played > 0 && (
+              {profile && profile.games_played > 0 && (
                 <div className="text-center">
                   <span className="text-sm text-white/60">Win Rate: </span>
                   <span className="text-sm font-medium text-blue-400">{winRate}%</span>
                 </div>
               )}
               
-              {(profile.longest_road_record > 0 || profile.largest_army_record > 0) && (
+              {((profile?.longest_road_record || 0) > 0 || (profile?.largest_army_record || 0) > 0) && (
                 <div className="flex justify-center space-x-2">
-                  {profile.longest_road_record > 0 && (
+                  {(profile?.longest_road_record || 0) > 0 && (
                     <Badge className="bg-orange-500/20 border-orange-400/20 text-orange-300 text-xs">
-                      🛤️ {profile.longest_road_record}
+                      🛤️ {profile?.longest_road_record}
                     </Badge>
                   )}
-                  {profile.largest_army_record > 0 && (
+                  {(profile?.largest_army_record || 0) > 0 && (
                     <Badge className="bg-red-500/20 border-red-400/20 text-red-300 text-xs">
-                      ⚔️ {profile.largest_army_record}
+                      ⚔️ {profile?.largest_army_record}
                     </Badge>
                   )}
                 </div>

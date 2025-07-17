@@ -1,52 +1,65 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createBunWebSocket } from 'hono/bun'
-import { sql } from 'drizzle-orm'
-import type { ServerWebSocket } from 'bun'
-import type { Context } from 'hono'
-
-// Import db first to avoid circular dependencies
-import { db } from './db'
-
-// Import modules that depend on db after db is imported
-import { websocketHandler } from './websocket/server'
-import gameRoutes from './routes/games'
 
 /**
- * Create Bun WebSocket utilities
+ * WebSocket utilities with type support
  */
-const { upgradeWebSocket, websocket } = createBunWebSocket<ServerWebSocket>()
+interface WSData {
+  gameId: string | null
+  playerId: string | null
+}
+
+const { upgradeWebSocket, websocket } = createBunWebSocket<WSData>()
 
 /**
- * CORS configuration
- */
-const CORS_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:3001', 
-  'http://localhost:3002',
-  'http://localhost:3003',
-  'http://localhost:3004',
-  process.env.FRONTEND_URL || 'http://localhost:3000'
-]
-
-/**
- * Initialize Hono app
+ * Initialize Hono app - ULTRA MINIMAL VERSION
  */
 const app = new Hono()
 
-// Enable CORS for HTTP routes
+// Enable CORS
 app.use('/*', cors({
-  origin: CORS_ORIGINS,
+  origin: 'http://localhost:3000',
   credentials: true
 }))
 
 /**
  * Health check endpoint
  */
+app.get('/health', (c) => {
+  return c.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    message: 'Minimal backend is working'
+  })
+})
+
+/**
+ * Test endpoint
+ */
+app.get('/api/test', (c) => {
+  return c.json({ 
+    message: 'Ultra minimal backend is working!',
+    timestamp: new Date().toISOString()
+  })
+})
+
+/**
+ * Health check endpoint with database
+ */
 app.get('/health', async (c) => {
   try {
-    // Test database connection
-    await db.execute(sql`SELECT 1`)
+    // Import db dynamically to avoid circular dependency
+    const { db } = await import('./db')
+    const { sql } = await import('drizzle-orm')
+    
+    // Test database connection with timeout
+    const dbTest = await Promise.race([
+      db.execute(sql`SELECT 1`),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database timeout')), 5000)
+      )
+    ])
     
     return c.json({ 
       status: 'ok', 
@@ -66,86 +79,84 @@ app.get('/health', async (c) => {
 })
 
 /**
- * Test endpoint
+ * WebSocket endpoint
  */
-app.get('/api/test', (c) => {
-  return c.json({ 
-    message: 'Settlers backend is working!',
-    timestamp: new Date().toISOString()
-  })
-})
-
-/**
- * Game routes
- */
-app.route('/api/games', gameRoutes)
-
-/**
- * WebSocket endpoint - now handled by Hono
- */
-app.get('/ws', upgradeWebSocket((c: Context) => {
+app.get('/ws', upgradeWebSocket((c) => {
   const url = new URL(c.req.url)
-  const sessionId = url.searchParams.get('sessionId') || crypto.randomUUID()
-  const gameId = url.searchParams.get('gameId') || undefined
-  const playerId = url.searchParams.get('playerId') || undefined
+  const gameId = url.searchParams.get('gameId')
+  const playerId = url.searchParams.get('playerId')
+  
+  console.log(`🔌 WebSocket connection attempt: gameId=${gameId}, playerId=${playerId}`)
   
   return {
-    onOpen(event: Event, ws: any) {
-      // Set up WebSocket data context using Bun's native data property
-      if (ws.raw) {
-        ws.raw.data = {
-          sessionId,
-          gameId,
-          playerId,
-          isSpectator: false,
-          isInLobby: false
-        }
-      }
-      
-      // Call the existing WebSocket handler's open logic
-      if (websocketHandler.open && ws.raw) {
-        websocketHandler.open(ws.raw)
+    onOpen(event, ws) {
+      console.log(`🔌 WebSocket opened: ${playerId} joined game ${gameId}`)
+      // Store connection metadata on the raw WebSocket
+      if ('raw' in ws && ws.raw) {
+        (ws.raw as any).data = { gameId, playerId }
       }
     },
-    onMessage(event: MessageEvent, ws: any) {
-      // Call the existing WebSocket handler's message logic
-      if (websocketHandler.message && ws.raw) {
-        websocketHandler.message(ws.raw, event.data)
+    
+    onMessage(event, ws) {
+      try {
+        const message = JSON.parse(event.data.toString())
+        const wsData = ('raw' in ws && ws.raw) ? (ws.raw as any).data : null
+        console.log(`📨 WebSocket message from ${wsData?.playerId}:`, message)
+        
+        // Echo back for now
+        ws.send(JSON.stringify({
+          type: 'echo',
+          originalMessage: message,
+          timestamp: new Date().toISOString()
+        }))
+      } catch (error) {
+        console.error('❌ WebSocket message error:', error)
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: 'Invalid message format'
+        }))
       }
     },
-    onClose(event: CloseEvent, ws: any) {
-      // Call the existing WebSocket handler's close logic
-      if (websocketHandler.close && ws.raw) {
-        websocketHandler.close(ws.raw, event.code, event.reason)
-      }
+    
+    onClose(event, ws) {
+      const wsData = ('raw' in ws && ws.raw) ? (ws.raw as any).data : null
+      console.log(`🔌 WebSocket closed: ${wsData?.playerId} left game ${wsData?.gameId}`)
     },
-    onError(event: Event, ws: any) {
-      console.error('WebSocket error:', event)
+    
+    onError(event, ws) {
+      console.error('❌ WebSocket error:', event)
     }
   }
 }))
 
 /**
- * Error handling middleware
+ * Add game routes dynamically
  */
-app.onError((err, c) => {
-  console.error('Unhandled error:', err)
-  return c.json({ error: 'Internal server error' }, 500)
-})
+setTimeout(async () => {
+  try {
+    const gameRoutes = await import('./routes/games')
+    app.route('/api', gameRoutes.default)
+    console.log('✅ Game routes loaded successfully')
+  } catch (error) {
+    console.error('❌ Failed to load game routes:', error)
+  }
+}, 100)
 
 /**
- * Start server with WebSocket support
+ * Start minimal server
  */
 const PORT = Number(process.env.PORT) || 4000
 
-console.log(`🚀 Starting Settlers backend server on port ${PORT}`)
-console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`)
-console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
-console.log(`📡 API endpoints: http://localhost:${PORT}/api/*`)
-console.log(`Started development server: http://localhost:${PORT}`)
+console.log(`🚀 Starting ULTRA MINIMAL backend on port ${PORT}`)
 
-export default {
+const server = Bun.serve({
   port: PORT,
+  idleTimeout: 120,
   fetch: app.fetch,
   websocket
-}
+})
+
+console.log(`✅ Server started at http://localhost:${PORT}`)
+console.log(`🔌 WebSocket available at ws://localhost:${PORT}/ws`)
+
+export default server
