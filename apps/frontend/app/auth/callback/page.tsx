@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Loader2 } from 'lucide-react'
 
-export default function AuthCallback() {
+function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -85,7 +85,7 @@ export default function AuthCallback() {
               <span className="text-2xl">✅</span>
             </div>
             <h1 className="text-xl font-semibold text-white mb-2">Welcome to Settlers!</h1>
-            <p className="text-white/60">You're now signed in. Redirecting...</p>
+            <p className="text-white/60">You&apos;re now signed in. Redirecting...</p>
           </>
         )}
         
@@ -102,5 +102,21 @@ export default function AuthCallback() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center px-4">
+        <div className="bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-8 text-center max-w-md w-full">
+          <Loader2 className="w-8 h-8 text-white animate-spin mx-auto mb-4" />
+          <h1 className="text-xl font-semibold text-white mb-2">Loading...</h1>
+          <p className="text-white/60">Please wait...</p>
+        </div>
+      </div>
+    }>
+      <AuthCallbackContent />
+    </Suspense>
   )
 } 

@@ -24,6 +24,12 @@ import {
   getTotalResourceCount,
   calculateDiscardCount
 } from '../calculations'
+import {
+  checkDistanceRule,
+  isConnectedToPlayerNetwork,
+  isEdgeConnectedToPlayer,
+  checkSetupRoadPlacement
+} from './adjacency-helpers'
 
 // Validation result interface
 interface PlacementValidation {
@@ -86,7 +92,7 @@ export function canPlaceSettlement(
   }
   
   // Check distance rule (no adjacent settlements)
-  if (!checkDistanceRule(state.board.vertices, vertexId)) {
+  if (!checkDistanceRule(state.board, vertexId)) {
     return { isValid: false, reason: 'Too close to another building' }
   }
   
@@ -179,7 +185,9 @@ export function canPlaceRoad(
   // During setup, must be connected to the settlement just placed
   if (state.phase === 'setup1' || state.phase === 'setup2') {
     // Check if connected to player's most recent settlement
-    return checkSetupRoadPlacement(state, playerId, edgeId)
+    if (!checkSetupRoadPlacement(state, playerId, edgeId)) {
+      return { isValid: false, reason: 'Must connect to your most recent settlement' }
+    }
   }
   
   // Check if connected to player's network
@@ -429,46 +437,7 @@ export function canDiscard(
 
 // ============= Helper Functions =============
 
-function checkDistanceRule(
-  vertices: Map<string, Vertex>,
-  vertexId: string
-): boolean {
-  // Check if any adjacent vertex has a building
-  // Simplified - would need proper adjacency calculation
-  return true // TODO: Implement proper distance rule check
-}
-
-function isConnectedToPlayerNetwork(
-  state: GameState,
-  playerId: PlayerId,
-  vertexId: string
-): boolean {
-  // Check if vertex is connected to player's road network
-  // Simplified - would need graph traversal
-  return true // TODO: Implement proper network check
-}
-
-function isEdgeConnectedToPlayer(
-  state: GameState,
-  playerId: PlayerId,
-  edgeId: string
-): boolean {
-  // Check if edge connects to player's network
-  // Must connect to either:
-  // 1. Another road owned by player
-  // 2. A settlement/city owned by player
-  return true // TODO: Implement proper connection check
-}
-
-function checkSetupRoadPlacement(
-  state: GameState,
-  playerId: PlayerId,
-  edgeId: string
-): PlacementValidation {
-  // During setup, road must connect to the settlement just placed
-  // TODO: Track last placed settlement and verify connection
-  return { isValid: true }
-}
+// Removed stubbed functions - now using real implementations from adjacency-helpers.ts
 
 function countPlayerBuildings(
   state: GameState,

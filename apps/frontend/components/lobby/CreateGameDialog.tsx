@@ -1,22 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Copy, Users, Eye, EyeOff, Globe, Lock, Check } from 'lucide-react'
+import { componentStyles, designSystem, ds } from '@/lib/design-system'
 import { toast } from 'sonner'
-
-// Avatar emojis for selection
-const AVATAR_EMOJIS = [
-  '🧙‍♂️', '🧙‍♀️', '👨‍🌾', '👩‍🌾', '👨‍🏭', '👩‍🏭', '👨‍💼', '👩‍💼',
-  '👨‍🔬', '👩‍🔬', '👨‍🎨', '👩‍🎨', '👨‍🍳', '👩‍🍳', '👨‍⚕️', '👩‍⚕️',
-  '🤴', '👸', '👨‍🚀', '👩‍🚀', '👨‍✈️', '👩‍✈️', '🕵️‍♂️', '🕵️‍♀️',
-  '👨‍🦱', '👩‍🦱', '👨‍🦰', '👩‍🦰', '👨‍🦳', '👩‍🦳', '👨‍🦲', '👩‍🦲'
-]
 
 interface CreateGameDialogProps {
   open: boolean
@@ -30,9 +22,7 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
   const [allowObservers, setAllowObservers] = useState(true)
   const [isPublic, setIsPublic] = useState(true)
   
-  // Player info
-  const [playerName, setPlayerName] = useState('')
-  const [selectedAvatar, setSelectedAvatar] = useState('🧙‍♂️')
+  // Remove player info - using user profile instead
   
   // UI states
   const [isCreating, setIsCreating] = useState(false)
@@ -41,23 +31,15 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
   const [gameId, setGameId] = useState('')
 
   const handleCreateGame = async () => {
-    if (!playerName.trim()) {
-      toast.error('Please enter your display name')
-      return
-    }
-    
     setIsCreating(true)
     try {
       const response = await fetch('/api/games', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hostPlayerName: playerName.trim(),
-          hostPlayerAvatar: selectedAvatar,
           maxPlayers: playerCount,
           allowObservers,
-          isPublic,
-          playerNames: [playerName.trim()]
+          isPublic
         })
       })
       
@@ -98,8 +80,6 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
 
   const handleClose = () => {
     if (!isCreating) {
-      setPlayerName('')
-      setSelectedAvatar('🧙‍♂️')
       setPlayerCount(4)
       setAllowObservers(true)
       setIsPublic(true)
@@ -110,78 +90,21 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
     }
   }
 
-  const isFormValid = playerName.trim().length > 0
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md bg-black/30 backdrop-blur-sm border border-white/20 text-white">
+      <DialogContent className={ds(componentStyles.glassCard, 'sm:max-w-md')}>
         <DialogHeader>
-          <DialogTitle className="text-white text-xl font-semibold">
+          <DialogTitle className={ds(designSystem.text.heading, 'text-xl')}>
             {step === 'setup' ? 'Create New Game' : 'Game Created!'}
           </DialogTitle>
+          <DialogDescription className={designSystem.text.muted}>
+            {step === 'setup' ? 'Configure your game settings and invite friends' : 'Share your game code with friends to join'}
+          </DialogDescription>
         </DialogHeader>
 
         {step === 'setup' ? (
           <div className="space-y-6">
-            {/* Player Info Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white/90 border-b border-white/20 pb-2">
-                Your Player Info
-              </h3>
-              
-              {/* Avatar Picker */}
-              <div className="space-y-2">
-                <Label className="text-white/80">Avatar</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start bg-white/5 border-white/20 text-white hover:bg-white/10 hover:border-white/30"
-                      disabled={isCreating}
-                    >
-                      <span className="text-2xl mr-3">{selectedAvatar}</span>
-                      <span>Choose your avatar</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80 bg-black/90 backdrop-blur-sm border border-white/20">
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-white">Choose Avatar</h4>
-                      <div className="grid grid-cols-8 gap-2">
-                        {AVATAR_EMOJIS.map((emoji) => (
-                          <Button
-                            key={emoji}
-                            variant="ghost"
-                            size="sm"
-                            className={`w-10 h-10 p-0 text-xl transition-all ${
-                              selectedAvatar === emoji 
-                                ? 'bg-white/20 border border-white/40' 
-                                : 'hover:bg-white/10'
-                            }`}
-                            onClick={() => setSelectedAvatar(emoji)}
-                          >
-                            {emoji}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Display Name */}
-              <div className="space-y-2">
-                <Label htmlFor="playerName" className="text-white/80">Display Name</Label>
-                <Input 
-                  id="playerName"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Enter your display name"
-                  disabled={isCreating}
-                  maxLength={20}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/50 focus:bg-white/10 focus:border-white/40"
-                />
-              </div>
-            </div>
+            {/* Player info removed - using user profile */}
 
             {/* Game Settings Section */}
             <div className="space-y-4">
@@ -358,7 +281,7 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
               </Button>
               <Button 
                 onClick={handleCreateGame}
-                disabled={!isFormValid || isCreating}
+                disabled={isCreating}
                 className="bg-white/20 text-white border border-white/40 hover:bg-white/30 disabled:opacity-50"
               >
                 {isCreating ? 'Creating...' : 'Create Game'}

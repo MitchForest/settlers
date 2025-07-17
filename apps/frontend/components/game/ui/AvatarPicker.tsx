@@ -5,13 +5,7 @@ import { Button } from '@/components/ui/button'
 
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-
-const AVATAR_EMOJIS = [
-  '🧙‍♂️', '🧙‍♀️', '👨‍🌾', '👩‍🌾', '👨‍🏭', '👩‍🏭', '👨‍💼', '👩‍💼',
-  '👨‍🔬', '👩‍🔬', '👨‍🎨', '👩‍🎨', '👨‍🍳', '👩‍🍳', '👨‍⚕️', '👩‍⚕️',
-  '🤴', '👸', '👨‍🚀', '👩‍🚀', '👨‍✈️', '👩‍✈️', '🕵️‍♂️', '🕵️‍♀️',
-  '👨‍🦱', '👩‍🦱', '👨‍🦰', '👩‍🦰', '👨‍🦳', '👩‍🦳', '👨‍🦲', '👩‍🦲'
-]
+import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 
 interface AvatarPickerProps {
   currentAvatar: string

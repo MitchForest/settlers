@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 interface MagicLinkDialogProps {
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess?: () => void
   title?: string
   description?: string
 }
@@ -20,8 +20,8 @@ interface MagicLinkDialogProps {
 export function MagicLinkDialog({ 
   open, 
   onClose, 
-  onSuccess,
-  title = "Join the Game!",
+  onSuccess: _onSuccess, 
+  title = "Join the Game!", 
   description = "Enter your email to sign in and continue"
 }: MagicLinkDialogProps) {
   const [email, setEmail] = useState('')
@@ -71,7 +71,7 @@ export function MagicLinkDialog({
       } else {
         toast.success('Magic link resent! Check your email.')
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
@@ -106,6 +106,9 @@ export function MagicLinkDialog({
           <DialogTitle className="text-white text-xl font-semibold text-center">
             {emailSent ? '📧 Check Your Email!' : title}
           </DialogTitle>
+          <DialogDescription className="text-white/60 text-center">
+            {emailSent ? 'Click the link in your email to sign in' : description}
+          </DialogDescription>
         </DialogHeader>
 
         {!emailSent ? (

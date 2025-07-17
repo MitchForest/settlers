@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,15 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, User, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { upsertUserProfile, isUsernameAvailable } from '@/lib/supabase'
+import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 import { toast } from 'sonner'
-
-// Avatar emojis for selection
-const AVATAR_EMOJIS = [
-  '🧙‍♂️', '🧙‍♀️', '👨‍🌾', '👩‍🌾', '👨‍🏭', '👩‍🏭', '👨‍💼', '👩‍💼',
-  '👨‍🔬', '👩‍🔬', '👨‍🎨', '👩‍🎨', '👨‍🍳', '👩‍🍳', '👨‍⚕️', '👩‍⚕️',
-  '🤴', '👸', '👨‍🚀', '👩‍🚀', '👨‍✈️', '👩‍✈️', '🕵️‍♂️', '🕵️‍♀️',
-  '👨‍🦱', '👩‍🦱', '👨‍🦰', '👩‍🦰', '👨‍🦳', '👩‍🦳', '👨‍🦲', '👩‍🦲'
-]
 
 interface ProfileSetupDialogProps {
   open: boolean
@@ -113,6 +106,9 @@ export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps
           <DialogTitle className="text-white text-xl font-semibold text-center">
             🎭 Create Your Player Profile
           </DialogTitle>
+          <DialogDescription className="text-white/60 text-center">
+            Choose your avatar and username to get started
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">

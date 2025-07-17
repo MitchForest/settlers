@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+
 import { testConnection, healthCheck } from '@/lib/api'
 import { toast } from 'sonner'
-import Link from 'next/link'
+
 import { CreateGameDialog } from '@/components/lobby/CreateGameDialog'
 import { JoinGameDialog } from '@/components/lobby/JoinGameDialog'
+import { ObserveGameDialog } from '@/components/lobby/ObserveGameDialog'
 import { MagicLinkDialog } from '@/components/auth/MagicLinkDialog'
 import { ProfileSetupDialog } from '@/components/auth/ProfileSetupDialog'
 import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
@@ -69,28 +70,20 @@ export default function Home() {
     }
   }
 
-  const handleGameJoined = async (gameId: string, playerId: string) => {
-    connectToLobby(gameId, playerId)
-    router.push(`/lobby/${gameId}`)
-  }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return <Badge className="status-connected">✓ Connected</Badge>
-      case 'failed':
-      case 'error':
-        return <Badge className="status-disconnected">✗ Failed</Badge>
-      case 'testing':
-        return <Badge className="status-testing">⟳ Testing...</Badge>
-      default:
-        return <Badge className="status-unknown">⚠ Unknown</Badge>
-    }
-  }
+
+
 
   // Track if component has mounted to avoid hydration issues
   const [isMounted, setIsMounted] = useState(false)
-  const [honeycombBackground, setHoneycombBackground] = useState<any[]>([])
+  const [honeycombBackground, setHoneycombBackground] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    terrain: typeof TERRAIN_ASSETS[0];
+    animationDelay: number;
+    animationDuration: number;
+  }[]>([])
 
   useEffect(() => {
     // Generate honeycomb background after component mounts
@@ -133,7 +126,7 @@ export default function Home() {
   }, [])
 
   const isSystemConnected = apiStatus === 'connected' && dbStatus === 'connected'
-  const needsProfile = user && !profile
+  const needsProfile = user && !profile && !authLoading // Only show profile setup if not loading
   const isAuthenticated = user && profile
 
   // Handle authentication interception
@@ -327,25 +320,13 @@ export default function Home() {
 
       <JoinGameDialog
         open={showJoinGame}
-        onClose={() => setShowJoinGame(false)}
-        onGameJoined={handleGameJoined}
+        onOpenChange={setShowJoinGame}
       />
 
-      {/* TODO: Add ObserveGameDialog */}
-      {showObserveGame && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-6 text-white">
-            <h3 className="text-lg font-semibold mb-4">Observe Games</h3>
-            <p className="text-white/60 mb-4">Coming soon - observe ongoing games</p>
-            <Button 
-              onClick={() => setShowObserveGame(false)}
-              className="bg-white/10 border border-white/20 text-white hover:bg-white/20"
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
+      <ObserveGameDialog
+        open={showObserveGame}
+        onOpenChange={setShowObserveGame}
+      />
     </div>
   )
 }

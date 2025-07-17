@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { User, Trophy, LogOut, Settings } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
+import { componentStyles } from '@/lib/design-system'
 
 interface UserAvatarMenuProps {
   className?: string
@@ -30,6 +31,8 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
     }
   }
 
+  // Calculate XP and win rate for display
+  const xp = profile.total_score || 0
   const winRate = profile.games_played > 0 
     ? Math.round((profile.games_won / profile.games_played) * 100) 
     : 0
@@ -68,40 +71,50 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
           {/* Stats Section */}
           <div className="p-4 border-b border-white/20">
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="space-y-1">
+              <div className="space-y-1 bg-white/5 rounded-lg p-2 border border-white/10">
                 <p className="text-lg font-bold text-white">{profile.games_played}</p>
                 <p className="text-xs text-white/60">Games</p>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 bg-green-500/10 rounded-lg p-2 border border-green-400/20">
                 <p className="text-lg font-bold text-green-400">{profile.games_won}</p>
-                <p className="text-xs text-white/60">Wins</p>
+                <p className="text-xs text-green-300/60">Wins</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-lg font-bold text-blue-400">{winRate}%</p>
-                <p className="text-xs text-white/60">Win Rate</p>
+              <div className="space-y-1 bg-purple-500/10 rounded-lg p-2 border border-purple-400/20">
+                <p className="text-lg font-bold text-purple-400">{xp}</p>
+                <p className="text-xs text-purple-300/60">XP</p>
               </div>
             </div>
             
-            {(profile.longest_road_record > 0 || profile.largest_army_record > 0) && (
-              <div className="flex justify-center space-x-2 mt-3">
-                {profile.longest_road_record > 0 && (
-                  <Badge className="bg-orange-500/20 border-orange-400/20 text-orange-300">
-                    🛤️ {profile.longest_road_record}
-                  </Badge>
-                )}
-                {profile.largest_army_record > 0 && (
-                  <Badge className="bg-red-500/20 border-red-400/20 text-red-300">
-                    ⚔️ {profile.largest_army_record}
-                  </Badge>
-                )}
-              </div>
-            )}
+            {/* Win Rate and Records */}
+            <div className="mt-3 space-y-2">
+              {profile.games_played > 0 && (
+                <div className="text-center">
+                  <span className="text-sm text-white/60">Win Rate: </span>
+                  <span className="text-sm font-medium text-blue-400">{winRate}%</span>
+                </div>
+              )}
+              
+              {(profile.longest_road_record > 0 || profile.largest_army_record > 0) && (
+                <div className="flex justify-center space-x-2">
+                  {profile.longest_road_record > 0 && (
+                    <Badge className="bg-orange-500/20 border-orange-400/20 text-orange-300 text-xs">
+                      🛤️ {profile.longest_road_record}
+                    </Badge>
+                  )}
+                  {profile.largest_army_record > 0 && (
+                    <Badge className="bg-red-500/20 border-red-400/20 text-red-300 text-xs">
+                      ⚔️ {profile.largest_army_record}
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Menu Items */}
           <div className="p-1">
             <DropdownMenuItem 
-              className="cursor-pointer text-white hover:bg-white/10 focus:bg-white/10"
+              className={componentStyles.dropdownItem}
               onClick={() => {
                 setIsOpen(false)
                 toast.info('Profile editing coming soon!')
@@ -112,7 +125,7 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
             </DropdownMenuItem>
             
             <DropdownMenuItem 
-              className="cursor-pointer text-white hover:bg-white/10 focus:bg-white/10"
+              className={componentStyles.dropdownItem}
               onClick={() => {
                 setIsOpen(false)
                 toast.info('Leaderboard coming soon!')
@@ -123,7 +136,7 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
             </DropdownMenuItem>
             
             <DropdownMenuItem 
-              className="cursor-pointer text-white hover:bg-white/10 focus:bg-white/10"
+              className={componentStyles.dropdownItem}
               onClick={() => {
                 setIsOpen(false)
                 toast.info('Settings coming soon!')
@@ -136,7 +149,7 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
             <DropdownMenuSeparator className="bg-white/20" />
             
             <DropdownMenuItem 
-              className="cursor-pointer text-red-300 hover:bg-red-500/10 focus:bg-red-500/10"
+              className={componentStyles.dropdownItemDestructive}
               onClick={() => {
                 setIsOpen(false)
                 handleSignOut()

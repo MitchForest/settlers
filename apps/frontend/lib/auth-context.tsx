@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null
   profile: UserProfile | null
   loading: boolean
-  signInWithMagicLink: (email: string) => Promise<{ error: any }>
+  signInWithMagicLink: (email: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
