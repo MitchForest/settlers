@@ -15,6 +15,7 @@
   "dependencies": {
     "@hono/zod-validator": "^0.7.1",
     "@settlers/core": "workspace:*",
+    "@supabase/supabase-js": "^2.51.0",
     "@types/uuid": "^10.0.0",
     "drizzle-orm": "^0.29.0",
     "hono": "^4.8.5",

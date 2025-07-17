@@ -1,9 +1,202 @@
 {
-  "id": "e3dd76c1-1b28-4289-ac8f-51d94f823609",
+  "id": "c6c3afe3-f3ca-4dce-a53f-aa8d93549b50",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
   "tables": {
+    "ai_stats": {
+      "name": "ai_stats",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "turns_played": {
+          "name": "turns_played",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "actions_executed": {
+          "name": "actions_executed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "successful_actions": {
+          "name": "successful_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failed_actions": {
+          "name": "failed_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "average_decision_time_ms": {
+          "name": "average_decision_time_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "setup_turns": {
+          "name": "setup_turns",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "regular_turns": {
+          "name": "regular_turns",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "special_action_turns": {
+          "name": "special_action_turns",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "building_actions": {
+          "name": "building_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "trade_actions": {
+          "name": "trade_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "card_actions": {
+          "name": "card_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "robber_actions": {
+          "name": "robber_actions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "final_score": {
+          "name": "final_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "game_won": {
+          "name": "game_won",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "game_position": {
+          "name": "game_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ai_started_at": {
+          "name": "ai_started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ai_ended_at": {
+          "name": "ai_ended_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_action_at": {
+          "name": "last_action_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ai_stats_game_id_games_id_fk": {
+          "name": "ai_stats_game_id_games_id_fk",
+          "tableFrom": "ai_stats",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ai_stats_player_id_players_id_fk": {
+          "name": "ai_stats_player_id_players_id_fk",
+          "tableFrom": "ai_stats",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
     "development_cards": {
       "name": "development_cards",
       "schema": "",
@@ -158,6 +351,64 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
     },
+    "game_observers": {
+      "name": "game_observers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "game_observers_game_id_games_id_fk": {
+          "name": "game_observers_game_id_games_id_fk",
+          "tableFrom": "game_observers",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "game_observers_game_id_user_id_unique": {
+          "name": "game_observers_game_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "game_id",
+            "user_id"
+          ]
+        }
+      }
+    },
     "game_players": {
       "name": "game_players",
       "schema": "",
@@ -275,6 +526,33 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "host_user_id": {
+          "name": "host_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "allow_observers": {
+          "name": "allow_observers",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_public": {
+          "name": "is_public",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "max_observers": {
+          "name": "max_observers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
         },
         "game_state": {
           "name": "game_state",
@@ -494,6 +772,19 @@
           "primaryKey": false,
           "notNull": true
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatar_emoji": {
+          "name": "avatar_emoji",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'🧙‍♂️'"
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -526,6 +817,53 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "ai_personality": {
+          "name": "ai_personality",
+          "type": "ai_personality",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ai_difficulty": {
+          "name": "ai_difficulty",
+          "type": "ai_difficulty",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ai_is_auto_mode": {
+          "name": "ai_is_auto_mode",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "ai_is_disconnected": {
+          "name": "ai_is_disconnected",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "ai_thinking_time_ms": {
+          "name": "ai_thinking_time_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2000
+        },
+        "ai_max_actions_per_turn": {
+          "name": "ai_max_actions_per_turn",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "ai_enable_logging": {
+          "name": "ai_enable_logging",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
         },
         "score": {
           "name": "score",
@@ -735,6 +1073,23 @@
     }
   },
   "enums": {
+    "ai_difficulty": {
+      "name": "ai_difficulty",
+      "values": {
+        "easy": "easy",
+        "medium": "medium",
+        "hard": "hard"
+      }
+    },
+    "ai_personality": {
+      "name": "ai_personality",
+      "values": {
+        "aggressive": "aggressive",
+        "balanced": "balanced",
+        "defensive": "defensive",
+        "economic": "economic"
+      }
+    },
     "building_type": {
       "name": "building_type",
       "values": {

@@ -3,6 +3,7 @@ import { GameFlowManager, GameAction, ActionType, GameEvent } from '@settlers/co
 import { games, gameEvents, db } from '../db'
 import { eq } from 'drizzle-orm'
 import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
+import { aiManager, handleAICommand, type AICommand } from './ai-handler'
 
 // WebSocket data context - enhanced for lobby support
 export interface WSData {
@@ -69,6 +70,11 @@ export const websocketHandler: WebSocketHandler<WSData> = {
     
     if (gameId) {
       await joinGameRoom(ws, gameId)
+      
+      // Handle potential reconnection for AI management
+      if (playerId && !isSpectator) {
+        aiManager.handlePlayerReconnection(gameId, playerId, ws)
+      }
     }
     
     if (playerId && !isSpectator) {
@@ -129,6 +135,10 @@ async function handleWebSocketMessage(ws: ServerWebSocket<WSData>, data: any) {
       
     case 'gameAction':
       await handleGameAction(ws, payload)
+      break
+    
+    case 'aiCommand':
+      await handleAICommand(ws, payload as AICommand)
       break
       
     case 'ping':
@@ -457,10 +467,19 @@ async function joinGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
     }
     
     gameRooms.set(gameId, gameRoom)
+    
+    // Register game with AI manager
+    aiManager.registerGame(gameId, gameManager)
   }
   
   // Add socket to room
   gameRoom.sockets.add(ws)
+  
+  // Update AI manager with player socket
+  const { playerId } = ws.data
+  if (playerId) {
+    aiManager.updatePlayerSocket(gameId, playerId, ws)
+  }
   
   // Send current game state to the joining player/spectator
   const currentGameState = gameRoom.manager.getState()
@@ -487,6 +506,12 @@ async function leaveGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
   // Remove socket from room
   gameRoom.sockets.delete(ws)
   
+  // Handle AI for disconnected player
+  const { playerId } = ws.data
+  if (playerId) {
+    aiManager.handlePlayerDisconnection(gameId, playerId)
+  }
+  
   // Notify other players of the disconnection
   broadcastToGameRoom(gameId, {
     type: 'playerDisconnected',
@@ -496,6 +521,8 @@ async function leaveGameRoom(ws: ServerWebSocket<WSData>, gameId: string) {
   
   // Clean up empty rooms
   if (gameRoom.sockets.size === 0) {
+    // Unregister game from AI manager
+    aiManager.unregisterGame(gameId)
     gameRooms.delete(gameId)
     console.log(`Cleaned up empty game room: ${gameId}`)
   }

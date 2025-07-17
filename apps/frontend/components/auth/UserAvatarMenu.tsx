@@ -8,6 +8,7 @@ import { User, Trophy, LogOut, Settings } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { componentStyles } from '@/lib/design-system'
+import { EditProfileDialog } from './EditProfileDialog'
 
 interface UserAvatarMenuProps {
   className?: string
@@ -16,6 +17,7 @@ interface UserAvatarMenuProps {
 export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
   const { user, profile, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
+  const [showEditProfile, setShowEditProfile] = useState(false)
 
   if (!user || !profile) {
     return null
@@ -23,8 +25,10 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
 
   const handleSignOut = async () => {
     try {
+      toast.info('Signing out...')
       await signOut()
       toast.success('Signed out successfully')
+      // The auth context will handle redirecting/clearing state
     } catch (error) {
       console.error('Sign out error:', error)
       toast.error('Failed to sign out')
@@ -117,7 +121,7 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
               className={componentStyles.dropdownItem}
               onClick={() => {
                 setIsOpen(false)
-                toast.info('Profile editing coming soon!')
+                setShowEditProfile(true)
               }}
             >
               <User className="w-4 h-4 mr-3" />
@@ -161,6 +165,12 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Edit Profile Dialog */}
+      <EditProfileDialog
+        open={showEditProfile}
+        onOpenChange={setShowEditProfile}
+      />
     </div>
   )
 } 

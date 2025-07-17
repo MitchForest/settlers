@@ -1,8 +1,10 @@
 import { GameState, GameAction, PlayerId, ActionType, ResourceCards } from '../types'
 import { BoardAnalyzer, createBoardAnalyzer } from './board-analyzer'
+import { createInitialPlacementAI } from './initial-placement'
 import {
   getPossibleSettlementPositions,
-  getPossibleRoadPositions
+  getPossibleRoadPositions,
+  getVertexEdges
 } from '../engine/adjacency-helpers'
 import { 
   canPlaceSettlement,
@@ -32,11 +34,20 @@ export class ActionDecisionEngine {
   private readonly state: GameState
   private readonly playerId: PlayerId
   private readonly analyzer: BoardAnalyzer
+  private readonly difficulty: 'easy' | 'medium' | 'hard'
+  private readonly personality: 'aggressive' | 'balanced' | 'defensive' | 'economic'
 
-  constructor(gameState: GameState, playerId: PlayerId) {
+  constructor(
+    gameState: GameState, 
+    playerId: PlayerId,
+    difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+    personality: 'aggressive' | 'balanced' | 'defensive' | 'economic' = 'balanced'
+  ) {
     this.state = gameState
     this.playerId = playerId
     this.analyzer = createBoardAnalyzer(gameState)
+    this.difficulty = difficulty
+    this.personality = personality
   }
 
   /**
@@ -84,30 +95,61 @@ export class ActionDecisionEngine {
   private getSetupActions(): ScoredAction[] {
     const actions: ScoredAction[] = []
     
-    // In setup, we place settlements first, then roads
-    const possibleSettlements = getPossibleSettlementPositions(this.state, this.playerId)
+    // Use sophisticated initial placement AI
+    const placementAI = createInitialPlacementAI(
+      this.state, 
+      this.playerId, 
+      this.analyzer,
+      this.difficulty,
+      this.personality
+    )
     
-    for (const vertexId of possibleSettlements) {
-      const positionScore = this.analyzer.scoreSettlementPosition(vertexId, this.playerId)
+    // Determine what action is needed based on setup phase context
+    // Setup follows: settlement → road → next player's settlement → road, etc.
+    
+    // Check if I need to place a road for my most recent settlement
+    const mostRecentSettlement = this.findMostRecentSettlement()
+    if (mostRecentSettlement) {
+      const roadAction = placementAI.selectSetupRoad(mostRecentSettlement)
       
-      const action: GameAction = {
-        type: 'placeBuilding',
-        playerId: this.playerId,
-        data: { buildingType: 'settlement', vertexId }
-      }
-
       actions.push({
-        action,
-        score: positionScore.totalScore,
-        priority: this.state.phase === 'setup2' ? 95 : 85, // Setup2 more urgent
+        action: roadAction,
+        score: 100, // Highest priority - must place road after settlement
+        priority: 100,
         reasoning: [
-          `Setup ${this.state.phase} settlement placement`,
-          `Position score: ${positionScore.totalScore.toFixed(1)}`,
-          ...positionScore.breakdown.slice(0, 2)
+          'Strategic setup road placement',
+          'Required after settlement placement',
+          'Optimized for expansion potential'
+        ]
+      })
+    } else {
+      // Need to place settlement
+      let settlementAction: GameAction
+      
+      // Determine if this is first or second settlement
+      const playerSettlements = Array.from(this.state.board.vertices.values())
+        .filter(v => v.building?.owner === this.playerId && v.building.type === 'settlement')
+      
+      if (playerSettlements.length === 0) {
+        // First settlement
+        settlementAction = placementAI.selectFirstSettlement()
+      } else {
+        // Second settlement (setup2 phase)
+        settlementAction = placementAI.selectSecondSettlement()
+      }
+      
+      actions.push({
+        action: settlementAction,
+        score: 100, // Highest priority
+        priority: 100,
+        reasoning: [
+          `Strategic ${this.state.phase} settlement placement`,
+          `Settlement ${playerSettlements.length + 1} of 2`,
+          `Uses advanced placement AI (${this.difficulty}/${this.personality})`
         ]
       })
     }
-
+    
     return actions
   }
 
@@ -151,6 +193,32 @@ export class ActionDecisionEngine {
     })
 
     return actions
+  }
+
+  private findMostRecentSettlement(): string {
+    // Find settlement that needs a road during setup phase
+    // This should only return a settlement if we're in the middle of a setup turn
+    // (just placed settlement, now need to place road)
+    
+    for (const [vertexId, vertex] of this.state.board.vertices) {
+      if (vertex.building?.owner === this.playerId && vertex.building.type === 'settlement') {
+        // Check if this settlement has any adjacent roads by this player
+        const adjacentEdges = getVertexEdges(this.state.board, vertexId)
+        const hasAdjacentPlayerRoad = adjacentEdges.some(edgeId => {
+          const edge = this.state.board.edges.get(edgeId)
+          return edge?.connection?.owner === this.playerId
+        })
+        
+        if (!hasAdjacentPlayerRoad) {
+          // This settlement has no adjacent roads from this player
+          // In setup phase, this means we just placed it and need to place a road
+          return vertexId
+        }
+      }
+    }
+    
+    // No settlement found that needs a road
+    return ''
   }
 
   private getBuildingActions(): ScoredAction[] {
@@ -479,15 +547,25 @@ export class ActionDecisionEngine {
 /**
  * Create an ActionDecisionEngine instance
  */
-export function createActionDecisionEngine(gameState: GameState, playerId: PlayerId): ActionDecisionEngine {
-  return new ActionDecisionEngine(gameState, playerId)
+export function createActionDecisionEngine(
+  gameState: GameState, 
+  playerId: PlayerId,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  personality: 'aggressive' | 'balanced' | 'defensive' | 'economic' = 'balanced'
+): ActionDecisionEngine {
+  return new ActionDecisionEngine(gameState, playerId, difficulty, personality)
 }
 
 /**
  * Get the best action for immediate execution
  */
-export function getBestActionForPlayer(gameState: GameState, playerId: PlayerId): GameAction | null {
-  const engine = createActionDecisionEngine(gameState, playerId)
+export function getBestActionForPlayer(
+  gameState: GameState, 
+  playerId: PlayerId,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  personality: 'aggressive' | 'balanced' | 'defensive' | 'economic' = 'balanced'
+): GameAction | null {
+  const engine = createActionDecisionEngine(gameState, playerId, difficulty, personality)
   return engine.getBestAction()
 }
 
@@ -496,10 +574,12 @@ export function getBestActionForPlayer(gameState: GameState, playerId: PlayerId)
  */
 export function getTopActionsForPlayer(
   gameState: GameState, 
-  playerId: PlayerId, 
+  playerId: PlayerId,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  personality: 'aggressive' | 'balanced' | 'defensive' | 'economic' = 'balanced',
   count: number = 5
 ): ScoredAction[] {
-  const engine = createActionDecisionEngine(gameState, playerId)
+  const engine = createActionDecisionEngine(gameState, playerId, difficulty, personality)
   const actions = engine.getAllScoredActions()
   return actions.slice(0, count)
 } 

@@ -220,7 +220,7 @@ export default function Home() {
             </h1>
             <div className="max-w-2xl mx-auto space-y-2">
               <p className="text-xl md:text-2xl text-white/90 font-medium">
-              A 2–4 player strategy game to collect, build, and dominate.
+              A 3–4 player strategy game to collect, build, and dominate.
               </p>
               <p className="text-sm text-white/60 italic">
                 For educational purposes only.

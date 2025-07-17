@@ -2,4 +2,10 @@
 export * from './types'
 export * from './constants'
 export * from './calculations'
-export * from './engine' 
+export * from './engine'
+
+// AI exports
+export * from './ai/board-analyzer'
+export * from './ai/action-decision-engine'
+export * from './ai/auto-player'
+export * from './ai/initial-placement' 

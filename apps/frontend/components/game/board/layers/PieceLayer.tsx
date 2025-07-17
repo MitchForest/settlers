@@ -43,12 +43,8 @@ export function PieceLayer({
       return player.color
     }
     
-    // Handle demo players for testing
-    if (playerId.includes('demo')) {
-      const match = playerId.match(/demo-(\d+)/)
-      return match ? parseInt(match[1], 10) : 0
-    }
-    
+    // Fallback for any orphaned pieces (shouldn't happen in production)
+    console.warn('Player not found for piece, using default color:', playerId)
     return 0
   }
 

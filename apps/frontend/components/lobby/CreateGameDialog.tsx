@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Copy, Users, Eye, EyeOff, Globe, Lock, Check } from 'lucide-react'
 import { componentStyles, designSystem, ds } from '@/lib/design-system'
+import { createGame } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 
 interface CreateGameDialogProps {
@@ -17,12 +19,12 @@ interface CreateGameDialogProps {
 }
 
 export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDialogProps) {
+  const { profile, user } = useAuth()
+  
   // Game settings
   const [playerCount, setPlayerCount] = useState<3 | 4>(4)
   const [allowObservers, setAllowObservers] = useState(true)
   const [isPublic, setIsPublic] = useState(true)
-  
-  // Remove player info - using user profile instead
   
   // UI states
   const [isCreating, setIsCreating] = useState(false)
@@ -31,19 +33,20 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
   const [gameId, setGameId] = useState('')
 
   const handleCreateGame = async () => {
+    if (!profile?.display_name || !user?.id) {
+      toast.error('You must be logged in to create a game')
+      return
+    }
+    
     setIsCreating(true)
     try {
-      const response = await fetch('/api/games', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          maxPlayers: playerCount,
-          allowObservers,
-          isPublic
-        })
+      const data = await createGame({
+        hostUserId: user.id,
+        maxPlayers: playerCount,
+        allowObservers,
+        isPublic
       })
       
-      const data = await response.json()
       if (data.success) {
         setGameCode(data.gameCode)
         setGameId(data.gameId)

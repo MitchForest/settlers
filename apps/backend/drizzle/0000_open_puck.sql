@@ -1,4 +1,16 @@
 DO $$ BEGIN
+ CREATE TYPE "ai_difficulty" AS ENUM('easy', 'medium', 'hard');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "ai_personality" AS ENUM('aggressive', 'balanced', 'defensive', 'economic');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  CREATE TYPE "building_type" AS ENUM('settlement', 'city');
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -40,6 +52,32 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "ai_stats" (
+	"id" text PRIMARY KEY NOT NULL,
+	"game_id" text NOT NULL,
+	"player_id" text NOT NULL,
+	"turns_played" integer DEFAULT 0 NOT NULL,
+	"actions_executed" integer DEFAULT 0 NOT NULL,
+	"successful_actions" integer DEFAULT 0 NOT NULL,
+	"failed_actions" integer DEFAULT 0 NOT NULL,
+	"average_decision_time_ms" integer DEFAULT 0 NOT NULL,
+	"setup_turns" integer DEFAULT 0 NOT NULL,
+	"regular_turns" integer DEFAULT 0 NOT NULL,
+	"special_action_turns" integer DEFAULT 0 NOT NULL,
+	"building_actions" integer DEFAULT 0 NOT NULL,
+	"trade_actions" integer DEFAULT 0 NOT NULL,
+	"card_actions" integer DEFAULT 0 NOT NULL,
+	"robber_actions" integer DEFAULT 0 NOT NULL,
+	"final_score" integer DEFAULT 0,
+	"game_won" boolean DEFAULT false,
+	"game_position" integer,
+	"ai_started_at" timestamp DEFAULT now() NOT NULL,
+	"ai_ended_at" timestamp,
+	"last_action_at" timestamp DEFAULT now() NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "development_cards" (
 	"id" text PRIMARY KEY NOT NULL,
 	"game_id" text NOT NULL,
@@ -59,6 +97,14 @@ CREATE TABLE IF NOT EXISTS "game_events" (
 	"timestamp" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "game_observers" (
+	"id" text PRIMARY KEY NOT NULL,
+	"game_id" text NOT NULL,
+	"user_id" uuid NOT NULL,
+	"joined_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "game_observers_game_id_user_id_unique" UNIQUE("game_id","user_id")
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "game_players" (
 	"game_id" text NOT NULL,
 	"player_id" text NOT NULL,
@@ -75,6 +121,10 @@ CREATE TABLE IF NOT EXISTS "games" (
 	"turn" integer DEFAULT 0 NOT NULL,
 	"game_code" text,
 	"host_player_id" text,
+	"host_user_id" uuid,
+	"allow_observers" boolean DEFAULT true NOT NULL,
+	"is_public" boolean DEFAULT true NOT NULL,
+	"max_observers" integer DEFAULT 4 NOT NULL,
 	"game_state" json NOT NULL,
 	"settings" json NOT NULL,
 	"winner" text,
@@ -105,11 +155,20 @@ CREATE TABLE IF NOT EXISTS "placed_roads" (
 CREATE TABLE IF NOT EXISTS "players" (
 	"id" text PRIMARY KEY NOT NULL,
 	"game_id" text NOT NULL,
+	"user_id" uuid,
+	"avatar_emoji" varchar DEFAULT '🧙‍♂️',
 	"name" text NOT NULL,
 	"color" integer NOT NULL,
 	"is_host" boolean DEFAULT false NOT NULL,
 	"is_ai" boolean DEFAULT false NOT NULL,
 	"is_connected" boolean DEFAULT false NOT NULL,
+	"ai_personality" "ai_personality",
+	"ai_difficulty" "ai_difficulty",
+	"ai_is_auto_mode" boolean DEFAULT false,
+	"ai_is_disconnected" boolean DEFAULT false,
+	"ai_thinking_time_ms" integer DEFAULT 2000,
+	"ai_max_actions_per_turn" integer DEFAULT 15,
+	"ai_enable_logging" boolean DEFAULT true,
 	"score" json DEFAULT '{"public":0,"hidden":0,"total":0}'::json NOT NULL,
 	"resources" json DEFAULT '{"wood":0,"brick":0,"sheep":0,"wheat":0,"ore":0}'::json NOT NULL,
 	"buildings" json DEFAULT '{"settlements":5,"cities":4,"roads":15}'::json NOT NULL,
@@ -137,6 +196,18 @@ CREATE TABLE IF NOT EXISTS "trades" (
 );
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "ai_stats" ADD CONSTRAINT "ai_stats_game_id_games_id_fk" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "ai_stats" ADD CONSTRAINT "ai_stats_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "development_cards" ADD CONSTRAINT "development_cards_game_id_games_id_fk" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -156,6 +227,12 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "game_events" ADD CONSTRAINT "game_events_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "players"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "game_observers" ADD CONSTRAINT "game_observers_game_id_games_id_fk" FOREIGN KEY ("game_id") REFERENCES "games"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;

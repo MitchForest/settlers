@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, json, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, timestamp, json, boolean, pgEnum, primaryKey, unique, uuid, varchar } from 'drizzle-orm/pg-core'
 
 // Settlers terrain types enum
 export const terrainTypeEnum = pgEnum('terrain_type', [
@@ -64,6 +64,21 @@ export const tradeTypeEnum = pgEnum('trade_type', [
   'player'
 ])
 
+// AI personality enum  
+export const aiPersonalityEnum = pgEnum('ai_personality', [
+  'aggressive',
+  'balanced', 
+  'defensive',
+  'economic'
+])
+
+// AI difficulty enum
+export const aiDifficultyEnum = pgEnum('ai_difficulty', [
+  'easy',
+  'medium',
+  'hard'
+])
+
 // Games table
 export const games = pgTable('games', {
   id: text('id').primaryKey(),
@@ -76,6 +91,12 @@ export const games = pgTable('games', {
   // Game code for joining games
   gameCode: text('game_code').unique(),
   hostPlayerId: text('host_player_id'),
+  hostUserId: uuid('host_user_id'), // Reference to auth.users(id)
+  
+  // Observer and visibility settings
+  allowObservers: boolean('allow_observers').notNull().default(true),
+  isPublic: boolean('is_public').notNull().default(true),
+  maxObservers: integer('max_observers').notNull().default(4),
   
   // Game state data stored as JSON - flexible structure for complete GameState serialization
   gameState: json('game_state').notNull().$type<any>(),
@@ -98,11 +119,22 @@ export const games = pgTable('games', {
 export const players = pgTable('players', {
   id: text('id').primaryKey(),
   gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id'), // Reference to auth.users(id), null for AI players
+  avatarEmoji: varchar('avatar_emoji').default('🧙‍♂️'), // Avatar emoji for the player
   name: text('name').notNull(),
   color: integer('color').notNull(), // 0-3 for player colors
   isHost: boolean('is_host').notNull().default(false),
   isAI: boolean('is_ai').notNull().default(false),
   isConnected: boolean('is_connected').notNull().default(false),
+  
+  // AI Configuration
+  aiPersonality: aiPersonalityEnum('ai_personality'),
+  aiDifficulty: aiDifficultyEnum('ai_difficulty'),
+  aiIsAutoMode: boolean('ai_is_auto_mode').default(false), // True if player requested auto-mode
+  aiIsDisconnected: boolean('ai_is_disconnected').default(false), // True if AI covering disconnection
+  aiThinkingTimeMs: integer('ai_thinking_time_ms').default(2000),
+  aiMaxActionsPerTurn: integer('ai_max_actions_per_turn').default(15),
+  aiEnableLogging: boolean('ai_enable_logging').default(true),
   score: json('score').notNull().$type<{
     public: number
     hidden: number
@@ -213,6 +245,33 @@ export const gameEvents = pgTable('game_events', {
   timestamp: timestamp('timestamp').notNull().defaultNow()
 })
 
+// AI Stats table - tracks AI performance metrics
+export const aiStats = pgTable('ai_stats', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  playerId: text('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  turnsPlayed: integer('turns_played').notNull().default(0),
+  actionsExecuted: integer('actions_executed').notNull().default(0),
+  successfulActions: integer('successful_actions').notNull().default(0),
+  failedActions: integer('failed_actions').notNull().default(0),
+  averageDecisionTimeMs: integer('average_decision_time_ms').notNull().default(0),
+  setupTurns: integer('setup_turns').notNull().default(0),
+  regularTurns: integer('regular_turns').notNull().default(0),
+  specialActionTurns: integer('special_action_turns').notNull().default(0),
+  buildingActions: integer('building_actions').notNull().default(0),
+  tradeActions: integer('trade_actions').notNull().default(0),
+  cardActions: integer('card_actions').notNull().default(0),
+  robberActions: integer('robber_actions').notNull().default(0),
+  finalScore: integer('final_score').default(0),
+  gameWon: boolean('game_won').default(false),
+  gamePosition: integer('game_position'),
+  aiStartedAt: timestamp('ai_started_at').notNull().defaultNow(),
+  aiEndedAt: timestamp('ai_ended_at'),
+  lastActionAt: timestamp('last_action_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow()
+})
+
 // Player-game relationship (for multi-table queries)
 export const gamePlayersRelation = pgTable('game_players', {
   gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
@@ -221,5 +280,18 @@ export const gamePlayersRelation = pgTable('game_players', {
 }, (table) => {
   return {
     pk: primaryKey({ columns: [table.gameId, table.playerId] })
+  }
+})
+
+// Game observers table - tracks users observing games
+export const gameObservers = pgTable('game_observers', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull(), // Reference to auth.users(id)
+  joinedAt: timestamp('joined_at').notNull().defaultNow(),
+}, (table) => {
+  return {
+    // Ensure unique observer per game
+    uniqueGameObserver: unique().on(table.gameId, table.userId)
   }
 }) 
