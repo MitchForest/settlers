@@ -1,13 +1,21 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { createBunWebSocket } from 'hono/bun'
 import { sql } from 'drizzle-orm'
+import type { ServerWebSocket } from 'bun'
+import type { Context } from 'hono'
 
 // Import db first to avoid circular dependencies
 import { db } from './db'
 
 // Import modules that depend on db after db is imported
-import { websocketHandler, upgradeWebSocket } from './websocket/server'
+import { websocketHandler } from './websocket/server'
 import gameRoutes from './routes/games'
+
+/**
+ * Create Bun WebSocket utilities
+ */
+const { upgradeWebSocket, websocket } = createBunWebSocket<ServerWebSocket>()
 
 /**
  * CORS configuration
@@ -73,6 +81,51 @@ app.get('/api/test', (c) => {
 app.route('/api/games', gameRoutes)
 
 /**
+ * WebSocket endpoint - now handled by Hono
+ */
+app.get('/ws', upgradeWebSocket((c: Context) => {
+  const url = new URL(c.req.url)
+  const sessionId = url.searchParams.get('sessionId') || crypto.randomUUID()
+  const gameId = url.searchParams.get('gameId') || undefined
+  const playerId = url.searchParams.get('playerId') || undefined
+  
+  return {
+    onOpen(event: Event, ws: any) {
+      // Set up WebSocket data context using Bun's native data property
+      if (ws.raw) {
+        ws.raw.data = {
+          sessionId,
+          gameId,
+          playerId,
+          isSpectator: false,
+          isInLobby: false
+        }
+      }
+      
+      // Call the existing WebSocket handler's open logic
+      if (websocketHandler.open && ws.raw) {
+        websocketHandler.open(ws.raw)
+      }
+    },
+    onMessage(event: MessageEvent, ws: any) {
+      // Call the existing WebSocket handler's message logic
+      if (websocketHandler.message && ws.raw) {
+        websocketHandler.message(ws.raw, event.data)
+      }
+    },
+    onClose(event: CloseEvent, ws: any) {
+      // Call the existing WebSocket handler's close logic
+      if (websocketHandler.close && ws.raw) {
+        websocketHandler.close(ws.raw, event.code, event.reason)
+      }
+    },
+    onError(event: Event, ws: any) {
+      console.error('WebSocket error:', event)
+    }
+  }
+}))
+
+/**
  * Error handling middleware
  */
 app.onError((err, c) => {
@@ -85,25 +138,14 @@ app.onError((err, c) => {
  */
 const PORT = Number(process.env.PORT) || 4000
 
-// Create Bun server with WebSocket support
-const server = Bun.serve({
-  port: PORT,
-  fetch(req, server) {
-    // Handle WebSocket upgrade
-    const url = new URL(req.url)
-    if (url.pathname === '/ws') {
-      return upgradeWebSocket(req, server) || new Response('Upgrade failed', { status: 400 })
-    }
-    
-    // Handle regular HTTP requests with Hono
-    return app.fetch(req)
-  },
-  websocket: websocketHandler
-})
-
 console.log(`🚀 Starting Settlers backend server on port ${PORT}`)
 console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`)
 console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
 console.log(`📡 API endpoints: http://localhost:${PORT}/api/*`)
+console.log(`Started development server: http://localhost:${PORT}`)
 
-export default server
+export default {
+  port: PORT,
+  fetch: app.fetch,
+  websocket
+}
