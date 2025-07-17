@@ -23,7 +23,9 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
     connectionStatus,
     connectToLobby, 
     startGame,
-    disconnect 
+    disconnect,
+    addAIBot,
+    removeAIBot
   } = useGameStore()
 
   const [isStartingGame, setIsStartingGame] = useState(false)
@@ -57,6 +59,24 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
   const handleLeaveLobby = () => {
     disconnect()
     router.push('/')
+  }
+
+  const handleAddAIBot = async (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
+    try {
+      await addAIBot(gameId, difficulty, personality)
+    } catch (error) {
+      console.error('Failed to add AI bot:', error)
+      // Could add toast notification here
+    }
+  }
+
+  const handleRemoveAIBot = async (botPlayerId: string) => {
+    try {
+      await removeAIBot(gameId, botPlayerId)
+    } catch (error) {
+      console.error('Failed to remove AI bot:', error)
+      // Could add toast notification here
+    }
   }
 
   if (connectionStatus === 'connecting') {
@@ -124,6 +144,8 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
       canStart={lobbyPlayers.length >= 3}
       onStartGame={handleStartGame}
       onLeave={handleLeaveLobby}
+      onAddAIBot={handleAddAIBot}
+      onRemoveAIBot={handleRemoveAIBot}
     />
   )
 } 

@@ -1,6 +1,6 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
 import { GameFlowManager, GameAction, ActionType, GameEvent } from '@settlers/core'
-import { games, gameEvents, db } from '../db'
+import { games, gameEvents, players, db } from '../db'
 import { eq } from 'drizzle-orm'
 import { prepareGameStateForDB, loadGameStateFromDB } from '../db/game-state-serializer'
 import { aiManager, handleAICommand, type AICommand } from './ai-handler'
@@ -139,6 +139,14 @@ async function handleWebSocketMessage(ws: ServerWebSocket<WSData>, data: any) {
     
     case 'aiCommand':
       await handleAICommand(ws, payload as AICommand)
+      break
+      
+    case 'addAIBot':
+      await handleAddAIBot(ws, payload)
+      break
+      
+    case 'removeAIBot':
+      await handleRemoveAIBot(ws, payload)
       break
       
     case 'ping':
@@ -665,6 +673,209 @@ export function getLobbyStatistics() {
     totalLobbies: lobbyRooms.size,
     lobbies
   }
+}
+
+/**
+ * Handle adding an AI bot to a lobby
+ */
+async function handleAddAIBot(ws: ServerWebSocket<WSData>, payload: { gameId: string; difficulty: string; personality: string }) {
+  const { gameId, difficulty, personality } = payload
+  const { playerId } = ws.data
+  
+  if (!playerId) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'No player ID provided'
+    }))
+    return
+  }
+  
+  try {
+    // Verify host permissions
+    const lobbyRoom = lobbyRooms.get(gameId)
+    if (!lobbyRoom) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Lobby not found'
+      }))
+      return
+    }
+    
+    if (lobbyRoom.hostPlayerId !== playerId) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Only the host can add AI bots'
+      }))
+      return
+    }
+    
+    // Load current game state to check player count
+    const gameRecord = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1)
+    
+    if (gameRecord.length === 0) {
+      throw new Error('Game not found')
+    }
+    
+    const gameState = await loadGameStateFromDB(gameRecord[0])
+    if (gameState.players.size >= 4) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Game is full (maximum 4 players)'
+      }))
+      return
+    }
+    
+    // Generate AI bot player
+    const botName = generateAIBotName()
+    const botAvatar = generateAIBotAvatar()
+    const botPlayerId = `ai-${crypto.randomUUID()}`
+    const botColor = getNextAvailableColor(gameState)
+    
+    // Add AI player to database
+    await db.insert(players).values({
+      id: botPlayerId,
+      gameId,
+      userId: null,
+      name: botName,
+      avatarEmoji: botAvatar,
+      color: botColor,
+      isAI: true,
+      aiPersonality: personality as any,
+      aiDifficulty: difficulty as any,
+      aiIsAutoMode: true,
+      aiThinkingTimeMs: getDifficultyThinkingTime(difficulty),
+      isConnected: true
+    })
+    
+    // Broadcast update to lobby
+    broadcastToLobby(gameId, {
+      type: 'aiBotAdded',
+      bot: { 
+        id: botPlayerId, 
+        name: botName, 
+        avatarEmoji: botAvatar, 
+        difficulty, 
+        personality,
+        color: botColor,
+        isAI: true
+      }
+    })
+    
+    console.log(`🤖 Added AI bot ${botName} to lobby ${gameId}`)
+    
+  } catch (error) {
+    console.error('❌ Error adding AI bot:', error)
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to add AI bot'
+    }))
+  }
+}
+
+/**
+ * Handle removing an AI bot from a lobby
+ */
+async function handleRemoveAIBot(ws: ServerWebSocket<WSData>, payload: { gameId: string; botPlayerId: string }) {
+  const { gameId, botPlayerId } = payload
+  const { playerId } = ws.data
+  
+  if (!playerId) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'No player ID provided'
+    }))
+    return
+  }
+  
+  try {
+    // Verify host permissions
+    const lobbyRoom = lobbyRooms.get(gameId)
+    if (!lobbyRoom) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Lobby not found'
+      }))
+      return
+    }
+    
+    if (lobbyRoom.hostPlayerId !== playerId) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Only the host can remove AI bots'
+      }))
+      return
+    }
+    
+    // Remove AI player from database
+    await db.delete(players)
+      .where(eq(players.id, botPlayerId))
+    
+    // Broadcast update to lobby
+    broadcastToLobby(gameId, {
+      type: 'aiBotRemoved',
+      botPlayerId
+    })
+    
+    console.log(`🤖 Removed AI bot ${botPlayerId} from lobby ${gameId}`)
+    
+  } catch (error) {
+    console.error('❌ Error removing AI bot:', error)
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to remove AI bot'
+    }))
+  }
+}
+
+// AI Name Generation (Xbox Live style)
+function generateAIBotName(): string {
+  const adjectives = [
+    'Swift', 'Clever', 'Bold', 'Crafty', 'Wise', 'Fierce', 'Silent', 'Noble',
+    'Quick', 'Sharp', 'Brave', 'Sly', 'Keen', 'Wild', 'Calm', 'Strong'
+  ]
+  
+  const nouns = [
+    'Builder', 'Trader', 'Explorer', 'Merchant', 'Pioneer', 'Settler', 'Farmer',
+    'Miner', 'Shepherd', 'Crafter', 'Navigator', 'Strategist', 'Commander', 'Ruler'
+  ]
+  
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)]
+  const noun = nouns[Math.floor(Math.random() * nouns.length)]
+  const number = Math.floor(Math.random() * 999) + 1
+  
+  return `${adjective}${noun}${number}`
+}
+
+function generateAIBotAvatar(): string {
+  const botAvatars = ['🤖', '👾', '🎮', '⚡', '🔥', '⭐', '💎', '🚀', '🎯', '🏆']
+  return botAvatars[Math.floor(Math.random() * botAvatars.length)]
+}
+
+function getDifficultyThinkingTime(difficulty: string): number {
+  const timings = {
+    easy: 1500,
+    medium: 2500,
+    hard: 3500
+  }
+  return timings[difficulty as keyof typeof timings] || timings.medium
+}
+
+function getNextAvailableColor(gameState: any): number {
+  const usedColors = new Set(
+    Array.from(gameState.players.values()).map((p: any) => p.color)
+  )
+  
+  for (let color = 0; color < 4; color++) {
+    if (!usedColors.has(color)) {
+      return color
+    }
+  }
+  
+  return 0
 }
 
 /**

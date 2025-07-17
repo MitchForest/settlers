@@ -4,9 +4,18 @@ import { Player } from '@settlers/core'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Crown, Copy, Check } from 'lucide-react'
+import { Users, Crown, Copy, Check, Bot, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { AddAIBotDialog } from './AddAIBotDialog'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
+
+// Extended player interface for AI players
+interface AIPlayer extends Player {
+  avatarEmoji?: string
+  aiDifficulty?: 'easy' | 'medium' | 'hard'
+  aiPersonality?: 'aggressive' | 'balanced' | 'defensive' | 'economic'
+}
 
 interface GameLobbyProps {
   gameCode: string
@@ -15,10 +24,23 @@ interface GameLobbyProps {
   canStart: boolean
   onStartGame: () => void
   onLeave: () => void
+  onAddAIBot?: (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => void
+  onRemoveAIBot?: (botPlayerId: string) => void
 }
 
-export function GameLobby({ gameCode, players, isHost, canStart, onStartGame, onLeave }: GameLobbyProps) {
+export function GameLobby({ 
+  gameCode, 
+  players, 
+  isHost, 
+  canStart, 
+  onStartGame, 
+  onLeave,
+  onAddAIBot,
+  onRemoveAIBot 
+}: GameLobbyProps) {
   const [codeCopied, setCodeCopied] = useState(false)
+  const [showAddBotDialog, setShowAddBotDialog] = useState(false)
+  const [isAddingBot, setIsAddingBot] = useState(false)
 
   const copyGameCode = async () => {
     try {
@@ -28,6 +50,32 @@ export function GameLobby({ gameCode, players, isHost, canStart, onStartGame, on
       setTimeout(() => setCodeCopied(false), 2000)
     } catch (_error) {
       toast.error('Failed to copy code')
+    }
+  }
+
+  const handleAddAIBot = async (difficulty: string, personality: string) => {
+    if (!onAddAIBot) return
+    
+    setIsAddingBot(true)
+    try {
+      await onAddAIBot(difficulty as 'easy' | 'medium' | 'hard', personality as 'aggressive' | 'balanced' | 'defensive' | 'economic')
+      setShowAddBotDialog(false)
+      toast.success('AI bot added successfully!')
+    } catch (_error) {
+      toast.error('Failed to add AI bot')
+    } finally {
+      setIsAddingBot(false)
+    }
+  }
+
+  const handleRemoveAIBot = async (botId: string) => {
+    if (!onRemoveAIBot) return
+    
+    try {
+      await onRemoveAIBot(botId)
+      toast.success('AI bot removed')
+    } catch (_error) {
+      toast.error('Failed to remove AI bot')
     }
   }
 
@@ -65,50 +113,126 @@ export function GameLobby({ gameCode, players, isHost, canStart, onStartGame, on
           </div>
 
           {/* Players */}
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
+          <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Players ({players.length}/4)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className={ds(designSystem.text.heading, 'flex items-center gap-2')}>
+                  <Users className="h-5 w-5" />
+                  Players ({players.length}/4)
+                </CardTitle>
+                {isHost && players.length < 4 && (
+                  <Button
+                    onClick={() => setShowAddBotDialog(true)}
+                    size="sm"
+                    className={ds(
+                      componentStyles.buttonPrimary,
+                      'bg-gradient-to-r from-blue-500/20 to-purple-500/20',
+                      'hover:from-blue-500/30 hover:to-purple-500/30',
+                      'border-blue-400/30'
+                    )}
+                  >
+                    <Bot className="h-4 w-4 mr-1" />
+                    Add AI Bot
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {players.map((player, index) => (
                   <div
                     key={player.id}
-                    className="flex items-center gap-3 p-3 bg-white/5 rounded-lg"
+                    className={ds(
+                      designSystem.glass.secondary,
+                      'flex items-center gap-3 p-3 rounded-lg border-white/10',
+                      designSystem.animation.normal
+                    )}
                   >
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                      style={{ backgroundColor: getPlayerColor(index) }}
-                    >
-                      {player.name[0].toUpperCase()}
+                    <div className={ds(
+                      componentStyles.avatarButton,
+                      'text-white font-bold border-white/20'
+                    )}
+                    style={{ backgroundColor: getPlayerColor(index) }}>
+                      {player.isAI ? (player as AIPlayer).avatarEmoji || '🤖' : player.name[0].toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <div className="text-white font-medium">{player.name}</div>
-                      {index === 0 && (
-                        <Badge variant="outline" className="text-yellow-400 border-yellow-400 mt-1">
-                          <Crown className="h-3 w-3 mr-1" />
-                          Host
-                        </Badge>
-                      )}
+                      <div className={ds(designSystem.text.body, 'font-medium flex items-center gap-2')}>
+                        {player.name}
+                                                 {player.isAI && (
+                           <Badge variant="secondary" className="text-xs">
+                             🤖 {(player as AIPlayer).aiDifficulty || 'medium'} AI
+                           </Badge>
+                         )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {index === 0 && (
+                          <Badge variant="outline" className="text-yellow-400 border-yellow-400 text-xs">
+                            <Crown className="h-3 w-3 mr-1" />
+                            Host
+                          </Badge>
+                        )}
+                                                 {player.isAI && (
+                           <Badge variant="outline" className="text-xs border-white/20">
+                             {(player as AIPlayer).aiPersonality || 'balanced'}
+                           </Badge>
+                         )}
+                      </div>
                     </div>
+                    {isHost && player.isAI && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveAIBot(player.id)}
+                        className={ds(
+                          componentStyles.dropdownItemDestructive,
+                          'h-8 w-8 p-0'
+                        )}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
                 
-                {/* Empty slots */}
-                {Array.from({ length: 4 - players.length }).map((_, i) => (
+                {/* Empty slots - only show if we can add more players */}
+                {isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
                   <div
                     key={`empty-${i}`}
-                    className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border-2 border-dashed border-white/20"
+                    className={ds(
+                      designSystem.glass.tertiary,
+                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
+                      designSystem.animation.normal
+                    )}
                   >
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                    <div className={ds(
+                      'w-10 h-10 rounded-md bg-white/5 flex items-center justify-center',
+                      'border border-white/10'
+                    )}>
+                      <Plus className="h-5 w-5 text-white/40" />
+                    </div>
+                    <div className={ds(designSystem.text.muted, 'text-sm')}>
+                      Add player or AI bot...
+                    </div>
+                  </div>
+                )) || (!isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
+                  <div
+                    key={`empty-${i}`}
+                    className={ds(
+                      designSystem.glass.tertiary,
+                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10'
+                    )}
+                  >
+                    <div className={ds(
+                      'w-10 h-10 rounded-md bg-white/5 flex items-center justify-center',
+                      'border border-white/10'
+                    )}>
                       <Users className="h-5 w-5 text-white/40" />
                     </div>
-                    <div className="text-white/40">Waiting for player...</div>
+                    <div className={ds(designSystem.text.muted, 'text-sm')}>
+                      Waiting for player...
+                    </div>
                   </div>
-                ))}
+                )))}
               </div>
             </CardContent>
           </Card>
@@ -156,6 +280,14 @@ export function GameLobby({ gameCode, players, isHost, canStart, onStartGame, on
           </Card>
         </div>
       </div>
+      
+      {/* Add AI Bot Dialog */}
+      <AddAIBotDialog
+        isOpen={showAddBotDialog}
+        onClose={() => setShowAddBotDialog(false)}
+        onAdd={handleAddAIBot}
+        isLoading={isAddingBot}
+      />
     </div>
   )
 } 

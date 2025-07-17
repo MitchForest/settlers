@@ -51,6 +51,10 @@ interface GameStore {
   connectToLobby: (gameId: string, playerId: string) => void
   startGame: (gameId: string) => Promise<void>
   
+  // AI Bot Actions
+  addAIBot: (gameId: string, difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => Promise<void>
+  removeAIBot: (gameId: string, botPlayerId: string) => Promise<void>
+  
   // Computed
   currentPlayer: () => Player | null
   isMyTurn: () => boolean
@@ -275,6 +279,18 @@ export const useGameStore = create<GameStore>()(
                 // Redirect to game
                 window.location.href = `/game/${data.gameId}`
                 break
+              case 'aiBotAdded':
+                // Update lobby players list with new AI bot
+                set((state) => {
+                  state.lobbyPlayers.push(data.bot)
+                })
+                break
+              case 'aiBotRemoved':
+                // Remove AI bot from lobby players list
+                set((state) => {
+                  state.lobbyPlayers = state.lobbyPlayers.filter(p => p.id !== data.botPlayerId)
+                })
+                break
               case 'error':
                 console.error('❌ Lobby error:', data.error)
                 break
@@ -309,6 +325,31 @@ export const useGameStore = create<GameStore>()(
         
         const data = await response.json()
         if (!data.success) throw new Error(data.error)
+      },
+
+      addAIBot: async (gameId, difficulty, personality) => {
+        const { ws, isHost } = get()
+        if (!isHost) throw new Error('Only host can add AI bots')
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not connected')
+        
+        ws.send(JSON.stringify({
+          type: 'addAIBot',
+          gameId,
+          difficulty,
+          personality
+        }))
+      },
+
+      removeAIBot: async (gameId, botPlayerId) => {
+        const { ws, isHost } = get()
+        if (!isHost) throw new Error('Only host can remove AI bots')
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not connected')
+        
+        ws.send(JSON.stringify({
+          type: 'removeAIBot',
+          gameId,
+          botPlayerId
+        }))
       },
       
       setPlacementMode: (mode) => set({ placementMode: mode }),
