@@ -642,7 +642,9 @@ export class InitialPlacementAI {
 
   private selectBestRoad(roadAnalyses: RoadAnalysis[]): RoadAnalysis {
     if (roadAnalyses.length === 0) {
-      throw new Error('No valid roads available')
+      // This is a realistic scenario - sometimes there are no valid road positions
+      // Return a fallback error that can be handled gracefully
+      throw new Error('No valid roads available - this can happen when settlement is isolated')
     }
     
     // Simple selection for roads - usually fewer options
