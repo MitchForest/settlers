@@ -3,10 +3,14 @@
 import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
-import { GameInterface } from '@/components/game/ui/GameInterface'
+import { PlayerSidebar } from '@/components/game/ui/PlayerSidebar'
+import { PlayersPanel } from '@/components/game/ui/PlayersPanel'
+import { DiceRoller } from '@/components/game/ui/DiceRoller'
 
 import { Button } from '@/components/ui/button'
+// Removed unused Dialog components
 import { toast } from 'sonner'
+import { RotateCcw, Palette, Play, LogOut, Info } from 'lucide-react'
 import { GameAction, GameFlowManager } from '@settlers/core'
 import { useGameStore } from '@/stores/gameStore'
 import { useRouter } from 'next/navigation'
@@ -25,6 +29,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   // Game state management - USE GAME STORE as single source of truth
   const { 
     gameState, 
+    localPlayerId,
     connectionStatus,
     connect,
     disconnect,
@@ -349,9 +354,12 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     )
   }
 
+  const localPlayer = localPlayerId ? gameState.players.get(localPlayerId) : null
+  const isMyTurn = gameState.currentPlayer === localPlayerId
+
   return (
-    <div className="min-h-screen bg-slate-900 relative">
-      {/* Main board display */}
+    <div className="h-screen bg-slate-900 relative overflow-hidden">
+      {/* Main game display */}
       <div className="relative w-full h-full">
         {/* Game Board */}
         <GameBoard
@@ -360,10 +368,108 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           onGameAction={handleGameAction}
         />
         
-        {/* Game Interface Overlay */}
-        <GameInterface
-          onGameAction={handleGameAction}
+        {/* Players Panel - Top edge to edge */}
+        <PlayersPanel
+          gameState={gameState}
+          playerAvatars={Object.fromEntries(
+            Array.from(gameState.players.entries()).map(([id, player]) => [
+              id, 
+              { avatar: '👤', name: player.name }
+            ])
+          )}
         />
+
+        {/* Player Sidebar - Left side with proper spacing */}
+        {localPlayerId && gameState && gameState.players.get(localPlayerId) && (
+          <div className="fixed left-4 w-80 top-20 z-40" style={{ bottom: 'calc(16px + 48px + 16px)' }}>
+            <PlayerSidebar
+              gameState={gameState}
+              localPlayer={gameState.players.get(localPlayerId)!}
+              isMyTurn={isMyTurn}
+              onAction={handleGameAction}
+            />
+          </div>
+        )}
+
+        {/* Floating Action Buttons - Below sidebar */}
+        <div className="fixed left-4 w-80 bottom-4 z-40">
+          <div className="flex flex-row justify-between">
+            {/* Regenerate/Restart Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                // TODO: Implement restart functionality for real games
+                toast.info('Restart functionality coming soon')
+              }}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Restart Game"
+            >
+              <RotateCcw className="h-6 w-6" />
+            </Button>
+            
+            {/* Theme Toggle Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                // TODO: Implement theme toggle
+                toast.info('Theme toggle coming soon')
+              }}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Toggle Theme Assets"
+            >
+              <Palette className="h-6 w-6" />
+            </Button>
+            
+            {/* Auto Mode Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                toast.info('Auto mode coming soon')
+              }}
+              disabled
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
+              title="Auto Mode (Coming Soon)"
+            >
+              <Play className="h-6 w-6" />
+            </Button>
+            
+            {/* Exit Button */}
+            <Button
+              size="icon"
+              onClick={() => router.push('/')}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Exit Game"
+            >
+              <LogOut className="h-6 w-6" />
+            </Button>
+            
+            {/* Info Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                toast.info('Game information coming soon')
+              }}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Game Information"
+            >
+              <Info className="h-6 w-6" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Bottom Action Bar - Dice Roller */}
+        {localPlayer && gameState && isMyTurn && gameState.phase === 'roll' && (
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
+            <DiceRoller
+              onRoll={(_dice) => handleGameAction({
+                type: 'roll',
+                playerId: localPlayerId || '',
+                data: {}
+              })}
+              canRoll={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

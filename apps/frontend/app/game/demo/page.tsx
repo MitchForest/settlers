@@ -3,18 +3,24 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
-import { GameInterface } from '@/components/game/ui/GameInterface'
 import { PlayerSidebar } from '@/components/game/ui/PlayerSidebar'
-import { PlayerDashboard } from '@/components/game/ui/PlayerDashboard'
 import { PlayersPanel } from '@/components/game/ui/PlayersPanel'
 import { DiceRoller } from '@/components/game/ui/DiceRoller'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { GameAction, GameFlowManager, GameState } from '@settlers/core'
+import { GameAction, GameFlowManager } from '@settlers/core'
 import { createDemoGameManager, generateDemoGame } from '@/lib/demo-game-generator'
 import { useGameStore } from '@/stores/gameStore'
-import { Home, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react'
+import { Home, RotateCcw, ChevronUp, ChevronDown, Palette, Play, LogOut, Info } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function DemoGamePage() {
@@ -30,6 +36,7 @@ export default function DemoGamePage() {
   const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const [showInfoDialog, setShowInfoDialog] = useState(false)
 
   // Generate demo game when theme is loaded
   const generateDemo = useCallback(async () => {
@@ -93,7 +100,7 @@ export default function DemoGamePage() {
     } finally {
       setIsGenerating(false)
     }
-  }, [isGenerating, updateGameState])
+  }, [isGenerating])
 
   // Generate demo when theme is loaded
   useEffect(() => {
@@ -260,45 +267,99 @@ export default function DemoGamePage() {
           onGameAction={handleGameAction}
         />
         
-        {/* Game Interface Overlay - only render when we have localPlayerId */}
-        {localPlayerId && (
-          <GameInterface
-            onGameAction={handleGameAction}
-          />
-        )}
 
-        {/* Player Sidebar - Left side */}
-        {myPlayer && gameState && (
-          <div className="fixed left-4 top-20 bottom-4 w-80 z-40">
+
+        {/* Player Sidebar - Left side with proper spacing */}
+        {localPlayerId && gameState && gameState.players.get(localPlayerId) && (
+          <div className="fixed left-4 w-80 top-20 z-40" style={{ bottom: 'calc(16px + 48px + 16px)' }}>
             <PlayerSidebar
               gameState={gameState}
-              localPlayer={myPlayer}
+              localPlayer={gameState.players.get(localPlayerId)!}
               isMyTurn={isMyTurn}
               onAction={handleGameAction}
             />
           </div>
         )}
 
-        {/* Players Panel - Right side */}
+        {/* Players Panel - Top edge to edge */}
         {gameState && (
-          <div className="fixed right-4 top-20 w-80 z-40">
-            <PlayersPanel
-              gameState={gameState}
-              playerAvatars={Object.fromEntries(
-                Array.from(gameState.players.entries()).map(([id, player]) => [
-                  id, 
-                  { avatar: '👤', name: player.name }
-                ])
-              )}
-            />
-          </div>
+          <PlayersPanel
+            gameState={gameState}
+            playerAvatars={Object.fromEntries(
+              Array.from(gameState.players.entries()).map(([id, player]) => [
+                id, 
+                { avatar: '👤', name: player.name }
+              ])
+            )}
+          />
         )}
 
-        {/* Bottom Action Bar */}
+        {/* Floating Action Buttons - Below sidebar */}
+        <div className="fixed left-4 w-80 bottom-4 z-40">
+          <div className="flex flex-row justify-between">
+            {/* Regenerate/Restart Button */}
+            <Button
+              size="icon"
+              onClick={resetDemo}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Regenerate Board"
+            >
+              <RotateCcw className="h-6 w-6" />
+            </Button>
+            
+            {/* Theme Toggle Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                // TODO: Implement theme toggle (PNG vs plain backgrounds)
+                // Toggle theme assets
+              }}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Toggle Theme Assets"
+            >
+              <Palette className="h-6 w-6" />
+            </Button>
+            
+            {/* Auto Mode Button */}
+            <Button
+              size="icon"
+              onClick={() => {
+                // TODO: Implement auto mode
+              }}
+              disabled
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
+              title="Auto Mode (Coming Soon)"
+            >
+              <Play className="h-6 w-6" />
+            </Button>
+            
+            {/* Exit Button */}
+            <Button
+              size="icon"
+              onClick={() => router.push('/')}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Exit Game"
+            >
+              <LogOut className="h-6 w-6" />
+            </Button>
+            
+            {/* Info Button */}
+            <Button
+              size="icon"
+              onClick={() => setShowInfoDialog(true)}
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              title="Game Information"
+            >
+              <Info className="h-6 w-6" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Bottom Action Bar - Dice Roller */}
         {myPlayer && gameState && isMyTurn && gameState.phase === 'roll' && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40">
             <DiceRoller
-              onRoll={(dice) => handleGameAction({
+              onRoll={(_dice) => handleGameAction({
                 type: 'roll',
                 playerId: localPlayerId || '',
                 data: {}
@@ -361,6 +422,53 @@ export default function DemoGamePage() {
           </div>
         </Card>
       </div>
+
+      {/* Game Info Dialog */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="sm:max-w-md bg-black/90 backdrop-blur-md border border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Game Information</DialogTitle>
+            <DialogDescription className="text-white/80">
+              Current game state and victory conditions
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold mb-2 text-white">Current Game State</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm text-white/80">
+                <div>Turn: {gameState?.turn || 0}</div>
+                <div>Phase: {gameState?.phase || 'Loading'}</div>
+                <div>Players: {gameState?.players.size || 0}</div>
+                <div>Current Player: {Array.from(gameState?.players.values() || [])[0]?.name || 'Unknown'}</div>
+              </div>
+            </div>
+            
+            {gameState?.dice && (
+              <div>
+                <h4 className="font-semibold mb-2 text-white">Last Roll</h4>
+                <div className="text-sm text-white/80">
+                  {gameState.dice.die1} + {gameState.dice.die2} = {gameState.dice.sum}
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <h4 className="font-semibold mb-2 text-white">Victory Conditions</h4>
+              <div className="text-sm text-white/60">
+                First player to reach 10 victory points wins!
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              onClick={() => setShowInfoDialog(false)}
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

@@ -1,13 +1,7 @@
 'use client'
 
-import React from 'react'
-import { GameState, Player, GameAction } from '@settlers/core'
-import { Card } from '@/components/ui/card'
+import { Player, GameState, GameAction, BUILDING_COSTS, hasResources } from '@settlers/core'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import TradingInterface from './TradingInterface'
 
 interface PlayerSidebarProps {
   gameState: GameState
@@ -55,269 +49,340 @@ const DEV_CARD_INFO = {
   }
 } as const
 
-export function PlayerSidebar({ 
-  gameState,
-  localPlayer, 
-  isMyTurn, 
-  onAction, 
-  timeRemaining 
-}: PlayerSidebarProps) {
-  
-  // Check what player can build
-  const canBuildSettlement = localPlayer.resources.wood >= 1 && localPlayer.resources.brick >= 1 && localPlayer.resources.wheat >= 1 && localPlayer.resources.sheep >= 1 && localPlayer.buildings.settlements > 0
-  const canBuildCity = localPlayer.resources.wheat >= 2 && localPlayer.resources.ore >= 3 && localPlayer.buildings.cities > 0
-  const canBuildRoad = localPlayer.resources.wood >= 1 && localPlayer.resources.brick >= 1 && localPlayer.buildings.roads > 0
-      const canBuyCard = localPlayer.resources.wheat >= 1 && localPlayer.resources.sheep >= 1 && localPlayer.resources.ore >= 1
+// Action info for consistent styling
+const ACTION_INFO = {
+  buildSettlement: {
+    emoji: '🏠',
+    name: 'Build Settlement',
+    description: 'Build a new settlement',
+    cost: ['🌲', '🧱', '🌾', '🐑']
+  },
+  buildCity: {
+    emoji: '🏛️',
+    name: 'Build City',
+    description: 'Upgrade settlement to city',
+    cost: ['🌾', '🌾', '🪨', '🪨', '🪨']
+  },
+  buildRoad: {
+    emoji: '🛤️',
+    name: 'Build Road',
+    description: 'Build a new road',
+    cost: ['🌲', '🧱']
+  },
+  buyCard: {
+    emoji: '📜',
+    name: 'Buy Development Card',
+    description: 'Purchase a development card',
+    cost: ['🌾', '🐑', '🪨']
+  },
+  endTurn: {
+    emoji: '⏭️',
+    name: 'End Turn',
+    description: 'End your turn',
+    cost: []
+  }
+} as const
 
-  // Handle building actions
-  const handleBuildAction = (buildingType: 'settlement' | 'city' | 'road') => {
+export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, timeRemaining = 120 }: PlayerSidebarProps) {
+  const canBuildSettlement = hasResources(localPlayer.resources, BUILDING_COSTS.settlement) && localPlayer.buildings.settlements > 0
+  const canBuildCity = hasResources(localPlayer.resources, BUILDING_COSTS.city) && localPlayer.buildings.cities > 0
+  const canBuildRoad = hasResources(localPlayer.resources, BUILDING_COSTS.road) && localPlayer.buildings.roads > 0
+  const canBuyCard = hasResources(localPlayer.resources, BUILDING_COSTS.developmentCard)
+
+  const playableCards = localPlayer.developmentCards.filter(card => 
+    !card.playedTurn && 
+    card.purchasedTurn < gameState.turn &&
+    card.type !== 'victory' // Victory cards are passive
+  )
+
+  const handleAction = (actionType: string, data?: unknown) => {
     const action: GameAction = {
-      type: 'build',
+      type: actionType as GameAction['type'],
       playerId: localPlayer.id,
-      data: { buildingType }
+      data: data || {}
     }
     onAction(action)
   }
-
-  const handleBuyCard = () => {
-    const action: GameAction = {
-      type: 'buyCard',
-      playerId: localPlayer.id,
-      data: {}
-    }
-    onAction(action)
-  }
-
-  const handlePlayCard = (cardId: string) => {
-    const action: GameAction = {
-      type: 'playCard',
-      playerId: localPlayer.id,
-      data: { cardId }
-    }
-    onAction(action)
-  }
-
-  // Get total resources
-  const totalResources = Object.values(localPlayer.resources).reduce((sum, count) => sum + count, 0)
 
   return (
-    <div className="space-y-4">
-      {/* Player Header */}
-      <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-lg font-semibold text-white">{localPlayer.name}</h3>
-            <div className="text-sm text-white/70">
-              {isMyTurn ? '🔥 Your Turn' : '⏳ Waiting'}
+    <div className="h-full flex flex-col bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg">
+      {/* Timer Section */}
+      <div className="p-4 border-b border-white/20">
+        <div className="flex flex-col space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-white">Turn {gameState?.turn || 0}</div>
+            <div className="text-lg font-mono text-white">
+              {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
             </div>
           </div>
-          <div className={`w-8 h-8 rounded-full border-2 border-white player-color-${localPlayer.color}`} 
-               style={{ backgroundColor: `var(--color-player-${localPlayer.color})` }} />
-        </div>
-
-        {/* Score Display */}
-        <div className="flex items-center justify-between text-white">
-          <div className="text-center">
-            <div className="text-2xl font-bold">{localPlayer.score.total}</div>
-            <div className="text-xs text-white/70">Victory Points</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-semibold">{totalResources}</div>
-            <div className="text-xs text-white/70">Resources</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-semibold">{localPlayer.developmentCards.length}</div>
-            <div className="text-xs text-white/70">Dev Cards</div>
+          
+          {/* Timer Progress Bar */}
+          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-1000 ${
+                timeRemaining / 120 > 0.5 ? 'bg-green-500' : 
+                timeRemaining / 120 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${(timeRemaining / 120) * 100}%` }}
+            />
           </div>
         </div>
+      </div>
 
-        {/* Turn Timer */}
-        {isMyTurn && timeRemaining !== undefined && (
-          <div className="mt-3 p-2 bg-black/30 rounded-md">
-            <div className="flex items-center justify-between text-white">
-              <span className="text-sm">Time remaining:</span>
-              <span className={cn(
-                "font-mono text-lg font-bold",
-                timeRemaining < 30 && "text-red-400",
-                timeRemaining < 10 && "animate-pulse"
-              )}>
-                {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Resources */}
-      <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-        <h4 className="text-lg font-semibold text-white mb-3">Resources</h4>
-        <div className="space-y-2">
-          {(Object.entries(localPlayer.resources) as [keyof typeof RESOURCE_EMOJIS, number][]).map(([resource, count]) => (
-            <div key={resource} className="flex items-center justify-between text-white">
-              <div className="flex items-center space-x-2">
-                <span className="text-lg">{RESOURCE_EMOJIS[resource]}</span>
-                <span className="capitalize">{resource}</span>
-              </div>
-              <Badge variant={count > 0 ? "default" : "outline"}>
-                {count}
-              </Badge>
+      {/* Resources Section - Horizontal layout */}
+      <div className="p-4 border-b border-white/20">
+        <h3 className="text-sm font-semibold text-white mb-2 text-left">Resources</h3>
+        <div className="flex flex-wrap gap-3 justify-center">
+          {Object.entries(localPlayer.resources).map(([resource, count]) => (
+            <div key={resource} className="flex items-center space-x-1 bg-white/10 rounded-full px-2 py-1">
+              <span className="text-lg">{RESOURCE_EMOJIS[resource as keyof typeof RESOURCE_EMOJIS]}</span>
+              <span className="text-white text-sm font-medium">{count}</span>
             </div>
           ))}
         </div>
-      </Card>
+      </div>
 
-      {/* Building Actions */}
-      {isMyTurn && gameState.phase === 'actions' && (
-        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-          <h4 className="text-lg font-semibold text-white mb-3">Build</h4>
-          <div className="space-y-2">
-            <Button
-              onClick={() => handleBuildAction('settlement')}
-              disabled={!canBuildSettlement}
-              className="w-full justify-between"
-              variant={canBuildSettlement ? "default" : "outline"}
-            >
-              <span>🏠 Settlement</span>
-              <div className="flex space-x-1 text-xs">
-                <span>🌲🧱🌾🐑</span>
-              </div>
-            </Button>
-            
-            <Button
-              onClick={() => handleBuildAction('city')}
-              disabled={!canBuildCity}
-              className="w-full justify-between"
-              variant={canBuildCity ? "default" : "outline"}
-            >
-              <span>🏙️ City</span>
-              <div className="flex space-x-1 text-xs">
-                <span>🌾🌾🪨🪨🪨</span>
-              </div>
-            </Button>
-            
-            <Button
-              onClick={() => handleBuildAction('road')}
-              disabled={!canBuildRoad}
-              className="w-full justify-between"
-              variant={canBuildRoad ? "default" : "outline"}
-            >
-              <span>🛤️ Road</span>
-              <div className="flex space-x-1 text-xs">
-                <span>🌲🧱</span>
-              </div>
-            </Button>
-            
-            <Separator className="bg-white/20" />
-            
-            <Button
-              onClick={handleBuyCard}
-              disabled={!canBuyCard}
-              className="w-full justify-between"
-              variant={canBuyCard ? "default" : "outline"}
-            >
-              <span>📜 Dev Card</span>
-              <div className="flex space-x-1 text-xs">
-                <span>🌾🐑🪨</span>
-              </div>
-            </Button>
-          </div>
+      {/* Scrollable content area */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Actions Section - Always show */}
+        <div className="p-4 border-b border-white/20">
+          <h3 className="text-sm font-semibold text-white mb-3">Actions</h3>
           
-          {/* Inventory Display */}
-          <div className="mt-4 p-3 bg-black/30 rounded-md">
-            <div className="text-xs text-white/70 mb-2">Remaining to build:</div>
-            <div className="grid grid-cols-3 gap-2 text-xs text-white">
-              <div className="text-center">
-                <div className="font-bold">{localPlayer.buildings.settlements}</div>
-                <div>Settlements</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold">{localPlayer.buildings.cities}</div>
-                <div>Cities</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold">{localPlayer.buildings.roads}</div>
-                <div>Roads</div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Trading */}
-      {isMyTurn && gameState.phase === 'actions' && (
-        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-          <h4 className="text-lg font-semibold text-white mb-3">Trading</h4>
-          <TradingInterface
-            gameState={gameState}
-            localPlayer={localPlayer}
-            isMyTurn={isMyTurn}
-            onAction={onAction}
-          />
-        </Card>
-      )}
-
-      {/* Development Cards */}
-      {localPlayer.developmentCards.length > 0 && (
-        <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-          <h4 className="text-lg font-semibold text-white mb-3">Development Cards</h4>
-          <div className="space-y-2">
-            {localPlayer.developmentCards.map((card, index) => {
-              const cardInfo = DEV_CARD_INFO[card.type]
-              const canPlay = isMyTurn && 
-                gameState.phase === 'actions' && 
-                !card.playedTurn && 
-                card.purchasedTurn < gameState.turn &&
-                card.type !== 'victory'
-
-              return (
-                <div key={index} className="flex items-center justify-between p-2 bg-black/30 rounded-md">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">{cardInfo.emoji}</span>
-                    <div>
-                      <div className="text-sm font-semibold text-white">{cardInfo.name}</div>
-                      <div className="text-xs text-white/70">{cardInfo.description}</div>
+          {!isMyTurn ? (
+            <div className="text-white/60 text-sm">Not your turn</div>
+          ) : (
+            <div className="space-y-2">
+              {gameState.phase === 'roll' && (
+                <Button 
+                  onClick={() => handleAction('roll')}
+                  variant="outline"
+                  className="w-full justify-start text-left text-sm p-2 h-auto bg-blue-600/20 border-blue-400/20 hover:bg-blue-600/30 text-white"
+                >
+                  <div className="flex items-start space-x-2 w-full">
+                    <span className="text-lg">🎲</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-white text-left">Roll Dice</div>
+                      <div className="text-xs text-white/60 text-left">Roll to start your turn</div>
                     </div>
                   </div>
-                  {canPlay && (
-                    <Button
-                      size="sm"
-                      onClick={() => handlePlayCard(card.id)}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      Play
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </Card>
-      )}
+                </Button>
+              )}
 
-      {/* Achievements */}
-      <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
-        <h4 className="text-lg font-semibold text-white mb-3">Achievements</h4>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-white">
-            <span className="text-sm">🛤️ Longest Road</span>
-            <Badge variant={localPlayer.hasLongestRoad ? "default" : "outline"}>
-              {localPlayer.hasLongestRoad ? 'Held' : 'None'}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between text-white">
-            <span className="text-sm">⚔️ Largest Army</span>
-            <Badge variant={localPlayer.hasLargestArmy ? "default" : "outline"}>
-              {localPlayer.hasLargestArmy ? 'Held' : 'None'}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between text-white">
-            <span className="text-sm">🗡️ Knights Played</span>
-            <Badge variant="outline">
-              {localPlayer.knightsPlayed}
-            </Badge>
-          </div>
+              {gameState.phase === 'moveRobber' && (
+                <Button 
+                  onClick={() => handleAction('moveRobber')}
+                  variant="outline"
+                  className="w-full justify-start text-left text-sm p-2 h-auto bg-red-600/20 border-red-400/20 hover:bg-red-600/30 text-white"
+                >
+                  <div className="flex items-start space-x-2 w-full">
+                    <span className="text-lg">🔥</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-white text-left">Move Robber</div>
+                      <div className="text-xs text-white/60 text-left">Click on a hex to move the robber</div>
+                    </div>
+                  </div>
+                </Button>
+              )}
+
+              {gameState.phase === 'steal' && (
+                <Button 
+                  onClick={() => handleAction('stealResource')}
+                  variant="outline"
+                  className="w-full justify-start text-left text-sm p-2 h-auto bg-purple-600/20 border-purple-400/20 hover:bg-purple-600/30 text-white"
+                >
+                  <div className="flex items-start space-x-2 w-full">
+                    <span className="text-lg">⚔️</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-white text-left">Steal Resource</div>
+                      <div className="text-xs text-white/60 text-left">Steal from adjacent players</div>
+                    </div>
+                  </div>
+                </Button>
+              )}
+
+              {gameState.phase === 'discard' && (
+                <Button 
+                  onClick={() => handleAction('discard')}
+                  variant="outline"
+                  className="w-full justify-start text-left text-sm p-2 h-auto bg-orange-600/20 border-orange-400/20 hover:bg-orange-600/30 text-white"
+                >
+                  <div className="flex items-start space-x-2 w-full">
+                    <span className="text-lg">🗑️</span>
+                    <div className="flex-1 text-left">
+                      <div className="font-medium text-white text-left">Discard Cards</div>
+                      <div className="text-xs text-white/60 text-left">Discard half your cards (7+ total)</div>
+                    </div>
+                  </div>
+                </Button>
+              )}
+
+              {gameState.phase === 'actions' && (
+                <>
+                  <Button 
+                    onClick={() => handleAction('build', { buildingType: 'settlement' })}
+                    disabled={!canBuildSettlement}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildSettlement 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildSettlement.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildSettlement.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildSettlement.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildSettlement.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleAction('build', { buildingType: 'city' })}
+                    disabled={!canBuildCity}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildCity 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildCity.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildCity.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildCity.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildCity.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleAction('build', { buildingType: 'road' })}
+                    disabled={!canBuildRoad}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuildRoad 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buildRoad.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buildRoad.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildRoad.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buildRoad.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleAction('buyCard')}
+                    disabled={!canBuyCard}
+                    variant="outline"
+                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                      canBuyCard 
+                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.buyCard.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.buyCard.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buyCard.description}</div>
+                        <div className="flex items-center space-x-1 text-xs mt-1">
+                          {ACTION_INFO.buyCard.cost.map((emoji, i) => (
+                            <span key={i}>{emoji}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleAction('trade')}
+                    variant="outline"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">🤝</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">Trade</div>
+                        <div className="text-xs text-white/60 text-left">Trade resources with players or ports</div>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleAction('endTurn')}
+                    variant="outline"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-red-600/20 border-red-400/20 hover:bg-red-600/30 text-white"
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{ACTION_INFO.endTurn.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{ACTION_INFO.endTurn.name}</div>
+                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.endTurn.description}</div>
+                      </div>
+                    </div>
+                  </Button>
+                </>
+              )}
+              
+              {!['roll', 'moveRobber', 'steal', 'discard', 'actions'].includes(gameState.phase) && (
+                <div className="text-white/60 text-sm">No actions available</div>
+              )}
+            </div>
+          )}
         </div>
-      </Card>
+
+        {/* Development Cards Section */}
+        <div className="p-4">
+          <h3 className="text-sm font-semibold text-white mb-3">Development Cards</h3>
+          
+          {/* Playable Cards */}
+          {playableCards.length > 0 ? (
+            <div className="space-y-2">
+              {playableCards.map((card, index) => {
+                const cardInfo = DEV_CARD_INFO[card.type]
+                return (
+                  <Button
+                    key={index}
+                    onClick={() => handleAction('playCard', { cardType: card.type })}
+                    variant="outline"
+                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
+                  >
+                    <div className="flex items-start space-x-2 w-full">
+                      <span className="text-lg">{cardInfo.emoji}</span>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-white text-left">{cardInfo.name}</div>
+                        <div className="text-xs text-white/60 text-left">{cardInfo.description}</div>
+                      </div>
+                    </div>
+                  </Button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-white/60 text-sm bg-white/10 rounded p-2">No cards available</div>
+          )}
+        </div>
+      </div>
     </div>
   )
 } 
