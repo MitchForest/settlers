@@ -30,7 +30,7 @@ export default function Home() {
   
   const router = useRouter()
   const { setLocalPlayerId } = useGameStore()
-  const { user, profile, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading, isGuest } = useAuth()
 
   useEffect(() => {
     checkSystemStatus()
@@ -75,18 +75,25 @@ export default function Home() {
   }
 
   const isSystemConnected = apiStatus === 'connected' && dbStatus === 'connected'
-  const needsProfile = user && !profile && !authLoading // Only show profile setup if not loading
-  const isAuthenticated = user && profile
+  const isAuthenticated = user && !isGuest
 
   // Handle authentication interception
   const handleGameAction = (action: 'create' | 'join' | 'observe') => {
-    if (!isAuthenticated) {
+    // Check if user needs to authenticate
+    if (isGuest) {
       setPendingAction(action)
       setShowMagicLink(true)
       return
     }
     
-    // User is authenticated, proceed with action
+    // Check if authenticated user needs profile setup
+    if (isAuthenticated && !profile && !authLoading) {
+      toast.error('Please complete your profile setup first')
+      // Could show profile setup dialog here
+      return
+    }
+    
+    // User is ready, proceed with action
     switch (action) {
       case 'create':
         setShowCreateGame(true)
@@ -100,167 +107,146 @@ export default function Home() {
     }
   }
 
-  // Handle completing profile setup
-  const handleProfileComplete = () => {
-    // After profile is complete, execute pending action
+  // Handle successful authentication from magic link dialog
+  const handleAuthSuccess = () => {
+    setShowMagicLink(false)
+    
+    // If there was a pending action, execute it
     if (pendingAction) {
-      switch (pendingAction) {
-        case 'create':
-          setShowCreateGame(true)
-          break
-        case 'join':
-          setShowJoinGame(true)
-          break
-        case 'observe':
-          setShowObserveGame(true)
-          break
-      }
+      const action = pendingAction
       setPendingAction(null)
+      
+      // Wait a bit for profile to load, then proceed
+      setTimeout(() => {
+        handleGameAction(action)
+      }, 1000)
     }
   }
 
-  // Handle completing authentication
-  const handleAuthComplete = () => {
-    // Auth complete, but might need profile setup
-    // The useAuth hook will automatically update user/profile state
-    setShowMagicLink(false)
-  }
-
   return (
-    <HoneycombBackground>
-      <div className="min-h-screen flex flex-col items-center justify-center px-4">
-        {/* Main Content */}
-        <div className="text-center space-y-8 max-w-4xl mx-auto">
-          {/* Title */}
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <HoneycombBackground />
+      
+      {/* Header */}
+      <header className="relative z-10 flex justify-between items-center p-6">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-foreground">🏰 Settlers</h1>
+          <ConnectionStatus 
+            status={isSystemConnected ? 'connected' : (apiStatus === 'testing' ? 'connecting' : 'error')}
+            className="hidden sm:flex"
+          />
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {!isGuest && user ? (
+            <UserAvatarMenu />
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => setShowMagicLink(true)}
+              className="flex items-center gap-2"
+            >
+              ✨ Sign In
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="relative z-10 flex flex-col items-center justify-center min-h-[70vh] px-6 text-center">
+        <div className="max-w-2xl mx-auto space-y-8">
+          {/* Hero Section */}
           <div className="space-y-4">
-            <h1 className="text-7xl md:text-8xl font-bold text-white drop-shadow-2xl tracking-tight">
-              Settlers
-            </h1>
-            <div className="max-w-2xl mx-auto space-y-2">
-              <p className="text-xl md:text-2xl text-white/90 font-medium">
-              A 3–4 player strategy game to collect, build, and dominate.
-              </p>
-              <p className="text-sm text-white/60 italic">
-                For educational purposes only.
-              </p>
-            </div>
+            <h2 className="text-4xl sm:text-6xl font-bold text-foreground tracking-tight">
+              Master the Art of
+              <span className="block text-primary">Strategic Trade</span>
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+              Build settlements, trade resources, and outmaneuver your opponents in this 
+              modern take on the classic strategy game.
+            </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="grid md:grid-cols-3 gap-6 max-w-2xl mx-auto">
+          {/* Status Display */}
+          {!isSystemConnected && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+              <p className="text-destructive text-sm">
+                System not ready. Check your backend connection.
+              </p>
+            </div>
+          )}
+
+          {/* Game Actions */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
             <Button
-              size="lg"
               onClick={() => handleGameAction('create')}
               disabled={!isSystemConnected}
-              className={ds(
-                componentStyles.buttonPrimary,
-                'w-full h-16 text-lg font-semibold rounded-xl hover:scale-105 transition-all duration-200'
-              )}
+              size="lg"
+              className="h-16 flex flex-col gap-1"
             >
-              Create Game
+              <span className="text-lg">🎯</span>
+              <span>Create Game</span>
             </Button>
             
             <Button
-              size="lg"
               variant="outline"
               onClick={() => handleGameAction('join')}
               disabled={!isSystemConnected}
-              className={ds(
-                componentStyles.buttonSecondary,
-                'w-full h-16 text-lg font-semibold rounded-xl hover:scale-105 transition-all duration-200'
-              )}
+              size="lg"
+              className="h-16 flex flex-col gap-1"
             >
-              Join Game
+              <span className="text-lg">🤝</span>
+              <span>Join Game</span>
             </Button>
             
             <Button
-              size="lg"
               variant="outline"
               onClick={() => handleGameAction('observe')}
               disabled={!isSystemConnected}
-              className={ds(
-                componentStyles.buttonSecondary,
-                'w-full h-16 text-lg font-semibold rounded-xl hover:scale-105 transition-all duration-200'
-              )}
+              size="lg"
+              className="h-16 flex flex-col gap-1"
             >
-              Observe Game
+              <span className="text-lg">👁️</span>
+              <span>Observe Game</span>
             </Button>
           </div>
 
-          {/* Auth State Display */}
-          {!isSystemConnected && (
-            <div className="bg-red-900/20 backdrop-blur-sm border border-red-500/30 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-red-200 text-sm">
-                System offline. Please wait...
-              </p>
-            </div>
-          )}
-
-          {needsProfile && (
-            <div className="bg-yellow-900/20 backdrop-blur-sm border border-yellow-500/30 rounded-lg p-4 max-w-md mx-auto">
-              <p className="text-yellow-200 text-sm">
-                Please complete your profile to continue
+          {/* Guest Notice */}
+          {isGuest && (
+            <div className="bg-info/10 border border-info/20 rounded-lg p-4 max-w-md mx-auto">
+              <p className="text-info text-sm">
+                💡 You're browsing as a guest. Sign in to save your game history and create a profile.
               </p>
             </div>
           )}
         </div>
+      </main>
 
-        {/* Footer */}
-        <div className="mt-auto pb-8 text-center">
-          <p className="text-white/60 text-sm">
-            Created by{' '}
-            <a 
-              href="https://github.com/mitchellwhite" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-white/80 hover:text-white underline"
-            >
-              @MitchForest
-            </a>
-          </p>
-        </div>
-      </div>
-
-      {/* User Avatar Menu (bottom left) */}
-      <UserAvatarMenu />
-
-      {/* Connection Status */}
-      <ConnectionStatus 
-        status={isSystemConnected ? 'connected' : (apiStatus === 'testing' ? 'connecting' : 'error')} 
+      {/* Dialogs */}
+      <CreateGameDialog
+        open={showCreateGame}
+        onClose={() => setShowCreateGame(false)}
+        onGameCreated={handleGameCreated}
       />
-
-      {/* Authentication Dialogs */}
+      
+      <JoinGameDialog
+        open={showJoinGame}
+        onOpenChange={setShowJoinGame}
+      />
+      
+      <ObserveGameDialog
+        open={showObserveGame}
+        onOpenChange={setShowObserveGame}
+      />
+      
       <MagicLinkDialog
         open={showMagicLink}
         onClose={() => {
           setShowMagicLink(false)
           setPendingAction(null)
         }}
-        onSuccess={handleAuthComplete}
-        title={pendingAction ? `Sign in to ${pendingAction} game` : "Join the Game!"}
-        description="Enter your email to sign in and continue"
+        onSuccess={handleAuthSuccess}
       />
-
-      <ProfileSetupDialog
-        open={!!needsProfile}
-        onComplete={handleProfileComplete}
-      />
-
-      <CreateGameDialog
-        open={showCreateGame}
-        onClose={() => setShowCreateGame(false)}
-        onGameCreated={handleGameCreated}
-      />
-
-      <JoinGameDialog
-        open={showJoinGame}
-        onOpenChange={setShowJoinGame}
-      />
-
-      <ObserveGameDialog
-        open={showObserveGame}
-        onOpenChange={setShowObserveGame}
-      />
-    </HoneycombBackground>
+    </div>
   )
 }

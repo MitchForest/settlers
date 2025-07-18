@@ -265,73 +265,6 @@ export function getValidSetupRoadPositions(state: GameState, playerId: PlayerId)
 // ============= Advanced Network Analysis =============
 
 /**
- * Calculate the longest road for a player
- * Used for longest road bonus determination
- */
-export function calculateLongestRoad(state: GameState, playerId: PlayerId): number {
-  const playerRoads = new Set<string>()
-  const roadGraph = new Map<string, string[]>() // vertex -> connected vertices through player roads
-  
-  // Build graph of player's roads
-  state.board.edges.forEach((edge, edgeId) => {
-    if (edge.connection?.owner === playerId) {
-      playerRoads.add(edgeId)
-      const vertices = getEdgeVertices(state.board, edgeId)
-      if (vertices.length === 2) {
-        const [v1, v2] = vertices
-        if (!roadGraph.has(v1)) roadGraph.set(v1, [])
-        if (!roadGraph.has(v2)) roadGraph.set(v2, [])
-        roadGraph.get(v1)!.push(v2)
-        roadGraph.get(v2)!.push(v1)
-      }
-    }
-  })
-  
-  // Find longest path using DFS from each vertex
-  let maxLength = 0
-  
-  roadGraph.forEach((_, startVertex) => {
-    const visited = new Set<string>()
-    const length = dfsLongestPath(roadGraph, startVertex, visited, state.board, playerId)
-    maxLength = Math.max(maxLength, length)
-  })
-  
-  return maxLength
-}
-
-/**
- * DFS helper for longest road calculation
- * Accounts for settlements/cities that may break the road
- */
-function dfsLongestPath(
-  roadGraph: Map<string, string[]>,
-  vertex: string,
-  visited: Set<string>,
-  board: Board,
-  playerId: PlayerId
-): number {
-  visited.add(vertex)
-  let maxLength = 0
-  
-  const neighbors = roadGraph.get(vertex) || []
-  for (const neighbor of neighbors) {
-    if (visited.has(neighbor)) continue
-    
-    // Check if this vertex blocks the road (opponent's building)
-    const vertexObj = board.vertices.get(vertex)
-    if (vertexObj?.building && vertexObj.building.owner !== playerId) {
-      continue // Road is blocked by opponent's building
-    }
-    
-    const length = 1 + dfsLongestPath(roadGraph, neighbor, visited, board, playerId)
-    maxLength = Math.max(maxLength, length)
-  }
-  
-  visited.delete(vertex) // Backtrack for other paths
-  return maxLength
-}
-
-/**
  * Get all possible settlement positions for a player
  * Considers distance rule and network connectivity
  */
@@ -347,14 +280,137 @@ export function getPossibleSettlementPositions(state: GameState, playerId: Playe
     if (!checkDistanceRule(state.board, vertexId)) return
     
     // During normal play, must be connected to network
+    // Exception: if player has no network yet, they can build anywhere (for testing scenarios)
     if (state.phase !== 'setup1' && state.phase !== 'setup2') {
-      if (!networkVertices.has(vertexId)) return
+      if (networkVertices.size > 0 && !networkVertices.has(vertexId)) {
+        return
+      }
     }
     
     validPositions.push(vertexId)
   })
   
   return validPositions
+}
+
+// ============= Longest Road Algorithm =============
+
+/**
+ * Road Network representation for longest road calculations
+ */
+interface RoadNetwork {
+  vertices: Set<string>           // All vertices with player roads
+  edges: Map<string, string[]>    // adjacency list: vertex -> connected vertices
+  roadCount: number               // Total roads in network
+}
+
+/**
+ * Calculate the actual longest road for a player using DFS
+ */
+export function calculateLongestRoad(
+  state: GameState, 
+  playerId: PlayerId
+): number {
+  // Build graph of player's road network
+  const roadNetwork = buildPlayerRoadNetwork(state, playerId)
+  
+  if (roadNetwork.roadCount === 0) {
+    return 0
+  }
+  
+  // Try DFS from every vertex in the network to find longest path
+  let maxLength = 0
+  for (const vertex of roadNetwork.vertices) {
+    const pathLength = dfsLongestPath(roadNetwork, vertex, new Set())
+    maxLength = Math.max(maxLength, pathLength)
+  }
+  
+  return maxLength
+}
+
+/**
+ * Build a graph representation of a player's road network
+ */
+function buildPlayerRoadNetwork(
+  state: GameState, 
+  playerId: PlayerId
+): RoadNetwork {
+  const network: RoadNetwork = {
+    vertices: new Set(),
+    edges: new Map(),
+    roadCount: 0
+  }
+
+  // Scan all edges for player's roads
+  state.board.edges.forEach((edge, edgeId) => {
+    if (edge.connection && edge.connection.owner === playerId) {
+      const edgeVertices = getEdgeVertices(state.board, edgeId)
+      
+      if (edgeVertices.length === 2) {
+        const [vertex1, vertex2] = edgeVertices
+        
+        // Add vertices to network
+        network.vertices.add(vertex1)
+        network.vertices.add(vertex2)
+        
+        // Add bidirectional edges
+        if (!network.edges.has(vertex1)) network.edges.set(vertex1, [])
+        if (!network.edges.has(vertex2)) network.edges.set(vertex2, [])
+        
+        network.edges.get(vertex1)!.push(vertex2)
+        network.edges.get(vertex2)!.push(vertex1)
+        
+        network.roadCount++
+      }
+    }
+  })
+
+  return network
+}
+
+/**
+ * Find endpoints (vertices with degree 1) in the road network
+ */
+function findNetworkEndpoints(network: RoadNetwork): string[] {
+  const endpoints: string[] = []
+  
+  for (const vertex of network.vertices) {
+    const connections = network.edges.get(vertex) || []
+    if (connections.length === 1) {  // Degree 1 = endpoint
+      endpoints.push(vertex)
+    }
+  }
+  
+  // If no endpoints (cycle), start from any vertex
+  if (endpoints.length === 0 && network.vertices.size > 0) {
+    endpoints.push(Array.from(network.vertices)[0])
+  }
+  
+  return endpoints
+}
+
+/**
+ * DFS to find the longest path from a starting vertex
+ * Returns the number of roads in the longest path
+ */
+function dfsLongestPath(
+  network: RoadNetwork,
+  currentVertex: string,
+  visited: Set<string>
+): number {
+  visited.add(currentVertex)
+  
+  let maxPath = 0
+  const neighbors = network.edges.get(currentVertex) || []
+  
+  for (const neighbor of neighbors) {
+    if (!visited.has(neighbor)) {
+      const pathLength = 1 + dfsLongestPath(network, neighbor, new Set(visited))
+      maxPath = Math.max(maxPath, pathLength)
+    }
+  }
+  
+  return maxPath
 }
 
 /**

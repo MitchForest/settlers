@@ -1,4 +1,6 @@
 {
+  "id": "c05ae965-7c25-4359-9d0e-ca31b9f98d1b",
+  "prevId": "c07687ee-e5b6-4e42-bcec-85bc29bc4b3d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -25,22 +27,22 @@
         "game_event_sequences_game_id_games_id_fk": {
           "name": "game_event_sequences_game_id_games_id_fk",
           "tableFrom": "game_event_sequences",
+          "tableTo": "games",
           "columnsFrom": [
             "game_id"
           ],
-          "tableTo": "games",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.game_events": {
       "name": "game_events",
@@ -61,6 +63,7 @@
         "event_type": {
           "name": "event_type",
           "type": "game_event_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -92,6 +95,7 @@
       },
       "indexes": {
         "game_events_game_sequence_idx": {
+          "name": "game_events_game_sequence_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -106,13 +110,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "game_events_game_sequence_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "game_events_game_type_idx": {
+          "name": "game_events_game_type_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -127,13 +131,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "game_events_game_type_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "game_events_timestamp_idx": {
+          "name": "game_events_timestamp_idx",
           "columns": [
             {
               "expression": "timestamp",
@@ -142,13 +146,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "game_events_timestamp_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "game_events_context_player_idx": {
+          "name": "game_events_context_player_idx",
           "columns": [
             {
               "expression": "context_player_id",
@@ -157,55 +161,54 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "game_events_context_player_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "game_events_game_id_games_id_fk": {
           "name": "game_events_game_id_games_id_fk",
           "tableFrom": "game_events",
+          "tableTo": "games",
           "columnsFrom": [
             "game_id"
           ],
-          "tableTo": "games",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "game_events_context_player_id_players_id_fk": {
           "name": "game_events_context_player_id_players_id_fk",
           "tableFrom": "game_events",
+          "tableTo": "players",
           "columnsFrom": [
             "context_player_id"
           ],
-          "tableTo": "players",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "game_events_game_id_sequence_number_unique": {
           "name": "game_events_game_id_sequence_number_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_id",
             "sequence_number"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.game_observers": {
       "name": "game_observers",
@@ -245,6 +248,7 @@
       },
       "indexes": {
         "game_observers_game_idx": {
+          "name": "game_observers_game_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -253,55 +257,69 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "game_observers_game_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
+        },
+        "game_observers_user_idx": {
+          "name": "game_observers_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "game_observers_game_id_games_id_fk": {
           "name": "game_observers_game_id_games_id_fk",
           "tableFrom": "game_observers",
+          "tableTo": "games",
           "columnsFrom": [
             "game_id"
           ],
-          "tableTo": "games",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "game_observers_user_id_user_profiles_id_fk": {
           "name": "game_observers_user_id_user_profiles_id_fk",
           "tableFrom": "game_observers",
+          "tableTo": "user_profiles",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "game_observers_game_id_user_id_unique": {
           "name": "game_observers_game_id_user_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_id",
             "user_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.games": {
       "name": "games",
@@ -336,6 +354,7 @@
         "current_phase": {
           "name": "current_phase",
           "type": "game_phase",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'lobby'"
@@ -368,6 +387,7 @@
       },
       "indexes": {
         "games_game_code_idx": {
+          "name": "games_game_code_idx",
           "columns": [
             {
               "expression": "game_code",
@@ -376,13 +396,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "games_game_code_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "games_phase_idx": {
+          "name": "games_phase_idx",
           "columns": [
             {
               "expression": "current_phase",
@@ -391,13 +411,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "games_phase_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "games_active_idx": {
+          "name": "games_active_idx",
           "columns": [
             {
               "expression": "is_active",
@@ -406,11 +426,10 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "games_active_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -418,15 +437,15 @@
       "uniqueConstraints": {
         "games_game_code_unique": {
           "name": "games_game_code_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_code"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.player_events": {
       "name": "player_events",
@@ -453,6 +472,7 @@
         "event_type": {
           "name": "event_type",
           "type": "player_event_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -478,6 +498,7 @@
       },
       "indexes": {
         "player_events_game_sequence_idx": {
+          "name": "player_events_game_sequence_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -492,13 +513,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "player_events_game_sequence_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "player_events_game_type_idx": {
+          "name": "player_events_game_type_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -513,13 +534,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "player_events_game_type_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "player_events_player_idx": {
+          "name": "player_events_player_idx",
           "columns": [
             {
               "expression": "player_id",
@@ -528,13 +549,13 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "player_events_player_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "player_events_timestamp_idx": {
+          "name": "player_events_timestamp_idx",
           "columns": [
             {
               "expression": "timestamp",
@@ -543,55 +564,54 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "player_events_timestamp_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "player_events_game_id_games_id_fk": {
           "name": "player_events_game_id_games_id_fk",
           "tableFrom": "player_events",
+          "tableTo": "games",
           "columnsFrom": [
             "game_id"
           ],
-          "tableTo": "games",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "player_events_player_id_players_id_fk": {
           "name": "player_events_player_id_players_id_fk",
           "tableFrom": "player_events",
+          "tableTo": "players",
           "columnsFrom": [
             "player_id"
           ],
-          "tableTo": "players",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "player_events_game_id_sequence_number_unique": {
           "name": "player_events_game_id_sequence_number_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_id",
             "sequence_number"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.players": {
       "name": "players",
@@ -618,6 +638,7 @@
         "player_type": {
           "name": "player_type",
           "type": "player_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -668,6 +689,7 @@
       },
       "indexes": {
         "players_game_player_idx": {
+          "name": "players_game_player_idx",
           "columns": [
             {
               "expression": "game_id",
@@ -682,63 +704,62 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "players_game_player_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "players_game_id_games_id_fk": {
           "name": "players_game_id_games_id_fk",
           "tableFrom": "players",
+          "tableTo": "games",
           "columnsFrom": [
             "game_id"
           ],
-          "tableTo": "games",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "players_user_id_user_profiles_id_fk": {
           "name": "players_user_id_user_profiles_id_fk",
           "tableFrom": "players",
+          "tableTo": "user_profiles",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "user_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "players_game_id_join_order_unique": {
           "name": "players_game_id_join_order_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_id",
             "join_order"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "players_game_id_color_unique": {
           "name": "players_game_id_color_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "game_id",
             "color"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.user_profiles": {
       "name": "user_profiles",
@@ -785,6 +806,7 @@
       },
       "indexes": {
         "user_profiles_email_idx": {
+          "name": "user_profiles_email_idx",
           "columns": [
             {
               "expression": "email",
@@ -793,11 +815,10 @@
               "nulls": "last"
             }
           ],
-          "with": {},
-          "name": "user_profiles_email_idx",
           "isUnique": false,
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -805,15 +826,53 @@
       "uniqueConstraints": {
         "user_profiles_email_unique": {
           "name": "user_profiles_email_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
-      "policies": {},
-      "isRLSEnabled": false,
-      "checkConstraints": {}
+      "policies": {
+        "authenticated_can_view_all_profiles": {
+          "name": "authenticated_can_view_all_profiles",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "authenticated_can_insert_own_profile": {
+          "name": "authenticated_can_insert_own_profile",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select auth.uid()) = \"user_profiles\".\"id\""
+        },
+        "authenticated_can_update_own_profile": {
+          "name": "authenticated_can_update_own_profile",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"user_profiles\".\"id\"",
+          "withCheck": "(select auth.uid()) = \"user_profiles\".\"id\""
+        },
+        "authenticated_can_delete_own_profile": {
+          "name": "authenticated_can_delete_own_profile",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"user_profiles\".\"id\""
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -929,15 +988,13 @@
     }
   },
   "schemas": {},
-  "_meta": {
-    "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "id": "fdd12290-6b91-4266-b305-22e2c4ad0786",
-  "prevId": "00000000-0000-0000-0000-000000000000",
   "sequences": {},
+  "roles": {},
   "policies": {},
   "views": {},
-  "roles": {}
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
 }

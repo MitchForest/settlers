@@ -1,0 +1,5 @@
+ALTER TABLE "user_profiles" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "authenticated_can_view_all_profiles" ON "user_profiles" AS PERMISSIVE FOR SELECT TO "authenticated" USING (true);--> statement-breakpoint
+CREATE POLICY "authenticated_can_insert_own_profile" ON "user_profiles" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((select auth.uid()) = "user_profiles"."id");--> statement-breakpoint
+CREATE POLICY "authenticated_can_update_own_profile" ON "user_profiles" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((select auth.uid()) = "user_profiles"."id") WITH CHECK ((select auth.uid()) = "user_profiles"."id");--> statement-breakpoint
+CREATE POLICY "authenticated_can_delete_own_profile" ON "user_profiles" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((select auth.uid()) = "user_profiles"."id");

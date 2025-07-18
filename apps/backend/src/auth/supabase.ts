@@ -12,21 +12,14 @@ export const supabaseAdmin = createClient(
   }
 )
 
-// User profile type for backend use
+// User profile type for backend use - aligned with actual database schema
 export interface UserProfile {
   id: string
-  username: string
-  avatar_emoji: string
-  display_name: string | null
-  created_at: string
-  updated_at: string
-  games_played: number
-  games_won: number
-  total_score: number
-  longest_road_record: number
-  largest_army_record: number
-  is_public: boolean
-  preferred_player_count: number
+  email: string
+  name: string
+  avatarEmoji: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 // Get user profile from database
@@ -69,18 +62,17 @@ async function createUserProfile(userId: string): Promise<UserProfile | null> {
     }
     
     const user = authUser.user
-    const username = `Player${userId.substring(0, 8)}`
-    const displayName = user.email || 'New Player'
+    const name = user.email?.split('@')[0] || 'New Player'
     
-    console.log(`Creating profile for ${userId} with username: ${username}`)
+    console.log(`Creating profile for ${userId} with name: ${name}`)
     
     const { data, error } = await supabaseAdmin
       .from('user_profiles')
       .insert({
         id: userId,
-        username,
-        display_name: displayName,
-        avatar_emoji: '🧙‍♂️'
+        email: user.email || '',
+        name,
+        avatarEmoji: '🧙‍♂️'
       })
       .select()
       .single()

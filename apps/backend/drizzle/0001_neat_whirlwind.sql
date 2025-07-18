@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "game_observers_user_idx" ON "game_observers" ("user_id");

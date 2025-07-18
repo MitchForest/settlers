@@ -14,7 +14,8 @@ import {
   GamePhase,
   DiceRoll,
   EdgePosition,
-  Trade
+  Trade,
+  Board
 } from '../types'
 import {
   BUILDING_COSTS,
@@ -31,9 +32,11 @@ import {
   calculateDiscardCount,
   randomChoice,
   shuffleArray,
-  hasResources
+  hasResources,
+  hasPortAccess
 } from '../calculations'
 import * as validator from './state-validator'
+import { calculateLongestRoad } from './adjacency-helpers'
 
 // Result of processing an action
 export interface ProcessResult {
@@ -421,7 +424,15 @@ function processPortTrade(state: GameState, action: GameAction): ProcessResult {
     }
   }
   
-  // TODO: Validate player has access to this port
+  // Validate player has access to this port
+  if (!hasPortAccess(state, action.playerId, portType, ratio)) {
+    return {
+      success: false,
+      newState: state,
+      events: [],
+      error: `You don't have access to a ${portType} ${ratio}:1 port`
+    }
+  }
   
   let newState = deepCloneState(state)
   const newPlayer = { ...player }
@@ -1111,39 +1122,46 @@ function distributeResources(state: GameState, distribution: Map<PlayerId, Resou
 
 function getPlayersAdjacentToHex(state: GameState, hexPosition: { q: number, r: number, s: number }): Array<{ playerId: PlayerId, buildingType: string }> {
   const adjacentPlayers: Array<{ playerId: PlayerId, buildingType: string }> = []
+  const foundPlayerIds = new Set<PlayerId>() // Prevent duplicate players
   
-  // Get all vertices adjacent to this hex
-  const adjacentVertices = getAdjacentVertices(hexPosition)
+  // Get all vertices that are adjacent to this hex
+  const adjacentVertices = getVerticesAdjacentToHex(state.board, hexPosition)
   
   adjacentVertices.forEach(vertexId => {
     const vertex = state.board.vertices.get(vertexId)
-    if (vertex && vertex.building) {
+    if (vertex && vertex.building && !foundPlayerIds.has(vertex.building.owner)) {
       adjacentPlayers.push({
         playerId: vertex.building.owner,
         buildingType: vertex.building.type
       })
+      foundPlayerIds.add(vertex.building.owner)
     }
   })
   
   return adjacentPlayers
 }
 
-// Helper function to get vertices adjacent to a hex
-function getAdjacentVertices(hexPos: { q: number, r: number, s: number }): string[] {
-  const { q, r, s } = hexPos
+/**
+ * Get all vertex IDs that are adjacent to a specific hex
+ * This is more robust than the simple string generation approach
+ */
+function getVerticesAdjacentToHex(board: Board, hexPosition: { q: number, r: number, s: number }): string[] {
+  const adjacentVertices: string[] = []
   
-  // Each hex has 6 vertices at the corners
-  // Using cube coordinates, the vertices are at specific offsets
-  const vertices = [
-    `${q},${r},${s}-N`,     // North
-    `${q},${r},${s}-NE`,    // Northeast  
-    `${q},${r},${s}-SE`,    // Southeast
-    `${q},${r},${s}-S`,     // South
-    `${q},${r},${s}-SW`,    // Southwest
-    `${q},${r},${s}-NW`     // Northwest
-  ]
+  // Iterate through all vertices and check if they're adjacent to this hex
+  board.vertices.forEach((vertex, vertexId) => {
+    // Check if any of the vertex's hexes match our target hex
+    for (const vertexHex of vertex.position.hexes) {
+      if (vertexHex.q === hexPosition.q && 
+          vertexHex.r === hexPosition.r && 
+          vertexHex.s === hexPosition.s) {
+        adjacentVertices.push(vertexId)
+        break // Found match, no need to check other hexes for this vertex
+      }
+    }
+  })
   
-  return vertices
+  return adjacentVertices
 }
 
 function updateLongestRoad(state: GameState): GameState {
@@ -1153,7 +1171,7 @@ function updateLongestRoad(state: GameState): GameState {
   let longestLength = 0
   
   state.players.forEach((player, playerId) => {
-    const pathLength = 5 // TODO: Calculate actual path length
+    const pathLength = calculateLongestRoad(state, playerId)
     if (pathLength >= GAME_RULES.longestRoadMinimum && pathLength > longestLength) {
       longestPlayer = playerId
       longestLength = pathLength

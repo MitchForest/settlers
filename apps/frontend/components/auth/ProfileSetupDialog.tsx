@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, User, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
-import { upsertUserProfile, isUsernameAvailable } from '@/lib/supabase'
+import { upsertUserProfile } from '@/lib/supabase'
 import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 import { toast } from 'sonner'
 
@@ -19,68 +19,44 @@ interface ProfileSetupDialogProps {
 
 export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps) {
   const [selectedAvatar, setSelectedAvatar] = useState('🧙‍♂️')
-  const [username, setUsername] = useState('')
+  const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [usernameError, setUsernameError] = useState('')
+  const [nameError, setNameError] = useState('')
   const { user, refreshProfile } = useAuth()
 
-  const validateUsername = async (value: string) => {
+  const validateName = async (value: string) => {
     if (!value.trim()) {
-      setUsernameError('Username is required')
+      setNameError('Name is required')
       return false
     }
 
-    if (value.length < 3) {
-      setUsernameError('Username must be at least 3 characters')
+    if (value.length < 2) {
+      setNameError('Name must be at least 2 characters')
       return false
     }
 
-    if (value.length > 20) {
-      setUsernameError('Username must be 20 characters or less')
+    if (value.length > 50) {
+      setNameError('Name must be 50 characters or less')
       return false
     }
 
-    if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-      setUsernameError('Username can only contain letters, numbers, - and _')
-      return false
-    }
-
-    // Check if username is available
-    const available = await isUsernameAvailable(value)
-    if (!available) {
-      setUsernameError('Username is already taken')
-      return false
-    }
-
-    setUsernameError('')
+    setNameError('')
     return true
   }
 
-  const handleUsernameChange = (value: string) => {
-    setUsername(value)
-    setUsernameError('')
-  }
+  const handleSubmit = async () => {
+    if (!user) return
 
-  const handleCreateProfile = async () => {
-    if (!user) {
-      toast.error('No user session found')
-      return
-    }
-
-    const isValid = await validateUsername(username.trim())
-    if (!isValid) {
-      return
-    }
+    const isValid = await validateName(name)
+    if (!isValid) return
 
     setIsLoading(true)
     try {
       await upsertUserProfile({
         id: user.id,
-        username: username.trim(),
-        avatar_emoji: selectedAvatar,
-        display_name: username.trim(),
-        is_public: true,
-        preferred_player_count: 4
+        name: name.trim(),
+        avatarEmoji: selectedAvatar,
+        email: user.email || ''
       })
 
       await refreshProfile()
@@ -94,60 +70,49 @@ export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps
     }
   }
 
-  const isFormValid = username.trim().length >= 3 && !usernameError
+  const handleNameChange = (value: string) => {
+    setName(value)
+    if (nameError && value.trim()) {
+      setNameError('')
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent 
-        className="sm:max-w-md bg-black/30 backdrop-blur-sm border border-white/20 text-white"
-        showCloseButton={false}
-      >
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle className="text-white text-xl font-semibold text-center">
-            🎭 Create Your Player Profile
+          <DialogTitle className="flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Set Up Your Profile
           </DialogTitle>
-          <DialogDescription className="text-white/60 text-center">
-            Choose your avatar and username to get started
+          <DialogDescription>
+            Choose your display name and avatar to get started
           </DialogDescription>
         </DialogHeader>
-
+        
         <div className="space-y-6">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-purple-500/20 rounded-full flex items-center justify-center">
-              <User className="w-8 h-8 text-purple-400" />
-            </div>
-            <p className="text-white/80 text-sm">
-              Choose your avatar and username to get started
-            </p>
-          </div>
-
-          {/* Avatar Picker */}
-          <div className="space-y-3">
-            <Label className="text-white/80">Choose Your Avatar</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-white/5 border-white/20 text-white hover:bg-white/10 hover:border-white/30"
-                  disabled={isLoading}
-                >
-                  <span className="text-3xl mr-3">{selectedAvatar}</span>
-                  <span>Choose your avatar</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 bg-black/90 backdrop-blur-sm border border-white/20">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-white">Choose Avatar</h4>
-                  <div className="grid grid-cols-8 gap-2">
+          {/* Avatar Selection */}
+          <div>
+            <Label className="text-sm font-medium">Avatar</Label>
+            <div className="mt-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start h-12"
+                  >
+                    <span className="text-2xl mr-3">{selectedAvatar}</span>
+                    Choose Avatar
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3">
+                  <div className="grid grid-cols-6 gap-2">
                     {AVATAR_EMOJIS.map((emoji) => (
                       <Button
                         key={emoji}
                         variant="ghost"
-                        size="sm"
-                        className={`w-10 h-10 p-0 text-xl transition-all ${
-                          selectedAvatar === emoji 
-                            ? 'bg-white/20 border border-white/40' 
-                            : 'hover:bg-white/10'
+                        className={`h-12 w-12 p-0 text-2xl hover:bg-muted ${
+                          selectedAvatar === emoji ? 'bg-primary/10 ring-2 ring-primary' : ''
                         }`}
                         onClick={() => setSelectedAvatar(emoji)}
                       >
@@ -155,39 +120,39 @@ export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps
                       </Button>
                     ))}
                   </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
-          {/* Username Input */}
-          <div className="space-y-3">
-            <Label htmlFor="username" className="text-white/80">Username</Label>
-            <Input 
-              id="username"
-              value={username}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              onBlur={() => username.trim() && validateUsername(username.trim())}
-              placeholder="Enter your username"
+          {/* Name Input */}
+          <div>
+            <Label htmlFor="name" className="text-sm font-medium">
+              Display Name
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="Enter your display name"
+              className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
               disabled={isLoading}
-              maxLength={20}
-              className={`bg-white/5 border-white/20 text-white placeholder:text-white/50 focus:bg-white/10 focus:border-white/40 ${
-                usernameError ? 'border-red-400 focus:border-red-400' : ''
-              }`}
+              autoFocus
             />
-            {usernameError && (
-              <p className="text-red-400 text-sm">{usernameError}</p>
+            {nameError && (
+              <p className="text-sm text-red-500 mt-1">{nameError}</p>
             )}
-            <p className="text-white/60 text-xs">
-              3-20 characters, letters, numbers, - and _ only
+            <p className="text-xs text-muted-foreground mt-1">
+              This is how other players will see you in games
             </p>
           </div>
 
-          {/* Create Profile Button */}
-          <Button 
-            onClick={handleCreateProfile}
-            disabled={!isFormValid || isLoading}
-            className="w-full bg-white/20 text-white border border-white/40 hover:bg-white/30 disabled:opacity-50"
+          {/* Submit Button */}
+          <Button
+            onClick={handleSubmit}
+            disabled={!name.trim() || isLoading || !!nameError}
+            className="w-full"
+            size="lg"
           >
             {isLoading ? (
               <>
@@ -197,14 +162,10 @@ export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps
             ) : (
               <>
                 <Check className="w-4 h-4 mr-2" />
-                Create Profile & Continue
+                Complete Setup
               </>
             )}
           </Button>
-
-          <div className="text-center text-xs text-white/60">
-            You can change these settings later in your profile
-          </div>
         </div>
       </DialogContent>
     </Dialog>

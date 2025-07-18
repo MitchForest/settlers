@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
-import { upsertUserProfile, isUsernameAvailable } from '@/lib/supabase'
+import { upsertUserProfile } from '@/lib/supabase'
 import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 import { componentStyles, designSystem, ds } from '@/lib/design-system'
 import { toast } from 'sonner'
@@ -23,17 +23,17 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
   
   // Initialize with current profile values
   const [selectedAvatar, setSelectedAvatar] = useState('')
-  const [username, setUsername] = useState('')
+  const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [usernameError, setUsernameError] = useState('')
+  const [nameError, setNameError] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
 
   // Update state when profile changes or dialog opens
   useEffect(() => {
     if (profile && open) {
-      setSelectedAvatar(profile.avatar_emoji || '🧙‍♂️')
-      setUsername(profile.username || '')
-      setUsernameError('')
+      setSelectedAvatar(profile.avatarEmoji || '🧙‍♂️')
+      setName(profile.name || '')
+      setNameError('')
       setHasChanges(false)
     }
   }, [profile, open])
@@ -41,193 +41,147 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
   // Check for changes
   useEffect(() => {
     if (profile) {
-      const avatarChanged = selectedAvatar !== (profile.avatar_emoji || '🧙‍♂️')
-      const usernameChanged = username !== (profile.username || '')
-      setHasChanges(avatarChanged || usernameChanged)
+      const avatarChanged = selectedAvatar !== (profile.avatarEmoji || '🧙‍♂️')
+      const nameChanged = name !== (profile.name || '')
+      setHasChanges(avatarChanged || nameChanged)
     }
-  }, [selectedAvatar, username, profile])
+  }, [selectedAvatar, name, profile])
 
-  const validateUsername = async (value: string): Promise<boolean> => {
+  const validateName = async (value: string): Promise<boolean> => {
     if (!value.trim()) {
-      setUsernameError('Username is required')
+      setNameError('Name is required')
       return false
     }
 
-    if (value.length < 3) {
-      setUsernameError('Username must be at least 3 characters')
+    if (value.length < 2) {
+      setNameError('Name must be at least 2 characters')
       return false
     }
 
-    if (value.length > 20) {
-      setUsernameError('Username must be 20 characters or less')
+    if (value.length > 50) {
+      setNameError('Name must be 50 characters or less')
       return false
     }
 
-    if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-      setUsernameError('Username can only contain letters, numbers, hyphens, and underscores')
-      return false
-    }
-
-    // Only check availability if username actually changed
-    if (profile && value !== profile.username) {
-      const available = await isUsernameAvailable(value)
-      if (!available) {
-        setUsernameError('This username is already taken')
-        return false
-      }
-    }
-
-    setUsernameError('')
+    setNameError('')
     return true
   }
 
   const handleSave = async () => {
     if (!user || !profile) return
 
-    const isValid = await validateUsername(username)
+    const isValid = await validateName(name)
     if (!isValid) return
 
     setIsLoading(true)
     try {
       await upsertUserProfile({
         id: user.id,
-        username: username.trim(),
-        avatar_emoji: selectedAvatar,
-        display_name: username.trim()
+        name: name.trim(),
+        avatarEmoji: selectedAvatar
       })
 
       await refreshProfile()
       onOpenChange(false)
       toast.success('Profile updated successfully!')
     } catch (error) {
-      console.error('Profile update error:', error)
-      toast.error('Failed to update profile')
+      console.error('Error updating profile:', error)
+      toast.error('Failed to update profile. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleCancel = () => {
-    if (profile) {
-      setSelectedAvatar(profile.avatar_emoji || '🧙‍♂️')
-      setUsername(profile.username || '')
-      setUsernameError('')
-      setHasChanges(false)
+  const handleNameChange = (value: string) => {
+    setName(value)
+    if (nameError && value.trim()) {
+      setNameError('')
     }
-    onOpenChange(false)
   }
 
-  if (!user || !profile) {
-    return null
-  }
+  if (!user || !profile) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={ds(componentStyles.glassCard, 'sm:max-w-md')}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className={ds(designSystem.text.heading, 'text-xl')}>
-            Edit Profile
-          </DialogTitle>
-          <DialogDescription className={designSystem.text.muted}>
-            Update your avatar and username
+          <DialogTitle>Edit Profile</DialogTitle>
+          <DialogDescription>
+            Update your display name and avatar
           </DialogDescription>
         </DialogHeader>
-
+        
         <div className="space-y-6">
           {/* Avatar Selection */}
-          <div className="space-y-2">
-            <Label className={designSystem.text.body}>Avatar</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button className={ds(
-                  componentStyles.buttonPrimary,
-                  'w-full justify-start'
-                )}>
-                  <span className="text-xl mr-3">{selectedAvatar}</span>
-                  Choose Avatar
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className={ds(
-                componentStyles.glassCard,
-                'w-80 p-4 max-h-96'
-              )}>
-                <div className="space-y-3">
-                  <h4 className={ds(designSystem.text.body, 'font-medium')}>Choose Avatar</h4>
-                  <div className="max-h-72 overflow-y-auto pr-2 -mr-2">
-                    <div className="grid grid-cols-8 gap-2">
-                      {AVATAR_EMOJIS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => setSelectedAvatar(emoji)}
-                          className={ds(
-                            componentStyles.avatarButton,
-                            selectedAvatar === emoji 
-                              ? ds(designSystem.accents.blue.subtle, designSystem.accents.blue.hover)
-                              : ds(designSystem.interactive.primary.base, designSystem.interactive.primary.hover)
-                          )}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
+          <div>
+            <Label className="text-sm font-medium">Avatar</Label>
+            <div className="mt-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start h-12"
+                  >
+                    <span className="text-2xl mr-3">{selectedAvatar}</span>
+                    Choose Avatar
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3">
+                  <div className="grid grid-cols-6 gap-2">
+                    {AVATAR_EMOJIS.map((emoji) => (
+                      <Button
+                        key={emoji}
+                        variant="ghost"
+                        className={`h-12 w-12 p-0 text-2xl hover:bg-muted ${
+                          selectedAvatar === emoji ? 'bg-primary/10 ring-2 ring-primary' : ''
+                        }`}
+                        onClick={() => setSelectedAvatar(emoji)}
+                      >
+                        {emoji}
+                      </Button>
+                    ))}
                   </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
-          {/* Username Input */}
-          <div className="space-y-2">
-            <Label className={designSystem.text.body}>Username</Label>
-            <div className="relative">
-              <Input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
-                className={ds(
-                  componentStyles.input,
-                  usernameError ? 'border-red-400/50 focus:border-red-400' : ''
-                )}
-                maxLength={20}
-                disabled={isLoading}
-              />
-              {isLoading && (
-                <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50 animate-spin" />
-              )}
-            </div>
-            {usernameError && (
-              <p className="text-red-400 text-sm">{usernameError}</p>
+          {/* Name Input */}
+          <div>
+            <Label htmlFor="name" className="text-sm font-medium">
+              Display Name
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="Enter your display name"
+              className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
+              disabled={isLoading}
+            />
+            {nameError && (
+              <p className="text-sm text-red-500 mt-1">{nameError}</p>
             )}
-            <p className={ds(designSystem.text.muted, 'text-xs')}>
-              3-20 characters, letters, numbers, hyphens, and underscores only
-            </p>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex space-x-3 pt-2">
+          <div className="flex gap-3 pt-4">
             <Button
-              onClick={handleCancel}
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="flex-1"
               disabled={isLoading}
-              className={ds(componentStyles.buttonPrimary, 'flex-1')}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isLoading || !hasChanges || !!usernameError || !username.trim()}
-              className={ds(componentStyles.buttonSecondary, 'flex-1')}
+              disabled={!hasChanges || isLoading || !!nameError}
+              className="flex-1"
             >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Save Changes
-                </>
-              )}
+              {isLoading && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </div>
         </div>

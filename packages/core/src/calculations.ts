@@ -1,7 +1,8 @@
 // Resource and scoring calculations for Settlers (Catan)
 // All functions use standard Settlers terminology
 
-import { ResourceCards, Player } from './types'
+import { ResourceCards, Player, GameState, PlayerId, ResourceType, Board, Building, Port, HexCoordinate, Edge } from './types'
+import { getEdgeVertices } from './engine/adjacency-helpers'
 
 // ============= Resource Management =============
 
@@ -234,4 +235,240 @@ export function hasAccessToPort(playerId: string, portType: 'generic' | string, 
   // TODO: Implement port access detection based on player settlements/cities
   // For now, return true for generic ports (3:1) which all players have access to via bank
   return portType === 'generic'
+} 
+
+// ============= Port Access Validation =============
+
+/**
+ * Check if a player has access to a specific port type and ratio
+ */
+export function hasPortAccess(
+  state: GameState, 
+  playerId: PlayerId, 
+  portType: 'generic' | ResourceType,
+  ratio: number
+): boolean {
+  const player = state.players.get(playerId)
+  if (!player) return false
+
+  // Get all player's settlements and cities
+  const playerBuildings = getPlayerBuildings(state, playerId)
+
+  // Check each building for adjacent port access
+  for (const building of playerBuildings) {
+    const adjacentPorts = getAdjacentPorts(state.board, building.vertexId)
+    for (const port of adjacentPorts) {
+      if (matchesPortRequirements(port, portType, ratio)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
+ * Get all buildings owned by a player
+ */
+function getPlayerBuildings(state: GameState, playerId: PlayerId): Array<{vertexId: string, building: Building}> {
+  const playerBuildings: Array<{vertexId: string, building: Building}> = []
+  
+  state.board.vertices.forEach((vertex, vertexId) => {
+    if (vertex.building && vertex.building.owner === playerId) {
+      playerBuildings.push({ vertexId, building: vertex.building })
+    }
+  })
+
+  return playerBuildings
+}
+
+/**
+ * Get all ports adjacent to a vertex (within 1 edge distance)
+ */
+function getAdjacentPorts(board: Board, vertexId: string): Port[] {
+  const adjacentPorts: Port[] = []
+  const vertex = board.vertices.get(vertexId)
+  if (!vertex) return adjacentPorts
+
+  // Ports are placed on sea edges adjacent to the coast
+  // A vertex has access to a port if:
+  // 1. The vertex is adjacent to a sea edge that contains a port
+  // 2. One of the vertex's adjacent vertices is adjacent to a port edge
+
+  // Get all edges connected to this vertex
+  const connectedEdges = getVertexConnectedEdges(board, vertexId)
+  
+  // Check if any connected edge leads to a port
+  for (const edge of connectedEdges) {
+    // Get the other vertex of this edge
+    const edgeVertices = getEdgeVertices(board, edge.id)
+    const otherVertexId = edgeVertices.find(vId => vId !== vertexId)
+    
+    if (otherVertexId) {
+      // Check if the other vertex is adjacent to any ports
+      const otherVertex = board.vertices.get(otherVertexId)
+      if (otherVertex) {
+        // Check all ports to see if they're accessible from the other vertex
+        for (const port of board.ports) {
+          if (isVertexAdjacentToPort(board, otherVertexId, port)) {
+            adjacentPorts.push(port)
+          }
+        }
+      }
+    }
+  }
+
+  // Remove duplicates
+  const uniquePorts = adjacentPorts.filter((port, index, self) => 
+    index === self.findIndex(p => p.id === port.id)
+  )
+
+  return uniquePorts
+}
+
+/**
+ * Get all edges connected to a vertex
+ */
+function getVertexConnectedEdges(board: Board, vertexId: string): Edge[] {
+  const connectedEdges: Edge[] = []
+  
+  board.edges.forEach((edge, edgeId) => {
+    const edgeVertices = getEdgeVertices(board, edgeId)
+    if (edgeVertices.includes(vertexId)) {
+      connectedEdges.push(edge)
+    }
+  })
+  
+  return connectedEdges
+}
+
+/**
+ * Check if a vertex is adjacent to a port (within trading distance)
+ */
+function isVertexAdjacentToPort(board: Board, vertexId: string, port: Port): boolean {
+  const vertex = board.vertices.get(vertexId)
+  if (!vertex) return false
+
+  // A vertex is adjacent to a port if it shares hex coordinates with the port's position
+  // Ports are positioned on sea edges, and vertices can access them if they're on the coast
+  
+  // Get the vertex's hex coordinates
+  const vertexHexes = vertex.position.hexes
+  
+  // Get the port's hex coordinates (ports are on sea edges)
+  const portHexes = port.position.hexes
+  
+  // Check if any of the vertex's hexes are adjacent to the port's hexes
+  for (const vertexHex of vertexHexes) {
+    for (const portHex of portHexes) {
+      // If they share the same hex or are adjacent hexes, the vertex has port access
+      if (hexesAreAdjacent(vertexHex, portHex) || hexesAreEqual(vertexHex, portHex)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
+ * Check if two hexes are adjacent (1 distance apart)
+ */
+function hexesAreAdjacent(hex1: HexCoordinate, hex2: HexCoordinate): boolean {
+  const dx = hex1.q - hex2.q
+  const dy = hex1.r - hex2.r
+  const dz = hex1.s - hex2.s
+  
+  // In cube coordinates, adjacent hexes have exactly one coordinate difference of ±1
+  // and the sum of absolute differences equals 2
+  return Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === 2
+}
+
+/**
+ * Check if two hexes are the same
+ */
+function hexesAreEqual(hex1: HexCoordinate, hex2: HexCoordinate): boolean {
+  return hex1.q === hex2.q && hex1.r === hex2.r && hex1.s === hex2.s
+}
+
+/**
+ * Check if a port matches the required type and ratio
+ */
+function matchesPortRequirements(
+  port: Port, 
+  requiredType: 'generic' | ResourceType, 
+  requiredRatio: number
+): boolean {
+  // Generic 3:1 ports work for any resource at 3:1 ratio
+  if (port.type === 'generic' && requiredRatio === 3 && requiredType !== 'generic') {
+    return true
+  }
+  
+  // Specific 2:1 ports work only for their resource at 2:1 ratio
+  if (port.type === requiredType && port.ratio === requiredRatio) {
+    return true
+  }
+  
+  return false
+}
+
+/**
+ * Get the best available port trade ratio for a resource
+ */
+export function getBestPortRatio(
+  state: GameState, 
+  playerId: PlayerId, 
+  resourceType: ResourceType
+): number {
+  // Check for 2:1 specific port first
+  if (hasPortAccess(state, playerId, resourceType, 2)) {
+    return 2
+  }
+  
+  // Check for 3:1 generic port
+  if (hasPortAccess(state, playerId, 'generic', 3)) {
+    return 3
+  }
+  
+  // Default to 4:1 bank trade
+  return 4
+}
+
+/**
+ * Get all available port trades for a player
+ */
+export function getAvailablePortTrades(state: GameState, playerId: PlayerId): Array<{
+  portType: 'generic' | ResourceType
+  ratio: number
+  resourcesCanTrade: ResourceType[]
+}> {
+  const availableTrades: Array<{
+    portType: 'generic' | ResourceType
+    ratio: number
+    resourcesCanTrade: ResourceType[]
+  }> = []
+
+  const resourceTypes: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'sheep']
+
+  // Check each resource type for specific 2:1 ports
+  for (const resourceType of resourceTypes) {
+    if (hasPortAccess(state, playerId, resourceType, 2)) {
+      availableTrades.push({
+        portType: resourceType,
+        ratio: 2,
+        resourcesCanTrade: [resourceType]
+      })
+    }
+  }
+
+  // Check for generic 3:1 port access
+  if (hasPortAccess(state, playerId, 'generic', 3)) {
+    availableTrades.push({
+      portType: 'generic',
+      ratio: 3,
+      resourcesCanTrade: resourceTypes
+    })
+  }
+
+  return availableTrades
 } 

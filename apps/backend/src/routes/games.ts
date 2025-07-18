@@ -2,8 +2,13 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { generateGameCode, isValidGameCodeFormat, normalizeGameCode } from '../utils/game-codes'
 import { eventStore } from '../db/event-store-repository'
+import { optionalAuthMiddleware } from '../middleware/auth'
+import { lobbyCommandService } from '../services/lobby-command-service'
 
 const app = new Hono()
+
+// Apply optional auth middleware to all game routes
+app.use('*', optionalAuthMiddleware)
 
 // Domain error types
 class GameCodeFormatError extends Error {
@@ -44,13 +49,14 @@ function handleDomainError(error: Error, c: any) {
 }
 
 /**
- * Create a new game using event sourcing
+ * Create a new game using event sourcing - supports both authenticated and guest users
  */
 app.post('/create', async (c) => {
   try {
     const body = await c.req.json()
-    const { hostPlayerName, hostAvatarEmoji, hostUserId } = body
+    const { hostPlayerName, hostAvatarEmoji, hostUserId, maxPlayers, allowObservers, isPublic } = body
 
+    // For guest users, hostUserId might not be provided
     if (!hostPlayerName) {
       throw new ValidationError('Missing required field: hostPlayerName')
     }
@@ -59,13 +65,30 @@ app.post('/create', async (c) => {
     const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const gameCode = generateGameCode()
 
+    // Get user info from middleware if authenticated
+    const user = c.get('user')
+    const userProfile = c.get('userProfile')
+    
+    // Use authenticated user info if available, otherwise use provided data
+          const finalHostUserId = user?.id || hostUserId || null
+      const finalHostPlayerName = userProfile?.name || hostPlayerName
+      const finalHostAvatarEmoji = userProfile?.avatarEmoji || hostAvatarEmoji || '🧙‍♂️'
+
+    console.log('Creating game:', {
+      gameId,
+      gameCode,
+      hostUserId: finalHostUserId,
+      hostPlayerName: finalHostPlayerName,
+      isGuest: !user
+    })
+
     // Create game using event store
     const result = await eventStore.createGame({
       id: gameId,
       gameCode,
-      hostUserId,
-      hostPlayerName,
-      hostAvatarEmoji
+      hostUserId: finalHostUserId,
+      hostPlayerName: finalHostPlayerName,
+      hostAvatarEmoji: finalHostAvatarEmoji
     })
 
     // Generate session URL for the host
@@ -77,7 +100,8 @@ app.post('/create', async (c) => {
         gameId,
         gameCode,
         hostPlayerId: result.hostPlayer.id,
-        sessionUrl
+        sessionUrl,
+        isGuest: !user
       }
     })
 
@@ -96,7 +120,7 @@ app.post('/create', async (c) => {
 })
 
 /**
- * Get game info by code
+ * Get game info by code - no auth required
  */
 app.get('/info/:gameCode', async (c) => {
   try {
@@ -150,15 +174,15 @@ app.get('/info/:gameCode', async (c) => {
 })
 
 /**
- * Join an existing game
+ * Join an existing game - supports both authenticated and guest users
  */
 app.post('/join', async (c) => {
   try {
     const body = await c.req.json()
     const { gameCode, playerName, avatarEmoji, userId } = body
 
-    if (!gameCode || !playerName || !userId) {
-      throw new ValidationError('Missing required fields: gameCode, playerName, userId')
+    if (!gameCode || !playerName) {
+      throw new ValidationError('Missing required fields: gameCode, playerName')
     }
 
     // Validate and normalize game code format
@@ -173,21 +197,47 @@ app.post('/join', async (c) => {
       throw new GameNotFoundError()
     }
 
-    // For now, we don't actually join via REST API
-    // Instead, we return the game info and let the WebSocket connection handle joining
-    // This ensures proper event ordering and real-time updates
+    // Get user info from middleware if authenticated
+    const user = c.get('user')
+    const userProfile = c.get('userProfile')
+    
+    // Use authenticated user info if available, otherwise use provided data
+    const finalUserId = user?.id || userId || null
+          const finalPlayerName = userProfile?.name || playerName
+      const finalAvatarEmoji = userProfile?.avatarEmoji || avatarEmoji || '🧙‍♂️'
 
-    return c.json({
-      success: true,
-      data: {
-        gameId: game.id,
-        gameCode: game.gameCode,
-        phase: game.currentPhase,
-        // Frontend should connect to WebSocket and send joinLobby message
-        websocketUrl: `/ws`,
-        joinInstructions: 'Connect to WebSocket and send joinLobby message'
-      }
+    console.log('Joining game:', {
+      gameCode: normalizedCode,
+      userId: finalUserId,
+      playerName: finalPlayerName,
+      isGuest: !user
     })
+
+    // Join game using lobby command service
+    const result = await lobbyCommandService.joinGame({
+      gameId: game.id,
+      userId: finalUserId,
+      playerName: finalPlayerName,
+      avatarEmoji: finalAvatarEmoji
+    })
+
+    if (!result.success) {
+      throw new ValidationError(result.error || 'Failed to join game')
+    }
+
+    // Generate session URL for the player
+    const sessionUrl = `/lobby/${game.id}?player=${result.playerId}`
+
+          return c.json({
+        success: true,
+        data: {
+          gameId: game.id,
+          gameCode: game.gameCode,
+          playerId: result.playerId,
+          sessionUrl,
+          isGuest: !user
+        }
+      })
 
   } catch (error) {
     // Handle domain errors with proper mapping

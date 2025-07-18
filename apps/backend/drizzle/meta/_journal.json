@@ -8,6 +8,27 @@
       "when": 1752808920092,
       "tag": "0000_illegal_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1752816865772,
+      "tag": "0001_neat_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752817375727,
+      "tag": "0002_smooth_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1752817815894,
+      "tag": "0003_easy_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }

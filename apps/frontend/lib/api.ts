@@ -60,7 +60,9 @@ export async function validatePlayerSession(sessionToken: string): Promise<Sessi
 }
 
 export async function createGame(gameData: {
-  hostUserId: string
+  hostPlayerName: string
+  hostAvatarEmoji: string
+  hostUserId?: string | null
   maxPlayers: number
   allowObservers: boolean
   isPublic: boolean

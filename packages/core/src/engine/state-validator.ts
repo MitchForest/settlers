@@ -368,8 +368,7 @@ export function canStealFrom(
   }
   
   // Check if target has buildings adjacent to robber hex
-  // (Simplified - would need proper adjacency check)
-  const hasAdjacentBuilding = true // TODO: Implement proper check
+  const hasAdjacentBuilding = playerHasBuildingAdjacentToRobber(state, targetId)
   
   if (!hasAdjacentBuilding) {
     return { isValid: false, reason: 'No valid targets to steal from' }
@@ -466,4 +465,38 @@ function countPlayerRoads(
     }
   })
   return count
+} 
+
+/**
+ * Check if a player has any buildings adjacent to the robber's current position
+ */
+function playerHasBuildingAdjacentToRobber(state: GameState, playerId: PlayerId): boolean {
+  if (!state.board.robberPosition) {
+    return false // No robber position set
+  }
+
+  // Get all vertices adjacent to the robber's hex
+  const adjacentVertices: string[] = []
+  
+  state.board.vertices.forEach((vertex, vertexId) => {
+    // Check if any of the vertex's hexes match the robber's position
+    for (const vertexHex of vertex.position.hexes) {
+      if (vertexHex.q === state.board.robberPosition!.q && 
+          vertexHex.r === state.board.robberPosition!.r && 
+          vertexHex.s === state.board.robberPosition!.s) {
+        adjacentVertices.push(vertexId)
+        break
+      }
+    }
+  })
+
+  // Check if any of these vertices have the player's buildings
+  for (const vertexId of adjacentVertices) {
+    const vertex = state.board.vertices.get(vertexId)
+    if (vertex && vertex.building && vertex.building.owner === playerId) {
+      return true
+    }
+  }
+
+  return false
 } 

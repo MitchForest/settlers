@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
-import { GameState, GameAction, PlayerId, Player } from '@settlers/core'
+import { GameState, GameAction, PlayerId, Player, LobbyPlayer } from '@settlers/core'
 import type { ReactFlowInstance } from 'reactflow'
 import { API_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
@@ -23,7 +23,7 @@ interface GameStore {
   lobbyState: 'idle' | 'creating' | 'joining' | 'waiting' | 'starting'
   gameCode: string | null
   isHost: boolean
-  lobbyPlayers: any[] // LobbyPlayer[] // Changed to any[] for now as LobbyPlayer type is removed
+  lobbyPlayers: LobbyPlayer[]
   
   // UI State
   placementMode: 'none' | 'settlement' | 'city' | 'road'

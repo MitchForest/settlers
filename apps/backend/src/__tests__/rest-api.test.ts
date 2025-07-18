@@ -3,6 +3,36 @@ import { server } from '../index'
 import { db } from '../db/index'
 import { userProfiles } from '../db/schema'
 
+// Add proper types for API responses
+interface APIResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+}
+
+interface CreateGameResponse {
+  gameId: string
+  gameCode: string
+  hostPlayerId: string
+  sessionUrl: string
+}
+
+interface GameInfoResponse {
+  gameId: string
+  gameCode: string
+  phase: string
+  isActive: boolean
+  eventCount: number
+  createdAt: string
+}
+
+interface JoinGameResponse {
+  gameCode: string
+  phase: string
+  websocketUrl: string
+  joinInstructions: string
+}
+
 // Set test environment
 process.env.NODE_ENV = 'test'
 
@@ -92,15 +122,15 @@ describe('REST API Tests', () => {
         body: JSON.stringify(gameData)
       })
 
-      const data = await response.json()
+      const data = await response.json() as APIResponse<CreateGameResponse>
 
       expect(response.ok).toBe(true)
       expect(data.success).toBe(true)
-      expect(data.data.gameId).toBeTruthy()
-      expect(data.data.gameCode).toBeTruthy()
-      expect(data.data.hostPlayerId).toBeTruthy()
-      expect(data.data.sessionUrl).toBeTruthy()
-      expect(data.data.gameCode).toMatch(/^[A-Z0-9]{6}$/)
+      expect(data.data?.gameId).toBeTruthy()
+      expect(data.data?.gameCode).toBeTruthy()
+      expect(data.data?.hostPlayerId).toBeTruthy()
+      expect(data.data?.sessionUrl).toBeTruthy()
+      expect(data.data?.gameCode).toMatch(/^[A-Z0-9]{6}$/)
     })
 
     it('should validate required fields for game creation', async () => {
@@ -117,7 +147,7 @@ describe('REST API Tests', () => {
         body: JSON.stringify(invalidGameData)
       })
 
-      const data = await response.json()
+      const data = await response.json() as APIResponse
 
       expect(response.status).toBe(400)
       expect(data.success).toBe(false)
@@ -165,12 +195,12 @@ describe('REST API Tests', () => {
         })
       ])
 
-      const data1 = await response1.json()
-      const data2 = await response2.json()
+      const data1 = await response1.json() as APIResponse<CreateGameResponse>
+      const data2 = await response2.json() as APIResponse<CreateGameResponse>
 
       expect(response1.ok).toBe(true)
       expect(response2.ok).toBe(true)
-      expect(data1.data.gameCode).not.toBe(data2.data.gameCode)
+      expect(data1.data?.gameCode).not.toBe(data2.data?.gameCode)
     })
   })
 
