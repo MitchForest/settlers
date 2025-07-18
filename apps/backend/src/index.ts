@@ -6,6 +6,9 @@ import { serve } from '@hono/node-server'
 
 // Import routes
 import gamesRouter from './routes/games'
+import { friendsRouter } from './routes/friends'
+import { invitesRouter } from './routes/invites'
+import { presenceRouter } from './routes/presence'
 
 // Import the new event-sourced WebSocket server
 import { server as webSocketServer } from './websocket/unified-server'
@@ -57,6 +60,9 @@ app.get('/health', (c) => {
 
 // API routes
 app.route('/api/games', gamesRouter)
+app.route('/api/friends', friendsRouter)
+app.route('/api/invites', invitesRouter)
+app.route('/api/presence', presenceRouter)
 
 // Test connection endpoint
 app.get('/api/test-connection', (c) => {

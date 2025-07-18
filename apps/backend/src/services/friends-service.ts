@@ -56,7 +56,7 @@ export class FriendsService {
   /**
    * Search for users by name or email
    */
-  async searchUsers(currentUserId: string, query: string, limit: number = 20): Promise<UserSearchResult[]> {
+  static async searchUsers(currentUserId: string, query: string, limit: number = 20): Promise<UserSearchResult[]> {
     const searchQuery = `%${query.toLowerCase()}%`
     
     // Get users matching search query
@@ -162,7 +162,7 @@ export class FriendsService {
   /**
    * Send a friend request
    */
-  async sendFriendRequest(
+  static async sendFriendRequest(
     fromUserId: string, 
     toUserId: string, 
     message?: string
@@ -235,7 +235,15 @@ export class FriendsService {
   /**
    * Respond to a friend request (accept/reject)
    */
-  async respondToFriendRequest(
+  static async acceptFriendRequest(requestId: string, userId: string) {
+    return this.respondToFriendRequest(requestId, userId, 'accepted')
+  }
+
+  static async rejectFriendRequest(requestId: string, userId: string) {
+    return this.respondToFriendRequest(requestId, userId, 'rejected')
+  }
+
+  static async respondToFriendRequest(
     requestId: string,
     userId: string,
     response: 'accepted' | 'rejected'
@@ -300,7 +308,12 @@ export class FriendsService {
   /**
    * Get pending friend requests for a user
    */
-  async getPendingRequests(userId: string): Promise<{
+  static async getFriendRequests(userId: string): Promise<FriendRequest[]> {
+    const result = await this.getPendingRequests(userId)
+    return result.received
+  }
+
+  static async getPendingRequests(userId: string): Promise<{
     sent: FriendRequest[]
     received: FriendRequest[]
   }> {
@@ -389,7 +402,11 @@ export class FriendsService {
   /**
    * Get user's friends list with presence
    */
-  async getFriendsList(userId: string): Promise<Friendship[]> {
+  static async getFriends(userId: string): Promise<Friendship[]> {
+    return this.getFriendsList(userId)
+  }
+
+  static async getFriendsList(userId: string): Promise<Friendship[]> {
     const friends = await db
       .select({
         friendshipId: friendships.id,
@@ -440,15 +457,16 @@ export class FriendsService {
   /**
    * Remove a friendship (unfriend)
    */
-  async removeFriend(userId: string, friendId: string): Promise<{ success: boolean; error?: string }> {
+  static async removeFriend(friendshipId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const result = await db
         .delete(friendships)
         .where(
-          or(
-            and(
-              eq(friendships.user1Id, userId < friendId ? userId : friendId),
-              eq(friendships.user2Id, userId < friendId ? friendId : userId)
+          and(
+            eq(friendships.id, friendshipId),
+            or(
+              eq(friendships.user1Id, userId),
+              eq(friendships.user2Id, userId)
             )
           )
         )
@@ -463,7 +481,7 @@ export class FriendsService {
   /**
    * Get friendship between two users
    */
-  private async getFriendship(user1Id: string, user2Id: string) {
+  private static async getFriendship(user1Id: string, user2Id: string) {
     const orderedUser1 = user1Id < user2Id ? user1Id : user2Id
     const orderedUser2 = user1Id < user2Id ? user2Id : user1Id
 
@@ -484,7 +502,7 @@ export class FriendsService {
   /**
    * Update friendship interaction time
    */
-  async updateLastInteraction(user1Id: string, user2Id: string): Promise<void> {
+  static async updateLastInteraction(user1Id: string, user2Id: string): Promise<void> {
     const orderedUser1 = user1Id < user2Id ? user1Id : user2Id
     const orderedUser2 = user1Id < user2Id ? user2Id : user1Id
 
