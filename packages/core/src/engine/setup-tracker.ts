@@ -1,13 +1,10 @@
-import { GameState, PlayerId, VertexPosition, EdgePosition } from '../types'
+import { GameState, PlayerId } from '../types'
 
 /**
  * Setup Phase Tracker
  * 
- * Handles the complexities of Settlers setup phase including:
- * - Tracking placement order (setup1 vs setup2)
- * - Managing reverse turn order in setup2  
- * - Ensuring roads connect to correct settlements
- * - Tracking resource collection from setup2 settlements
+ * Manages the complex setup phase logic for Settlers games.
+ * Handles both rounds of placement and turn order reversal.
  */
 
 export interface SetupPlacement {

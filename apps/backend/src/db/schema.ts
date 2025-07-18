@@ -1,6 +1,6 @@
-import { pgTable, unique, pgEnum, text, integer, uuid, boolean, json, timestamp, foreignKey, index, varchar, primaryKey, bigint, pgPolicy, check } from "drizzle-orm/pg-core"
+import { pgTable, unique, pgEnum, text, integer, uuid, boolean, json, timestamp, index, varchar, bigint, pgPolicy } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
-import { authenticatedRole, authUid } from "drizzle-orm/supabase"
+import { authenticatedRole } from "drizzle-orm/supabase"
 
 // **SEGREGATED EVENT TYPES FOR PROPER DOMAIN SEPARATION**
 

@@ -3,7 +3,7 @@
 
 export * from '../lobby-types'
 export * from './lobby-manager'
-export * from './lobby-serializer'
+// Note: lobby-serializer moved to apps/backend/src/infrastructure/persistence/
 
 // Re-export commonly used types for convenience
 export type {
@@ -18,9 +18,4 @@ export type {
 } from '../lobby-types'
 
 export { LobbyManager } from './lobby-manager'
-export {
-  serializeLobbyState,
-  deserializeLobbyState,
-  prepareLobbyForDB,
-  loadLobbyFromDB
-} from './lobby-serializer' 
+// Note: serialization functions moved to apps/backend/src/infrastructure/persistence/ 

@@ -1,6 +1,8 @@
 import { GameState, GameAction, PlayerId, Player, ResourceCards, ResourceType } from '../types'
 import { BUILDING_COSTS } from '../constants'
 import { hasResources } from '../calculations'
+import { canPlaceSettlement } from '../engine/state-validator'
+import { getEdgeVertices } from '../engine/adjacency-helpers'
 import { VictoryPathOptimizer, VictoryAnalysis, MultiTurnPlanner, MultiTurnPlan } from './victory-optimizer'
 
 // ===== GOAL SYSTEM INTERFACES =====
@@ -129,6 +131,15 @@ export class GoalManager {
       this.generateOptimalPathGoals(fastestPath)
     }
     
+    // CRITICAL FIX: Always generate settlement goals for expansion
+    this.generateSettlementGoals()
+    
+    // Always generate city goals to upgrade existing settlements
+    this.generateCityGoals()
+    
+    // Generate road goals to support expansion
+    this.generateRoadGoals()
+    
     // Resource goals based on victory path bottlenecks
     this.generateResourceGoalsFromBottlenecks(this.currentVictoryAnalysis.bottlenecks)
     
@@ -159,12 +170,32 @@ export class GoalManager {
       }
       
       this.goals.set(victoryGoal.id, victoryGoal)
+    } else {
+      // Always generate victory pursuit goals - not just when close
+      const victoryGoal: VictoryGoal = {
+        id: this.generateGoalId('victory-pursuit'),
+        type: 'victory',
+        priority: 90,
+        status: 'active',
+        createdTurn: this.gameState.turn,
+        targetCompletionTurn: this.gameState.turn + fastestPath.targetTurns - this.gameState.turn,
+        requirements: this.calculateVictoryRequirements(vpNeeded),
+        value: 80,
+        description: `Work toward ${fastestPath.description}`,
+        resourcesNeeded: fastestPath.remainingCost,
+        turnsToComplete: fastestPath.targetTurns - this.gameState.turn,
+        vpValue: vpNeeded
+      }
+      
+      this.goals.set(victoryGoal.id, victoryGoal)
     }
   }
   
   private generateOptimalPathGoals(fastestPath: any): void {
     // Generate goals for each step in the optimal victory path
-    for (let i = 0; i < Math.min(2, fastestPath.steps.length); i++) {
+    // FIXED: Generate more goals, not just 2
+    const maxGoals = Math.min(5, fastestPath.steps.length) // Up to 5 goals instead of 2
+    for (let i = 0; i < maxGoals; i++) {
       const step = fastestPath.steps[i]
       const goalId = this.generateGoalId(`path-step-${i}`)
       
@@ -247,7 +278,7 @@ export class GoalManager {
   }
 
   private generateCityGoals(): void {
-    const player = this.gameState.players.get(this.playerId)!
+    // const player = this.gameState.players.get(this.playerId)!
     
     // Find settlements that can be upgraded to cities
     const settlementVertices = this.findPlayerSettlements()
@@ -259,7 +290,7 @@ export class GoalManager {
       const cityGoal: Goal = {
         id: goalId,
         type: 'victory',
-        priority: 85,
+        priority: this.applyTurnBasedUrgency(85), // Apply urgency to city goals
         status: 'active',
         createdTurn: this.gameState.turn,
         targetCompletionTurn: this.gameState.turn + 5,
@@ -280,30 +311,113 @@ export class GoalManager {
     
     if (player.buildings.settlements <= 0) return // No settlements left
     
-    // Find good settlement locations (simplified)
+    // CRITICAL: Settlement building is key to victory - always consider it
     const expansionSpots = this.findExpansionOpportunities()
     
-    for (const spot of expansionSpots.slice(0, 2)) { // Limit to 2 expansion goals
+    // Generate settlement goals with high priority if player needs more VP
+    const currentVP = player.score.total
+    const vpGap = 10 - currentVP
+    
+    // Prioritize settlements when we need VP and have building capacity
+    let settlementPriority = vpGap > 6 ? 85 : 75 // High priority when far from victory
+    
+    // AGGRESSIVE ENDGAME: Add turn-based urgency multiplier
+    settlementPriority = this.applyTurnBasedUrgency(settlementPriority)
+    
+    for (const spot of expansionSpots.slice(0, 3)) { // Up to 3 expansion goals
       const goalId = this.generateGoalId(`settlement-${spot}`)
       if (this.goals.has(goalId)) continue
       
       const settlementGoal: Goal = {
         id: goalId,
-        type: 'strategic',
-        priority: 70,
+        type: 'victory', // Make it victory type for higher priority
+        priority: settlementPriority,
         status: 'active',
         createdTurn: this.gameState.turn,
-        targetCompletionTurn: this.gameState.turn + 4,
+        targetCompletionTurn: this.gameState.turn + 6,
         requirements: [{
           resources: BUILDING_COSTS.settlement,
           position: { type: 'specific', locations: [spot] }
         }],
-        value: 15, // 1 VP + expansion
+        value: 20, // 1 VP + future city potential (2 VP) = 3 VP total value
         description: `Build settlement at ${spot}`
       }
       
       this.goals.set(settlementGoal.id, settlementGoal)
     }
+    
+    console.log(`🎯 Generated ${expansionSpots.length > 0 ? Math.min(3, expansionSpots.length) : 0} settlement goals for AI (${expansionSpots.length} valid spots found)`)
+  }
+
+  private generateRoadGoals(): void {
+    const player = this.gameState.players.get(this.playerId)!
+    
+    if (player.buildings.roads <= 0) return // No roads left
+    
+    // Find strategic road placements for expansion
+    const strategicRoads = this.findStrategicRoadPlacements()
+    
+    for (const roadSpot of strategicRoads.slice(0, 2)) { // Limit to 2 road goals
+      const goalId = this.generateGoalId(`road-${roadSpot}`)
+      if (this.goals.has(goalId)) continue
+      
+      const roadGoal: Goal = {
+        id: goalId,
+        type: 'tactical',
+        priority: 70, // Medium priority - supports other goals
+        status: 'active',
+        createdTurn: this.gameState.turn,
+        targetCompletionTurn: this.gameState.turn + 3,
+        requirements: [{
+          resources: BUILDING_COSTS.road,
+          position: { type: 'specific', locations: [roadSpot] }
+        }],
+        value: 10, // Enables settlement building (high strategic value)
+        description: `Build road at ${roadSpot}`
+      }
+      
+      this.goals.set(roadGoal.id, roadGoal)
+    }
+    
+    console.log(`🛣️ Generated ${strategicRoads.length > 0 ? Math.min(2, strategicRoads.length) : 0} road goals for AI`)
+  }
+  
+  private findStrategicRoadPlacements(): string[] {
+    const strategicRoads: string[] = []
+    
+    // Find roads that would enable settlement placement
+    for (const [edgeId, edge] of this.gameState.board.edges) {
+      // Skip if edge is already occupied
+      if (edge.connection) continue
+      
+      // Check if this road would connect to our existing network
+      const vertices = getEdgeVertices(this.gameState.board, edgeId)
+      let connectsToOurNetwork = false
+      let enablesSettlement = false
+      
+      for (const vertexId of vertices) {
+        // Check if this vertex is connected to our road network
+        if (this.hasRoadConnection(vertexId, this.playerId)) {
+          connectsToOurNetwork = true
+        }
+        
+        // Check if the other vertex could be a good settlement spot
+        const otherVertices = vertices.filter(v => v !== vertexId)
+        for (const otherVertex of otherVertices) {
+          const vertex = this.gameState.board.vertices.get(otherVertex)
+          if (vertex && !vertex.building && !this.hasNearbySettlement(otherVertex)) {
+            enablesSettlement = true
+          }
+        }
+      }
+      
+      // This road is strategic if it connects to our network and enables settlement
+      if (connectsToOurNetwork && enablesSettlement) {
+        strategicRoads.push(edgeId)
+      }
+    }
+    
+    return strategicRoads.slice(0, 5) // Limit to avoid performance issues
   }
 
   private generateStrategicGoals(): void {
@@ -358,7 +472,7 @@ export class GoalManager {
     const player = this.gameState.players.get(this.playerId)!
     
     // Boost priorities based on game state
-    for (const [goalId, goal] of this.goals) {
+    for (const [, goal] of this.goals) {
       if (goal.status !== 'active') continue
       
       // Boost victory goals when close to winning
@@ -392,13 +506,93 @@ export class GoalManager {
   // ===== HELPER METHODS =====
 
   private isGoalCompleted(goal: Goal): boolean {
-    // Simplified completion check - would need full game state analysis
+    // Check if goal is completed based on actual game state
+    
+    // City building goals
+    if (goal.description.includes('Build city at')) {
+      const vertexId = goal.description.split('Build city at ')[1]
+      const vertex = this.gameState.board.vertices.get(vertexId)
+      
+      // Goal is completed if the vertex now has a city owned by this player
+      if (vertex?.building?.owner === this.playerId && vertex.building.type === 'city') {
+        console.log(`✅ Goal completed: ${goal.description}`)
+        return true
+      }
+      
+      // Goal is impossible if the vertex no longer has a settlement
+      if (!vertex?.building || vertex.building.type !== 'settlement' || vertex.building.owner !== this.playerId) {
+        console.log(`❌ Goal impossible: ${goal.description} - no settlement found`)
+        return false
+      }
+    }
+    
+    // Settlement building goals
+    if (goal.description.includes('Build settlement at')) {
+      const vertexId = goal.description.split('Build settlement at ')[1]
+      const vertex = this.gameState.board.vertices.get(vertexId)
+      
+      // Goal is completed if the vertex now has a settlement owned by this player
+      if (vertex?.building?.owner === this.playerId && vertex.building.type === 'settlement') {
+        console.log(`✅ Goal completed: ${goal.description}`)
+        return true
+      }
+    }
+    
+    // Strategic goals (simplified)
+    if (goal.description.includes('largest army')) {
+      const player = this.gameState.players.get(this.playerId)!
+      if (player.hasLargestArmy) {
+        console.log(`✅ Goal completed: ${goal.description}`)
+        return true
+      }
+    }
+    
+    if (goal.description.includes('longest road')) {
+      const player = this.gameState.players.get(this.playerId)!
+      if (player.hasLongestRoad) {
+        console.log(`✅ Goal completed: ${goal.description}`)
+        return true
+      }
+    }
+    
     return false
   }
 
   private isGoalFeasible(goal: Goal): boolean {
     // Check if goal can still be achieved given current game state
-    return true // Simplified
+    
+    // City building goals
+    if (goal.description.includes('Build city at')) {
+      const vertexId = goal.description.split('Build city at ')[1]
+      const vertex = this.gameState.board.vertices.get(vertexId)
+      
+      // Goal is feasible only if the vertex has a settlement owned by this player
+      if (vertex?.building?.owner === this.playerId && vertex.building.type === 'settlement') {
+        const player = this.gameState.players.get(this.playerId)!
+        // Also check if player has cities available
+        return player.buildings.cities > 0
+      }
+      
+      // Goal is not feasible if no settlement or wrong owner
+      return false
+    }
+    
+    // Settlement building goals
+    if (goal.description.includes('Build settlement at')) {
+      const vertexId = goal.description.split('Build settlement at ')[1]
+      const vertex = this.gameState.board.vertices.get(vertexId)
+      
+      // Goal is feasible if the vertex is empty and player has settlements
+      if (!vertex?.building) {
+        const player = this.gameState.players.get(this.playerId)!
+        return player.buildings.settlements > 0
+      }
+      
+      return false
+    }
+    
+    // Strategic goals are generally feasible
+    return true
   }
 
   private isCloseToCompletion(goal: Goal): boolean {
@@ -474,8 +668,135 @@ export class GoalManager {
   }
 
   private findExpansionOpportunities(): string[] {
-    // Simplified - return some mock expansion spots
-    return ['expansion1', 'expansion2', 'expansion3']
+    // Find actual valid settlement locations on the game board
+    const validSpots: string[] = []
+    const potentialSpots: string[] = [] // Spots that would be valid with road building
+    
+    for (const [vertexId, vertex] of this.gameState.board.vertices) {
+      // Skip if already occupied
+      if (vertex.building) continue
+      
+      // Check distance rule - no settlements within 1 edge
+      const hasNearbySettlement = this.hasNearbySettlement(vertexId)
+      if (hasNearbySettlement) continue
+      
+      // For main game phase, check road connectivity
+      if (this.gameState.phase === 'actions') {
+        const hasRoadConnection = this.hasRoadConnection(vertexId, this.playerId)
+        if (hasRoadConnection) {
+          validSpots.push(vertexId) // Can build immediately
+        } else {
+          const canBuildRoadTo = this.canBuildRoadTo(vertexId)
+          if (canBuildRoadTo) {
+            potentialSpots.push(vertexId) // Can build with road first
+          }
+        }
+      } else {
+        // Setup phase - all spots are valid
+        validSpots.push(vertexId)
+      }
+    }
+    
+    // Include some potential spots that require road building
+    const allSpots = [...validSpots, ...potentialSpots.slice(0, 3)]
+    
+    console.log(`🔍 EXPANSION ANALYSIS: ${validSpots.length} immediate spots, ${potentialSpots.length} potential spots (with roads)`)
+    console.log(`📍 Immediate spots: [${validSpots.slice(0, 5).join(', ')}]`)
+    console.log(`🛤️ Potential spots: [${potentialSpots.slice(0, 5).join(', ')}]`)
+    
+    if (validSpots.length === 0 && potentialSpots.length === 0) {
+      console.log(`🚨 CRITICAL: No expansion opportunities found - AI may be blocked!`)
+    }
+    
+    return allSpots.slice(0, 10) // Limit to avoid performance issues
+  }
+
+  private hasNearbySettlement(vertexId: string): boolean {
+    // FIXED: Use game engine validation instead of custom distance checks
+    // This ensures we follow the exact same rules as the game engine
+    try {
+      const result = canPlaceSettlement(this.gameState, this.playerId, vertexId)
+      if (!result.isValid && result.reason?.includes('distance')) {
+        console.log(`🚫 Settlement blocked at ${vertexId}: ${result.reason}`)
+        return true
+      }
+      console.log(`✅ Settlement allowed at ${vertexId}: passed game engine validation`)
+      return false
+    } catch (error) {
+      console.log(`⚠️ Settlement validation error at ${vertexId}: ${error}`)
+      return true // Assume blocked on error
+    }
+  }
+  
+  private hasRoadConnection(vertexId: string, playerId: PlayerId): boolean {
+    // For setup phase, always allow placement
+    if (this.gameState.phase.startsWith('setup')) return true
+    
+    // Check if player has a road connected to this vertex
+    for (const [edgeId, edge] of this.gameState.board.edges) {
+      if (!edge.connection) continue
+      if (edge.connection.owner !== playerId) continue
+      
+      // Check if this edge connects to the target vertex
+      const edgeVertices = getEdgeVertices(this.gameState.board, edgeId)
+      if (edgeVertices.includes(vertexId)) return true
+    }
+    
+    return false
+  }
+  
+  private canBuildRoadTo(vertexId: string): boolean {
+    // Check if we can build a road chain (up to 2 roads) that would connect to this vertex
+    // This allows for more strategic expansion planning
+    
+    // First check: direct connection (1 road)
+    for (const [edgeId, edge] of this.gameState.board.edges) {
+      // Skip if edge is already occupied
+      if (edge.connection) continue
+      
+      // Check if this edge connects to our target vertex
+      const edgeVertices = getEdgeVertices(this.gameState.board, edgeId)
+      const connectsToTarget = edgeVertices.includes(vertexId)
+      if (!connectsToTarget) continue
+      
+      // Check if the other vertex of this edge is connected to our road network
+      const otherVertices = edgeVertices.filter(v => v !== vertexId)
+      for (const otherVertex of otherVertices) {
+        if (this.hasRoadConnection(otherVertex, this.playerId)) {
+          return true // We can build a road on this edge to connect
+        }
+      }
+    }
+    
+    // Second check: 2-road chain (more ambitious expansion)
+    for (const [edgeId1, edge1] of this.gameState.board.edges) {
+      if (edge1.connection) continue
+      
+      const edge1Vertices = getEdgeVertices(this.gameState.board, edgeId1)
+      const connectsToTarget = edge1Vertices.includes(vertexId)
+      if (!connectsToTarget) continue
+      
+      const otherVertices1 = edge1Vertices.filter(v => v !== vertexId)
+      for (const intermediateVertex of otherVertices1) {
+        // Check if we can connect to the intermediate vertex with another road
+        for (const [edgeId2, edge2] of this.gameState.board.edges) {
+          if (edge2.connection || edgeId2 === edgeId1) continue
+          
+          const edge2Vertices = getEdgeVertices(this.gameState.board, edgeId2)
+          const connectsToIntermediate = edge2Vertices.includes(intermediateVertex)
+          if (!connectsToIntermediate) continue
+          
+          const otherVertices2 = edge2Vertices.filter(v => v !== intermediateVertex)
+          for (const networkVertex of otherVertices2) {
+            if (this.hasRoadConnection(networkVertex, this.playerId)) {
+              return true // We can build 2 roads to connect
+            }
+          }
+        }
+      }
+    }
+    
+    return false
   }
 
   private analyzeResourceDeficits(player: Player): Record<string, number> {
@@ -508,6 +829,24 @@ export class GoalManager {
 
   private generateGoalId(prefix: string): string {
     return `${prefix}-${this.goalIdCounter++}`
+  }
+  
+  private applyTurnBasedUrgency(basePriority: number): number {
+    const currentTurn = this.gameState.turn
+    let urgencyMultiplier = 1.0
+    
+    if (currentTurn > 80) urgencyMultiplier = 2.0      // CRITICAL: Game going too long
+    else if (currentTurn > 60) urgencyMultiplier = 1.8 // URGENT: Speed up significantly  
+    else if (currentTurn > 40) urgencyMultiplier = 1.5 // FASTER: Increase aggression
+    else if (currentTurn > 20) urgencyMultiplier = 1.2 // MODERATE: Slight speed increase
+    
+    const adjustedPriority = Math.min(100, basePriority * urgencyMultiplier)
+    
+    if (urgencyMultiplier > 1.0) {
+      console.log(`⏰ Turn ${currentTurn}: Urgency boost ${urgencyMultiplier}x - Priority ${basePriority} → ${adjustedPriority}`)
+    }
+    
+    return adjustedPriority
   }
 
   // ===== PUBLIC API =====
@@ -560,8 +899,7 @@ export class ResourceManager {
 
   shouldSaveResources(
     currentResources: ResourceCards,
-    goal: Goal | null,
-    state: GameState
+    goal: Goal | null
   ): boolean {
     if (!goal) return false
     
@@ -601,7 +939,7 @@ export class ResourceManager {
     return deficit
   }
 
-  private estimateTurnsToResources(needed: ResourceCards, state: GameState): number {
+  private estimateTurnsToResources(needed: ResourceCards): number {
     // Simplified estimation - assume we get 1-2 resources per turn
     const totalNeeded = Object.values(needed).reduce((sum, val) => sum + val, 0)
     return Math.ceil(totalNeeded / 1.5)
@@ -631,8 +969,7 @@ export class TurnPlanner {
     const saveResources = primaryGoal ? 
       this.resourceManager.shouldSaveResources(
         player.resources, 
-        primaryGoal, 
-        state
+        primaryGoal
       ) : false
     
     // 4. Generate action plan

@@ -64,7 +64,7 @@ export class AvailableGamesService {
       const allGames = await this.getAllActiveGames()
       
       // Filter games based on criteria
-      let filteredGames = allGames.filter(game => {
+      const filteredGames = allGames.filter(game => {
         // Only show lobby and initial_placement games (joinable)
         if (phase && game.phase !== phase) return false
         if (game.phase === 'main_game' || game.phase === 'ended') return false
@@ -84,7 +84,7 @@ export class AvailableGamesService {
         return true
       })
 
-      let friendsGames: GameInfo[] = []
+      const friendsGames: GameInfo[] = []
       let publicGames: GameInfo[] = []
 
       // Add friend data if user is authenticated

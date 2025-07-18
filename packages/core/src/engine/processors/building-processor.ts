@@ -36,6 +36,15 @@ export class BuildingProcessor extends BaseActionProcessor<BuildingAction> {
     const player = state.players.get(action.playerId)!
     const events = []
     
+    // Debug logging for building placement
+    const vertex = state.board.vertices.get(vertexId)
+    if (buildingType === 'city' && vertex?.building) {
+      console.log(`🏗️ Upgrading settlement to city at ${vertexId} for player ${action.playerId}`)
+      console.log(`  Before: building=${vertex.building.type}, owner=${vertex.building.owner}`)
+    } else if (buildingType === 'settlement') {
+      console.log(`🏡 Placing new settlement at ${vertexId} for player ${action.playerId}`)
+    }
+    
     let newState = { ...state }
     const newPlayer = { ...player }
     
@@ -46,30 +55,41 @@ export class BuildingProcessor extends BaseActionProcessor<BuildingAction> {
     }
     
     // Update building inventory and score
+    const vpBefore = newPlayer.score.total
     if (buildingType === 'settlement') {
       newPlayer.buildings.settlements -= 1
       newPlayer.score = {
         ...newPlayer.score,
         public: newPlayer.score.public + VICTORY_POINTS.settlement
       }
+      console.log(`🏆 VP CHANGE: ${action.playerId} ${vpBefore} → ${vpBefore + VICTORY_POINTS.settlement} (+${VICTORY_POINTS.settlement}) - settlement built`)
     } else if (buildingType === 'city') {
       newPlayer.buildings.cities -= 1
       newPlayer.buildings.settlements += 1 // Return settlement to inventory
+      // FIXED: Only add net +1 VP for settlement→city upgrade
+      // City = 2 VP, Settlement = 1 VP, Net gain = 1 VP
+      const vpGain = VICTORY_POINTS.city - VICTORY_POINTS.settlement
       newPlayer.score = {
         ...newPlayer.score,
-        public: newPlayer.score.public + VICTORY_POINTS.city
+        public: newPlayer.score.public + vpGain
+      }
+      console.log(`🏆 VP CHANGE: ${action.playerId} ${vpBefore} → ${vpBefore + vpGain} (+${vpGain}) - settlement upgraded to city`)
+      
+      // Validate VP change makes sense
+      if (vpGain !== 1) {
+        console.error(`🚨 VP BUG: Expected +1 VP for city upgrade, got +${vpGain}`)
       }
     }
     
     newPlayer.score.total = newPlayer.score.public + newPlayer.score.hidden
     
     // Place building on board
-    const vertex = newState.board.vertices.get(vertexId)
-    if (vertex) {
-      vertex.building = {
+    const targetVertex = newState.board.vertices.get(vertexId)
+    if (targetVertex) {
+      targetVertex.building = {
         type: buildingType,
         owner: action.playerId,
-        position: vertex.position
+        position: targetVertex.position
       }
     }
     
@@ -147,14 +167,36 @@ export class BuildingProcessor extends BaseActionProcessor<BuildingAction> {
       })
     }
     
-    // Check if upgrading settlement to city
+    // SENIOR ARCHITECT FIX: Enhanced city upgrade validation with comprehensive logging
     if (buildingType === 'city') {
-      if (!vertex.building || vertex.building.owner !== action.playerId || vertex.building.type !== 'settlement') {
+      console.log(`🔍 VALIDATION: City upgrade attempt at ${vertexId} by ${action.playerId}`)
+      
+      if (!vertex.building) {
+        console.error(`🚨 VALIDATION FAILED: No building exists at ${vertexId}`)
+        errors.push({
+          field: 'building',
+          message: 'No building exists at this position to upgrade',
+          code: 'NO_BUILDING_TO_UPGRADE'
+        })
+      } else if (vertex.building.type !== 'settlement') {
+        console.error(`🚨 VALIDATION FAILED: Attempted to upgrade ${vertex.building.type} to city at ${vertexId}`)
+        console.error(`   Building owner: ${vertex.building.owner}`)
+        console.error(`   Requesting player: ${action.playerId}`)
+        console.error(`   This indicates a critical bug - buildings can only be upgraded once!`)
+        errors.push({
+          field: 'building',
+          message: `Cannot upgrade ${vertex.building.type} to city - only settlements can be upgraded`,
+          code: 'INVALID_BUILDING_TYPE'
+        })
+      } else if (vertex.building.owner !== action.playerId) {
+        console.error(`🚨 VALIDATION FAILED: Player ${action.playerId} tried to upgrade building owned by ${vertex.building.owner}`)
         errors.push({
           field: 'building',
           message: 'Can only upgrade your own settlements to cities',
-          code: 'INVALID_CITY_UPGRADE'
+          code: 'NOT_YOUR_BUILDING'
         })
+      } else {
+        console.log(`✅ VALIDATION PASSED: Valid settlement found at ${vertexId} for city upgrade`)
       }
     } else {
       // Placing new settlement

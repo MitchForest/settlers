@@ -5,8 +5,9 @@ import { GameState, GameAction, PlayerId, Player, LobbyPlayer } from '@settlers/
 import type { ReactFlowInstance } from 'reactflow'
 import { API_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { ReliableWebSocketManager, ConnectionStatus } from '../lib/websocket-manager'
 
-interface GameStore {
+export interface GameStore {
   // Core State
   gameState: GameState | null
   localPlayerId: PlayerId | null
@@ -16,8 +17,8 @@ interface GameStore {
   setFlowInstance: (instance: ReactFlowInstance) => void
   
   // WebSocket
-  ws: WebSocket | null
-  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error'
+  wsManager: ReliableWebSocketManager | null
+  connectionStatus: ConnectionStatus
   
   // Lobby State
   lobbyState: 'idle' | 'creating' | 'joining' | 'waiting' | 'starting'
@@ -71,7 +72,7 @@ export const useGameStore = create<GameStore>()(
       gameState: null,
       localPlayerId: null,
       flowInstance: null,
-      ws: null,
+      wsManager: null,
       connectionStatus: 'disconnected',
       
       // Lobby state
@@ -97,94 +98,86 @@ export const useGameStore = create<GameStore>()(
       
       connect: async (gameId, playerId) => {
         // Close existing connection if any
-        const existingWs = get().ws
-        if (existingWs) {
-          existingWs.close()
+        const existingWsManager = get().wsManager
+        if (existingWsManager) {
+          existingWsManager.disconnect()
         }
 
         // Store player ID for this game
         localStorage.setItem(`playerId_${gameId}`, playerId)
 
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
-        const ws = new WebSocket(`${wsUrl}/ws?gameId=${gameId}&playerId=${playerId}`)
+        const wsManager = new ReliableWebSocketManager({
+          url: `${wsUrl}/ws?gameId=${gameId}&playerId=${playerId}`,
+          reconnectInterval: 2000,
+          maxReconnectAttempts: 10,
+          heartbeatInterval: 30000,
+          enableMessageQueue: true
+        })
         
-        ws.onopen = () => {
-          console.log('🔌 WebSocket connected to game:', gameId)
-          set({ connectionStatus: 'connected', ws, localPlayerId: playerId })
+        // Set up event handlers
+        wsManager.on('onopen', () => {
+          console.log('🔌 ReliableWebSocket connected to game:', gameId)
+          set({ localPlayerId: playerId })
           
           // Send join game message
-          ws.send(JSON.stringify({ 
+          wsManager.send({ 
             type: 'joinGame', 
-            gameId, 
-            playerId 
-          }))
-        }
+            data: { gameId, playerId }
+          })
+        })
         
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            console.log('📨 WebSocket message received:', data.type)
-            
-            switch (data.type) {
-              case 'gameStateUpdate':
-                if (data.gameState) {
-                  get().updateGameState(data.gameState)
-                }
-                break
-              case 'actionSuccess':
-                console.log('✅ Action successful:', data.action)
-                break
-              case 'error':
-                console.error('❌ Server error:', data.error)
-                // Don't show toast here as the game page will handle it
-                break
-              default:
-                console.log('📨 Unhandled message type:', data.type)
-            }
-          } catch (error) {
-            console.error('❌ Failed to parse WebSocket message:', error, event.data)
-          }
-        }
-        
-        ws.onerror = (error) => {
-          console.error('❌ WebSocket error:', error)
-          set({ connectionStatus: 'error' })
-        }
-        
-        ws.onclose = (event) => {
-          console.log('🔌 WebSocket closed:', event.code, event.reason)
-          set({ connectionStatus: 'disconnected', ws: null })
+        wsManager.on('onmessage', (message) => {
+          console.log('📨 WebSocket message received:', message.type)
           
-          // Auto-reconnect after 5 seconds if not a clean close
-          if (event.code !== 1000 && event.code !== 1001) {
-            console.log('🔄 Attempting to reconnect in 5 seconds...')
-            setTimeout(() => {
-              if (get().connectionStatus === 'disconnected') {
-                get().connect(gameId, playerId)
+          switch (message.type) {
+            case 'gameStateUpdate':
+              if (message.data && typeof message.data === 'object' && 'gameState' in message.data) {
+                get().updateGameState((message.data as { gameState: GameState }).gameState)
               }
-            }, 5000)
+              break
+            case 'actionSuccess':
+              if (message.data && typeof message.data === 'object' && 'action' in message.data) {
+                console.log('✅ Action successful:', (message.data as { action: unknown }).action)
+              }
+              break
+            case 'error':
+              if (message.data && typeof message.data === 'object' && 'error' in message.data) {
+                console.error('❌ Server error:', (message.data as { error: unknown }).error)
+              }
+              break
+            default:
+              console.log('📨 Unhandled message type:', message.type)
           }
-        }
+        })
         
-        set({ ws, connectionStatus: 'connecting', localPlayerId: playerId })
+        wsManager.on('onerror', (error) => {
+          console.error('❌ WebSocket error:', error)
+        })
+        
+        wsManager.on('onstatuschange', (status) => {
+          set({ connectionStatus: status })
+        })
+        
+        set({ wsManager, connectionStatus: 'connecting', localPlayerId: playerId })
+        wsManager.connect()
       },
       
       disconnect: () => {
-        const ws = get().ws
-        if (ws) {
-          ws.close()
-          set({ ws: null, connectionStatus: 'disconnected' })
+        const wsManager = get().wsManager
+        if (wsManager) {
+          wsManager.disconnect()
+          set({ wsManager: null, connectionStatus: 'disconnected' })
         }
       },
       
       sendAction: (action) => {
-        const ws = get().ws
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        const wsManager = get().wsManager
+        if (wsManager) {
           try {
-            ws.send(JSON.stringify({ type: 'action', action }))
+            wsManager.send({ type: 'action', data: { action } })
           } catch (error) {
             console.error('❌ Failed to send action:', error)
-            set({ connectionStatus: 'error' })
           }
         } else {
           console.warn('⚠️ Cannot send action: WebSocket not connected')
@@ -286,10 +279,10 @@ export const useGameStore = create<GameStore>()(
 
       connectToLobby: (gameId, playerId) => {
         // Close existing WebSocket connection first
-        const existingWs = get().ws
-        if (existingWs) {
+        const existingWsManager = get().wsManager
+        if (existingWsManager) {
           console.log('🔌 Closing existing WebSocket connection')
-          existingWs.close()
+          existingWsManager.disconnect()
         }
 
         // Set the player ID immediately to prevent redirects
@@ -297,7 +290,7 @@ export const useGameStore = create<GameStore>()(
           localPlayerId: playerId,
           connectionStatus: 'connecting',
           lobbyState: 'joining',
-          ws: null // Clear old connection
+          wsManager: null // Clear old connection
         })
         
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
@@ -392,7 +385,7 @@ export const useGameStore = create<GameStore>()(
           if (currentStatus !== 'error') {
             set({ 
               connectionStatus: 'disconnected', 
-              ws: null,
+              wsManager: null,
               lobbyState: 'idle'
             })
           }
@@ -411,7 +404,7 @@ export const useGameStore = create<GameStore>()(
           }
         }
         
-        set({ ws, connectionStatus: 'connecting' })
+        set({ connectionStatus: 'connecting' })
       },
 
       startGame: async (gameId) => {
@@ -438,28 +431,25 @@ export const useGameStore = create<GameStore>()(
       },
 
       addAIBot: async (gameId, difficulty, personality) => {
-        const { ws, isHost } = get()
+        const { wsManager, isHost } = get()
         if (!isHost) throw new Error('Only host can add AI bots')
-        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not connected')
+        if (!wsManager) throw new Error('WebSocket not connected')
         
-        ws.send(JSON.stringify({
+        wsManager.send({
           type: 'addAIBot',
-          gameId,
-          difficulty,
-          personality
-        }))
+          data: { gameId, difficulty, personality }
+        })
       },
 
       removeAIBot: async (gameId, botPlayerId) => {
-        const { ws, isHost } = get()
+        const { wsManager, isHost } = get()
         if (!isHost) throw new Error('Only host can remove AI bots')
-        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not connected')
+        if (!wsManager) throw new Error('WebSocket not connected')
         
-        ws.send(JSON.stringify({
+        wsManager.send({
           type: 'removeAIBot',
-          gameId,
-          botPlayerId
-        }))
+          data: { gameId, botPlayerId }
+        })
       },
       
       setPlacementMode: (mode) => set({ placementMode: mode }),

@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Check, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { upsertUserProfile } from '@/lib/supabase'
 import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
-import { componentStyles, designSystem, ds } from '@/lib/design-system'
+// Removed unused imports: componentStyles, designSystem, ds
 import { toast } from 'sonner'
 
 interface EditProfileDialogProps {

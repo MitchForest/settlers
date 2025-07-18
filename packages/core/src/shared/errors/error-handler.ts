@@ -3,7 +3,7 @@
 
 import { DomainError, Result } from './domain-error'
 import { ErrorLogger } from './error-logger'
-import { SystemError, ValidationError } from './system-errors'
+import { SystemError, ValidationError, GenericSystemError } from './system-errors'
 
 /**
  * Centralized error handler with recovery strategies
@@ -121,14 +121,14 @@ export class ErrorHandler {
     }
     
     if (error instanceof Error) {
-      return new SystemError(error.message, {
+      return new GenericSystemError(error.message, {
         originalError: error.name,
         stack: error.stack,
         ...context
       })
     }
     
-    return new SystemError(
+    return new GenericSystemError(
       `Unknown error: ${String(error)}`,
       {
         originalError: error,

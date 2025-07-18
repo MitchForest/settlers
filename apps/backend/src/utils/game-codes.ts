@@ -61,10 +61,10 @@ export function isValidGameCodeFormat(code: string): boolean {
 }
 
 /**
- * Normalize game code (uppercase, trim)
+ * Normalize game code (uppercase, trim, remove spaces)
  */
 export function normalizeGameCode(code: string): string {
-  return code.trim().toUpperCase()
+  return code.trim().replace(/\s+/g, '').toUpperCase()
 }
 
 /**

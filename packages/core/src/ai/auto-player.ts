@@ -1,7 +1,7 @@
-import { GameState, GameAction, PlayerId, GamePhase } from '../types'
-import { AICoordinator, createAIDecisionSystem, ScoredAction, getTopActionsForPlayer } from './action-decision-engine'
+import { GameAction, PlayerId, GamePhase } from '../types'
+import { AICoordinator, createAIDecisionSystem, getTopActionsForPlayer } from './ai-coordinator'
+import { ScoredAction } from './types/ai-interfaces'
 import { GameFlowManager } from '../engine/game-flow'
-import { ProcessResult } from '../engine/action-processor-v2'
 
 /**
  * AutoPlayer - Complete AI Automation System
@@ -324,15 +324,17 @@ export class AutoPlayer {
     if (actions.length === 0) return null
 
     switch (this.config.difficulty) {
-      case 'easy':
+      case 'easy': {
         // Pick from top 50% with some randomness
         const easyOptions = actions.slice(0, Math.max(1, Math.ceil(actions.length * 0.5)))
         return this.randomSelect(easyOptions).action
+      }
 
-      case 'medium':
+      case 'medium': {
         // Pick from top 25% with slight randomness
         const mediumOptions = actions.slice(0, Math.max(1, Math.ceil(actions.length * 0.25)))
         return this.randomSelect(mediumOptions).action
+      }
 
       case 'hard':
         // Always pick the best action, or occasionally second best for unpredictability
@@ -416,7 +418,7 @@ export class AutoPlayer {
   /**
    * Logging utility
    */
-  private log(message: string, data?: any): void {
+  private log(message: string, data?: unknown): void {
     if (!this.config.enableLogging) return
     
     const timestamp = new Date().toISOString()

@@ -232,9 +232,26 @@ export function isValidPortTrade(offering: Partial<ResourceCards>, requesting: P
 }
 
 export function hasAccessToPort(playerId: string, portType: 'generic' | string, board: any): boolean {
-  // TODO: Implement port access detection based on player settlements/cities
-  // For now, return true for generic ports (3:1) which all players have access to via bank
-  return portType === 'generic'
+  // All players have access to generic 4:1 bank trading
+  if (portType === 'generic') {
+    return true
+  }
+  
+  // Check if player has a settlement or city adjacent to the specific port
+  if (board && board.vertices && board.ports) {
+    for (const [vertexId, vertex] of board.vertices) {
+      // Check if player owns this vertex
+      if (vertex.building && vertex.building.owner === playerId) {
+        // Check if this vertex is adjacent to the desired port type
+        const adjacentPort = board.ports.get(vertexId)
+        if (adjacentPort && adjacentPort.type === portType) {
+          return true
+        }
+      }
+    }
+  }
+  
+  return false
 } 
 
 // ============= Port Access Validation =============

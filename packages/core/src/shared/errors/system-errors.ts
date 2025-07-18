@@ -11,6 +11,17 @@ export abstract class SystemError extends DomainError {
 }
 
 /**
+ * Generic system error for unknown errors
+ */
+export class GenericSystemError extends SystemError {
+  readonly code = 'GENERIC_SYSTEM_ERROR'
+  
+  constructor(message: string, context: Record<string, unknown> = {}) {
+    super(message, context)
+  }
+}
+
+/**
  * Authentication and Authorization Errors
  */
 export class AuthenticationError extends SystemError {

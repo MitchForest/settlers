@@ -108,24 +108,79 @@ export abstract class BaseActionProcessor<T extends GameAction> implements Actio
 
 export class StateManager {
   cloneState(state: GameState): GameState {
-    // Deep clone that preserves Map structures
+    // SENIOR ARCHITECT FIX: Comprehensive deep clone with proper immutability
     const cloned = { ...state }
     
-    // Clone the players Map
+    // Deep clone players Map with all nested objects
     cloned.players = new Map()
     for (const [playerId, player] of state.players) {
-      cloned.players.set(playerId, { ...player })
+      cloned.players.set(playerId, {
+        ...player,
+        // Deep clone player resources to prevent shared mutations
+        resources: { ...player.resources },
+        // Deep clone player buildings inventory
+        buildings: { ...player.buildings },
+        // Deep clone player score object
+        score: { ...player.score },
+        // Deep clone development cards array
+        developmentCards: player.developmentCards ? [...player.developmentCards] : []
+        // Note: activeTrades was removed from Player type - trades are now managed at game level
+      })
     }
     
-    // Clone board Maps
+    // Deep clone board with proper object isolation
     cloned.board = { ...state.board }
-    cloned.board.hexes = new Map(state.board.hexes)
-    cloned.board.vertices = new Map(state.board.vertices)
-    cloned.board.edges = new Map(state.board.edges)
     
-    // Clone arrays by reference (they're generally immutable in our usage)
-    cloned.developmentDeck = [...state.developmentDeck]
-    cloned.activeTrades = [...state.activeTrades]
+    // Deep clone hexes Map - hexes are generally immutable after creation
+    cloned.board.hexes = new Map(state.board.hexes)
+    
+    // CRITICAL FIX: Deep clone vertices Map with building objects
+    cloned.board.vertices = new Map()
+    for (const [vertexId, vertex] of state.board.vertices) {
+      cloned.board.vertices.set(vertexId, {
+        ...vertex,
+        // Deep clone position object
+        position: {
+          ...vertex.position,
+          hexes: vertex.position.hexes ? [...vertex.position.hexes] : [] // Clone hexes array safely
+        },
+        // CRITICAL: Deep clone building object to prevent shared mutations
+        building: vertex.building ? {
+          ...vertex.building,
+          position: { ...vertex.building.position }
+        } : null,
+        // Deep clone port object if it exists
+        port: vertex.port ? { ...vertex.port } : null
+      })
+    }
+    
+    // CRITICAL FIX: Deep clone edges Map with connection objects  
+    cloned.board.edges = new Map()
+    for (const [edgeId, edge] of state.board.edges) {
+      cloned.board.edges.set(edgeId, {
+        ...edge,
+        // Deep clone position object (EdgePosition only has hexes and direction)
+        position: {
+          ...edge.position,
+          hexes: edge.position.hexes ? [...edge.position.hexes] : []
+        },
+        // CRITICAL: Deep clone connection object to prevent shared mutations
+        connection: edge.connection ? {
+          ...edge.connection
+        } : null
+      })
+    }
+    
+    // Deep clone robber position if it exists
+    if (state.board.robberPosition) {
+      cloned.board.robberPosition = { ...state.board.robberPosition }
+    }
+    
+    // Deep clone arrays and objects (with null safety)
+    cloned.developmentDeck = state.developmentDeck ? [...state.developmentDeck] : []
+    cloned.activeTrades = state.activeTrades ? [...state.activeTrades] : []
+    
+    // Note: playerOrder was removed from GameState - turn management handled differently
     
     return cloned
   }
@@ -201,7 +256,7 @@ export class LongestRoadUpdater implements PostProcessor {
   process(state: GameState): GameState {
     // Import the longest road calculation function
     const { calculateLongestRoad } = require('../adjacency-helpers')
-    const { GAME_RULES } = require('../../constants')
+    const { GAME_RULES, VICTORY_POINTS } = require('../../constants')
     
     // Calculate longest road for each player
     const playerRoadLengths = new Map<PlayerId, number>()
@@ -231,7 +286,7 @@ export class LongestRoadUpdater implements PostProcessor {
       
       // Update score if longest road status changed
       if (wasChanged) {
-        const scoreDelta = hasLongestRoad ? GAME_RULES.pointsFor.longestRoad : -GAME_RULES.pointsFor.longestRoad
+        const scoreDelta = hasLongestRoad ? VICTORY_POINTS.longestRoad : -VICTORY_POINTS.longestRoad
         updatedPlayer.score = {
           ...player.score,
           public: player.score.public + scoreDelta,
@@ -248,7 +303,7 @@ export class LongestRoadUpdater implements PostProcessor {
 
 export class LargestArmyUpdater implements PostProcessor {
   process(state: GameState): GameState {
-    const { GAME_RULES } = require('../../constants')
+    const { GAME_RULES, VICTORY_POINTS } = require('../../constants')
     
     // Find player with largest army
     let largestArmySize = 0
@@ -274,7 +329,7 @@ export class LargestArmyUpdater implements PostProcessor {
       
       // Update score if largest army status changed
       if (wasChanged) {
-        const scoreDelta = hasLargestArmy ? GAME_RULES.pointsFor.largestArmy : -GAME_RULES.pointsFor.largestArmy
+        const scoreDelta = hasLargestArmy ? VICTORY_POINTS.largestArmy : -VICTORY_POINTS.largestArmy
         updatedPlayer.score = {
           ...player.score,
           public: player.score.public + scoreDelta,

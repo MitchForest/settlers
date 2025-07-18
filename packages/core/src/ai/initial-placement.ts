@@ -1,25 +1,15 @@
 import {
   GameState,
   GameAction,
-  Player,
   PlayerId,
   ResourceType,
   TerrainType,
-  HexCoordinate,
-  Vertex,
-  Edge,
   ResourceCards
 } from '../types'
 import {
-  NUMBER_PROBABILITIES,
-  BUILDING_COSTS,
-  GAME_RULES
+  NUMBER_PROBABILITIES
 } from '../constants'
 import { BoardAnalyzer } from './board-analyzer'
-import { 
-  canPlaceSettlement, 
-  canPlaceRoad
-} from '../engine/state-validator'
 import {
   getPossibleSettlementPositions,
   getPossibleRoadPositions,
@@ -83,6 +73,14 @@ interface BoardAnalysis {
     totalProduction: number
     hasPort: boolean
   }>
+}
+
+interface PowerSpot {
+  vertexId: string
+  has68: boolean
+  resourceTypes: ResourceType[]
+  totalProduction: number
+  hasPort: boolean
 }
 
 type Strategy = 'CITY_RUSH' | 'PORT_MONOPOLY' | 'BALANCED_EXPANSION'
@@ -206,8 +204,7 @@ export class InitialPlacementAI {
     // Adjust strategy based on first settlement
     const adjustedStrategy = this.adjustStrategyForSecondPlacement(
       this.strategy,
-      firstVertexData,
-      this.boardAnalysis!
+      firstVertexData
     )
     
     if (adjustedStrategy !== this.strategy) {
@@ -348,7 +345,7 @@ export class InitialPlacementAI {
     const resourceScarcity = { ore: 0, wheat: 0, wood: 0, brick: 0, sheep: 0 }
     const highNumberResources = { ore: 0, wheat: 0, wood: 0, brick: 0, sheep: 0 }
     const availablePorts = { ore: false, wheat: false, wood: false, brick: false, sheep: false, generic: 0 }
-    const powerSpots: Array<any> = []
+    const powerSpots: PowerSpot[] = []
 
     // Analyze all hexes on the board
     for (const [, hex] of this.state.board.hexes) {
@@ -419,8 +416,9 @@ export class InitialPlacementAI {
    * Get comprehensive vertex data for strategic analysis
    */
   private getVertexData(vertexId: string): VertexData {
-    if (this.vertexDataCache.has(vertexId)) {
-      return this.vertexDataCache.get(vertexId)!
+    const cached = this.vertexDataCache.get(vertexId)
+    if (cached) {
+      return cached
     }
 
     const vertex = this.state.board.vertices.get(vertexId)
@@ -520,8 +518,7 @@ export class InitialPlacementAI {
    */
   private adjustStrategyForSecondPlacement(
     originalStrategy: Strategy,
-    firstVertexData: VertexData,
-    _boardAnalysis: BoardAnalysis
+    firstVertexData: VertexData
   ): Strategy {
     // If City Rush but missing essential resources, consider pivoting
     if (originalStrategy === 'CITY_RUSH') {

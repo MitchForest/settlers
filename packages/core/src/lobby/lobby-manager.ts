@@ -10,7 +10,7 @@ import {
   LobbyAIConfig,
   LobbyEvent
 } from '../lobby-types'
-import { PlayerId, GameState, Player, PlayerColor } from '../types'
+import { PlayerId, GameState, Player } from '../types'
 import { generatePlayerId } from '../calculations'
 import { GameFlowManager } from '../engine/game-flow'
 

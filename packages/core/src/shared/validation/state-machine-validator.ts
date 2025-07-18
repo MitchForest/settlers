@@ -2,7 +2,7 @@
 // Validates game phase transitions and ensures state machine consistency
 
 import { GameState, GameAction, GamePhase, PlayerId } from '../../types'
-import { Result, GameStateError, InvalidActionError } from '../errors'
+import { Result, GameStateError, InvalidActionError, ErrorContextBuilder } from '../errors'
 
 /**
  * State machine validation result
@@ -30,9 +30,9 @@ export interface StateMachineError {
  * State machine consistency enforcer
  */
 export class StateMachineValidator {
-  private phaseTransitions: Map<GamePhase, GamePhase[]>
-  private phaseActions: Map<GamePhase, string[]>
-  private actionPhases: Map<string, GamePhase[]>
+  private phaseTransitions: Map<GamePhase, GamePhase[]> = new Map()
+  private phaseActions: Map<GamePhase, string[]> = new Map()
+  private actionPhases: Map<string, GamePhase[]> = new Map()
   
   constructor() {
     this.initializeStateMachine()
@@ -146,20 +146,24 @@ export class StateMachineValidator {
       
       if (currentIndex === -1) {
         return Result.failure(
-          InvalidActionError.invalidPlayerAction(
-            gameState.id,
-            currentPlayer,
-            'turn_order_validation'
+          new InvalidActionError(
+            `Current player ${currentPlayer} not found in player list`,
+            new ErrorContextBuilder()
+              .addGameContext(gameState.id, currentPlayer)
+              .addActionContext('turn_order_validation', { currentPlayer })
+              .build()
           )
         )
       }
       
       if (nextIndex === -1) {
         return Result.failure(
-          InvalidActionError.invalidPlayerAction(
-            gameState.id,
-            nextPlayer,
-            'turn_order_validation'
+          new InvalidActionError(
+            `Next player ${nextPlayer} not found in player list`,
+            new ErrorContextBuilder()
+              .addGameContext(gameState.id, nextPlayer)
+              .addActionContext('turn_order_validation', { nextPlayer })
+              .build()
           )
         )
       }
@@ -176,10 +180,12 @@ export class StateMachineValidator {
       return Result.success(isValidTransition)
     } catch (error) {
       return Result.failure(
-        InvalidActionError.invalidPlayerAction(
-          gameState.id,
-          currentPlayer,
-          'turn_order_validation'
+        new InvalidActionError(
+          `Turn order validation failed for player ${currentPlayer}`,
+          new ErrorContextBuilder()
+            .addGameContext(gameState.id, currentPlayer)
+            .addActionContext('turn_order_validation', { currentPlayer, error: error instanceof Error ? error.message : 'Unknown error' })
+            .build()
         )
       )
     }

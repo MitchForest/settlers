@@ -1,5 +1,4 @@
-import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
+import { Hono, type Context } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { generateGameCode, isValidGameCodeFormat, normalizeGameCode } from '../utils/game-codes'
@@ -36,7 +35,7 @@ class ValidationError extends Error {
 }
 
 // Helper function to map domain errors to HTTP responses
-function handleDomainError(error: Error, c: any) {
+function handleDomainError(error: Error, c: Context) {
   if (error instanceof GameCodeFormatError) {
     return c.json({ success: false, error: error.message }, 400)
   }
@@ -57,7 +56,7 @@ function handleDomainError(error: Error, c: any) {
 app.post('/create', async (c) => {
   try {
     const body = await c.req.json()
-    const { hostPlayerName, hostAvatarEmoji, hostUserId, maxPlayers, allowObservers, isPublic } = body
+    const { hostPlayerName, hostAvatarEmoji, hostUserId } = body
 
     // For guest users, hostUserId might not be provided
     if (!hostPlayerName) {

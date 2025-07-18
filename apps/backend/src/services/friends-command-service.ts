@@ -1,9 +1,8 @@
-import { eq, and, or, inArray } from 'drizzle-orm'
-import { sql } from 'drizzle-orm'
+import { eq, and, or, sql } from 'drizzle-orm'
 import { db } from '../db/index'
 import { userProfiles } from '../db/schema'
 import { eventStore } from '../db/event-store-repository'
-import { FriendEvent, FriendEventType } from '@settlers/core/src/events/friend-event-store'
+import { FriendEvent } from '@settlers/core/src/events/friend-event-store'
 import { server as unifiedWebSocketServer } from '../websocket/unified-server'
 
 // **FRIENDS DOMAIN TYPES**

@@ -10,12 +10,12 @@ import { CreateGameDialog } from '@/components/lobby/CreateGameDialog'
 import { JoinGameDialog } from '@/components/lobby/JoinGameDialog'
 import { ObserveGameDialog } from '@/components/lobby/ObserveGameDialog'
 import { MagicLinkDialog } from '@/components/auth/MagicLinkDialog'
-import { ProfileSetupDialog } from '@/components/auth/ProfileSetupDialog'
+// Removed unused import: ProfileSetupDialog
 import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
 import { useRouter } from 'next/navigation'
 import { useGameStore } from '@/stores/gameStore'
 import { useAuth } from '@/lib/auth-context'
-import { ds, componentStyles } from '@/lib/design-system'
+// Removed unused import: ds, componentStyles
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
 import { ConnectionStatus } from '@/components/ui/connection-status'
 
@@ -215,7 +215,7 @@ export default function Home() {
           {isGuest && (
             <div className="bg-info/10 border border-info/20 rounded-lg p-4 max-w-md mx-auto">
               <p className="text-info text-sm">
-                💡 You're browsing as a guest. Sign in to save your game history and create a profile.
+                💡 You&apos;re browsing as a guest. Sign in to save your game history and create a profile.
               </p>
             </div>
           )}

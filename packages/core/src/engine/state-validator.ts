@@ -2,13 +2,7 @@
 
 import {
   GameState,
-  Player,
   PlayerId,
-  Building,
-  Road,
-  Vertex,
-  VertexPosition,
-  EdgePosition,
   ResourceCards,
   HexCoordinate,
   GamePhase,

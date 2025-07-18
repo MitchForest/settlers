@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+// Removed unused import: Input
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Copy, Users, Eye, EyeOff, Globe, Lock, Check } from 'lucide-react'
-import { componentStyles, designSystem, ds } from '@/lib/design-system'
+// Removed unused import: Badge
+import { Copy, Users, Eye, EyeOff, Globe, Lock } from 'lucide-react'
+// Removed unused imports: componentStyles, designSystem, ds
 import { createGame } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { getGuestSession, getGuestDisplayName, getGuestAvatar } from '@/lib/guest-session'

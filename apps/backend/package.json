@@ -6,11 +6,13 @@
     "dev": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun dist/index.js",
+    "lint": "eslint src --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "test": "bun test"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.1",
@@ -24,9 +26,13 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.31.0",
     "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^8.37.0",
+    "@typescript-eslint/parser": "^8.37.0",
     "bun-types": "^1.2.18",
     "drizzle-kit": "^0.31.4",
+    "eslint": "^9.31.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"

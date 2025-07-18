@@ -23,6 +23,7 @@ export {
 // System domain errors
 export {
   SystemError,
+  GenericSystemError,
   AuthenticationError,
   WebSocketError,
   ValidationError,

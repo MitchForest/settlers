@@ -7,12 +7,9 @@ import {
   PlayerId,
   GamePhase,
   DevelopmentCard,
-  ResourceCards,
-  Board,
   GameAction,
   GameEvent,
   PlayerColor,
-  DevelopmentCardType,
   Trade
 } from '../types'
 import {
@@ -81,7 +78,7 @@ export class GameFlowManager {
       playerIds
     
     // Generate board
-    const board = generateBoard(`board-${Date.now()}`)
+    const board = generateBoard()
     
     // Create development deck
     const developmentDeck = createDevelopmentDeck()

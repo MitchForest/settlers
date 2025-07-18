@@ -6,6 +6,11 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:frontend": "turbo run test --filter=@settlers/frontend",
+    "test:backend": "turbo run test --filter=@settlers/backend", 
+    "test:core": "turbo run test --filter=@settlers/core",
+    "test:e2e": "cd apps/e2e && bun run test",
+    "test:watch": "turbo run test:watch",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "typecheck": "turbo run typecheck"
   },

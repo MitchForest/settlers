@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { optionalAuthMiddleware } from '../middleware/auth'

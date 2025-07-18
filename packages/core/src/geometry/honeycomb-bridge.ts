@@ -1,5 +1,5 @@
-import { defineHex, Orientation, Grid, spiral } from 'honeycomb-grid'
-import { HexCoordinate, VertexPosition, EdgePosition } from '../types'
+import { defineHex, Orientation } from 'honeycomb-grid'
+import { HexCoordinate } from '../types'
 
 /**
  * Honeycomb Grid Bridge for Core Package
@@ -130,7 +130,7 @@ export class HoneycombBridge {
     // Add hexes at each distance ring using manual calculation
     for (let distance = 1; distance <= maxDistance; distance++) {
       // Start at one neighbor and spiral around
-      let current = {
+      const current = {
         q: center.q + distance,
         r: center.r - distance,
         s: center.s

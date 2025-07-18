@@ -40,7 +40,7 @@ app.use('*', async (c, next) => {
     // Pre-parse JSON to catch errors early
     try {
       await c.req.json()
-    } catch (error) {
+    } catch {
       throw new HTTPException(400, { message: 'Invalid JSON in request body' })
     }
   }

@@ -1,4 +1,4 @@
-import { 
+import {
   GameEvent, 
   LobbyState, 
   LobbyPlayer,
@@ -6,8 +6,7 @@ import {
   PlayerJoinedData,
   PlayerLeftData,
   AIPlayerAddedData,
-  SettingsChangedData,
-  GameStartedData
+  SettingsChangedData
 } from './event-store'
 
 // Default settings for new lobbies
@@ -82,7 +81,7 @@ export class LobbyProjector {
         return this.applySettingsChanged(newState, event.data as SettingsChangedData)
       
       case 'game_started':
-        return this.applyGameStarted(newState, event.data as GameStartedData)
+        return this.applyGameStarted(newState)
       
       default:
         // For game events (dice_rolled, etc.), lobby state doesn't change
@@ -168,7 +167,7 @@ export class LobbyProjector {
     }
   }
 
-  private static applyGameStarted(state: LobbyState, data: GameStartedData): LobbyState {
+  private static applyGameStarted(state: LobbyState): LobbyState {
     return {
       ...state,
       phase: 'initial_placement',

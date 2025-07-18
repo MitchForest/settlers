@@ -18,7 +18,7 @@ interface ClientConnection {
 // Base message interface
 interface BaseMessage {
   type: string
-  data?: any
+  data?: Record<string, unknown>
 }
 
 // GAME ENTITY - Real game operations
@@ -30,7 +30,7 @@ interface GameMessage extends BaseMessage {
     playerName?: string
     avatarEmoji?: string
     // Additional fields based on message type
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -47,7 +47,7 @@ interface SocialMessage extends BaseMessage {
     message?: string
     response?: 'accept' | 'decline'
     status?: 'online' | 'offline' | 'in_game'
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -55,7 +55,7 @@ interface SocialMessage extends BaseMessage {
 interface SystemMessage extends BaseMessage {
   type: 'ping'
   data?: {
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -64,12 +64,12 @@ type WebSocketMessage = GameMessage | SocialMessage | SystemMessage
 
 interface ErrorResponse {
   error: string
-  details?: any
+  details?: Record<string, unknown>
 }
 
 interface SuccessResponse {
   success: true
-  data?: any
+  data?: Record<string, unknown>
 }
 
 type WebSocketResponse = ErrorResponse | SuccessResponse
@@ -96,7 +96,7 @@ export class UnifiedWebSocketServer {
     console.log(`🌐 WebSocket server listening on port ${port}`)
   }
 
-  private handleConnection(ws: WebSocket, request: IncomingMessage): void {
+  private handleConnection(ws: WebSocket, _request: IncomingMessage): void {
     console.log('🔌 New WebSocket connection')
 
     const connection: Partial<ClientConnection> = {
@@ -153,7 +153,7 @@ export class UnifiedWebSocketServer {
   private cleanupStaleConnections(): void {
     let cleaned = 0
     
-    for (const [ws, connection] of this.connectionToGame.entries()) {
+    for (const ws of this.connectionToGame.keys()) {
       if (ws.readyState !== WebSocket.OPEN) {
         this.handleDisconnection(ws)
         cleaned++
@@ -345,7 +345,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Leave current game
    */
-  private async handleLeaveGame(ws: WebSocket, data: any): Promise<void> {
+  private async handleLeaveGame(ws: WebSocket, _data: any): Promise<void> {
     const connection = this.connectionToGame.get(ws)
     if (!connection?.playerId) {
       this.sendError(ws, 'Not connected to a lobby')
@@ -673,7 +673,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Remove AI bot from game
    */
-  private async handleRemoveAIBot(ws: WebSocket, data: any): Promise<void> {
+  private async handleRemoveAIBot(ws: WebSocket, _data: any): Promise<void> {
     // TODO: Implement AI bot removal when AI system is built
     this.sendError(ws, 'Remove AI bot not yet implemented')
   }
@@ -681,7 +681,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Update game settings
    */
-  private async handleUpdateGameSettings(ws: WebSocket, data: any): Promise<void> {
+  private async handleUpdateGameSettings(ws: WebSocket, _data: any): Promise<void> {
     // TODO: Implement game settings update when settings system is built
     this.sendError(ws, 'Update game settings not yet implemented')
   }

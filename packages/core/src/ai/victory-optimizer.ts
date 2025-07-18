@@ -1,6 +1,8 @@
 import { GameState, Player, PlayerId, ResourceCards, ResourceType } from '../types'
 import { BUILDING_COSTS } from '../constants'
 import { hasResources } from '../calculations'
+import { canPlaceSettlement } from '../engine/state-validator'
+import { getEdgeVertices } from '../engine/adjacency-helpers'
 
 // ===== VICTORY PATH INTERFACES =====
 
@@ -62,6 +64,30 @@ export class VictoryPathOptimizer {
       .map(path => this.scorePath(path))
       .sort((a, b) => b.efficiency - a.efficiency)
     
+    // Handle case where no valid paths exist
+    if (scoredPaths.length === 0) {
+      const fallbackPath: VictoryPath = {
+        id: 'fallback',
+        description: 'Basic survival strategy',
+        targetTurns: 60,
+        currentProgress: 0,
+        totalCost: { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 },
+        remainingCost: { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 },
+        steps: [],
+        probability: 0.1,
+        efficiency: 0.1
+      }
+      
+      return {
+        currentVP,
+        vpNeeded,
+        fastestPath: fallbackPath,
+        alternativePaths: [],
+        bottlenecks: ['No viable victory paths found'],
+        recommendations: ['Focus on resource accumulation and basic building']
+      }
+    }
+    
     const fastestPath = scoredPaths[0]
     const alternativePaths = scoredPaths.slice(1, 3)
     
@@ -88,7 +114,7 @@ export class VictoryPathOptimizer {
         
         if (remainingVP <= 0) {
           // Found a valid combination
-          const path = this.createVictoryPath(cities, settlements, remainingVP)
+          const path = this.createVictoryPath(cities, settlements)
           if (path) paths.push(path)
         } else if (remainingVP <= 4) {
           // Try to fill remaining VP with special achievements
@@ -104,7 +130,7 @@ export class VictoryPathOptimizer {
   /**
    * Create a victory path with buildings only
    */
-  private createVictoryPath(cities: number, settlements: number, remainingVP: number): VictoryPath | null {
+  private createVictoryPath(cities: number, settlements: number): VictoryPath | null {
     const steps: VictoryStep[] = []
     let totalCost: ResourceCards = { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 }
     
@@ -160,7 +186,7 @@ export class VictoryPathOptimizer {
    * Create a victory path including special achievements
    */
   private createVictoryPathWithSpecial(cities: number, settlements: number, remainingVP: number): VictoryPath | null {
-    const basePath = this.createVictoryPath(cities, settlements, 0)
+    const basePath = this.createVictoryPath(cities, settlements)
     if (!basePath) return null
     
     const steps = [...basePath.steps]
@@ -307,8 +333,14 @@ export class VictoryPathOptimizer {
   private identifyBottlenecks(path: VictoryPath): string[] {
     const bottlenecks: string[] = []
     
-    // Resource bottlenecks
-    const resourceTotals = path.remainingCost
+    // Defensive check for undefined path object
+    if (!path) {
+      console.warn('⚠️ identifyBottlenecks called with undefined path')
+      return ['Path analysis failed - undefined path']
+    }
+    
+    // Resource bottlenecks - defensive check for undefined remainingCost
+    const resourceTotals = path.remainingCost || { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 }
     if (resourceTotals.ore > 6) bottlenecks.push('Ore shortage - need port or trading')
     if (resourceTotals.wheat > 6) bottlenecks.push('Wheat shortage - need port or trading')
     if (resourceTotals.wood > 8) bottlenecks.push('Wood shortage - need production')
@@ -330,8 +362,14 @@ export class VictoryPathOptimizer {
   private generateRecommendations(path: VictoryPath): string[] {
     const recommendations: string[] = []
     
-    // Resource recommendations
-    const remaining = path.remainingCost
+    // Defensive check for undefined path object
+    if (!path) {
+      console.warn('⚠️ generateRecommendations called with undefined path')
+      return ['Path analysis failed - undefined path']
+    }
+    
+    // Resource recommendations - defensive check for undefined remainingCost
+    const remaining = path.remainingCost || { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 }
     if (remaining.ore > 3) recommendations.push('Prioritize ore: build on ore hexes or find ore port')
     if (remaining.wheat > 3) recommendations.push('Prioritize wheat: build on wheat hexes or find wheat port')
     
@@ -383,8 +421,65 @@ export class VictoryPathOptimizer {
   }
 
   private getExpansionSpots(): string[] {
-    // Simplified - return mock expansion spots
-    return ['expansion1', 'expansion2', 'expansion3', 'expansion4']
+    // Find actual valid settlement locations on the game board
+    const validSpots: string[] = []
+    
+    for (const [vertexId, vertex] of this.gameState.board.vertices) {
+      // Skip if already occupied
+      if (vertex.building) continue
+      
+      // Check distance rule - no settlements within 1 edge
+      const hasNearbySettlement = this.hasNearbySettlement(vertexId)
+      if (hasNearbySettlement) continue
+      
+      // Check if accessible by roads (for main game phase)
+      if (this.gameState.phase === 'actions') {
+        const hasRoadConnection = this.hasRoadConnection(vertexId, this.playerId)
+        if (!hasRoadConnection) continue
+      }
+      
+      validSpots.push(vertexId)
+    }
+    
+    return validSpots.slice(0, 8) // Limit to avoid performance issues
+  }
+
+  private hasNearbySettlement(vertexId: string): boolean {
+    // Check distance rule: no settlements within 2 edges (proper Settlers rule)
+    const vertex = this.gameState.board.vertices.get(vertexId)
+    if (!vertex) return true // Assume blocked if vertex doesn't exist
+    
+    // FIXED: Use game engine validation instead of custom distance checks
+    // This ensures we follow the exact same rules as the game engine
+    try {
+      const result = canPlaceSettlement(this.gameState, this.playerId, vertexId)
+      if (!result.isValid && result.reason?.includes('distance')) {
+        console.log(`🚫 Settlement blocked at ${vertexId}: ${result.reason}`)
+        return true
+      }
+      console.log(`✅ Settlement allowed at ${vertexId}: passed game engine validation`)
+      return false
+    } catch (error) {
+      console.log(`⚠️ Settlement validation error at ${vertexId}: ${error}`)
+      return true // Assume blocked on error
+    }
+  }
+  
+  private hasRoadConnection(vertexId: string, playerId: PlayerId): boolean {
+    // For setup phase, always allow placement
+    if (this.gameState.phase.startsWith('setup')) return true
+    
+    // Check if player has a road connected to this vertex
+    for (const [edgeId, edge] of this.gameState.board.edges) {
+      if (!edge.connection) continue
+      if (edge.connection.owner !== playerId) continue
+      
+      // Check if this edge connects to the target vertex
+      const edgeVertices = getEdgeVertices(this.gameState.board, edgeId)
+      if (edgeVertices.includes(vertexId)) return true
+    }
+    
+    return false
   }
 
   private canGetLargestArmy(): boolean {
@@ -469,7 +564,7 @@ export class MultiTurnPlanner {
       turns.push(turnPlan)
       
       // Simulate resource changes
-      currentResources = this.simulateResourceChanges(currentResources, turnPlan)
+      currentResources = this.simulateResourceChanges(currentResources)
     }
     
     return {
@@ -482,7 +577,7 @@ export class MultiTurnPlanner {
 
   private planSingleTurn(path: VictoryPath, resources: ResourceCards, turnNumber: number): TurnPlan {
     // Find the next step in the victory path we can work toward
-    const nextStep = this.findNextAchievableStep(path.steps, resources)
+    const nextStep = this.findNextAchievableStep(path.steps)
     
     if (nextStep && hasResources(resources, nextStep.cost)) {
       // Can complete this step
@@ -496,7 +591,7 @@ export class MultiTurnPlanner {
       }
     } else if (nextStep) {
       // Need to work toward this step
-      const deficit = this.calculateResourceDeficit(resources, nextStep.cost)
+      // const deficit = this.calculateResourceDeficit(resources, nextStep.cost)
       return {
         turnNumber,
         primaryGoal: `Prepare for: ${nextStep.description}`,
@@ -518,11 +613,11 @@ export class MultiTurnPlanner {
     }
   }
 
-  private findNextAchievableStep(steps: VictoryStep[], resources: ResourceCards): VictoryStep | null {
+  private findNextAchievableStep(steps: VictoryStep[]): VictoryStep | null {
     // Find the first step we can work toward
     for (const step of steps) {
       // Check if prerequisites are met (simplified)
-      if (step.prerequisites.length === 0 || this.checkPrerequisites(step.prerequisites)) {
+      if (step.prerequisites.length === 0 || this.checkPrerequisites()) {
         return step
       }
     }
@@ -530,7 +625,7 @@ export class MultiTurnPlanner {
     return null
   }
 
-  private checkPrerequisites(prerequisites: string[]): boolean {
+  private checkPrerequisites(): boolean {
     // Simplified prerequisite checking
     return true
   }
@@ -545,7 +640,7 @@ export class MultiTurnPlanner {
     }
   }
 
-  private simulateResourceChanges(current: ResourceCards, plan: TurnPlan): ResourceCards {
+  private simulateResourceChanges(current: ResourceCards): ResourceCards {
     // Simplified resource simulation
     const result = { ...current }
     

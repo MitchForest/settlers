@@ -1,5 +1,4 @@
-import { GameState, Board, VertexPosition, EdgePosition, HexCoordinate, PlayerId, Vertex, Edge } from '../types'
-import { honeycombBridge } from '../geometry/honeycomb-bridge'
+import { GameState, Board, PlayerId, Vertex } from '../types'
 
 /**
  * Adjacency Helpers for Settlers Game Rules
@@ -22,28 +21,30 @@ export function getAdjacentVertices(board: Board, vertexId: string): string[] {
 
   const adjacentVertices: Set<string> = new Set()
   
-  // For each hex that this vertex touches
-  for (const hexCoord of vertex.position.hexes) {
-    // Get all neighbors of this hex
-    const neighborHexes = honeycombBridge.getHexNeighbors(hexCoord)
+  // For each hex that this vertex touches (incomplete algorithm - commented out)
+  // for (const hexCoord of vertex.position.hexes) {
+  //   // Get all neighbors of this hex (commented out for now)
+  //   // const neighborHexes = honeycombBridge.getHexNeighbors(hexCoord)
+  //   
+  //   // Find vertices that share edges with our vertex
+  // }
     
-    // Find vertices that share edges with our vertex
-    board.vertices.forEach((otherVertex, otherVertexId) => {
-      if (otherVertexId === vertexId) return
-      
-      // Check if this vertex shares an edge with our vertex
-      // Two vertices are adjacent if they share exactly 2 hexes
-      const sharedHexes = vertex.position.hexes.filter(hexA =>
-        otherVertex.position.hexes.some(hexB =>
-          hexA.q === hexB.q && hexA.r === hexB.r && hexA.s === hexB.s
-        )
+  // Simple implementation: find vertices that share edges with our vertex
+  board.vertices.forEach((otherVertex, otherVertexId) => {
+    if (otherVertexId === vertexId) return
+    
+    // Check if this vertex shares an edge with our vertex
+    // Two vertices are adjacent if they share exactly 2 hexes
+    const sharedHexes = vertex.position.hexes.filter(hexA =>
+      otherVertex.position.hexes.some(hexB =>
+        hexA.q === hexB.q && hexA.r === hexB.r && hexA.s === hexB.s
       )
-      
-      if (sharedHexes.length === 2) {
-        adjacentVertices.add(otherVertexId)
-      }
-    })
-  }
+    )
+    
+    if (sharedHexes.length === 2) {
+      adjacentVertices.add(otherVertexId)
+    }
+  })
   
   return Array.from(adjacentVertices)
 }
@@ -230,25 +231,18 @@ export function getValidSetupRoadPositions(state: GameState, playerId: PlayerId)
   
   // Get the settlement that was just placed and needs a road connection
   const targetSettlement = getSetupPhaseTargetSettlement(state, playerId)
-  console.log(`[DEBUG] getValidSetupRoadPositions: targetSettlement = ${targetSettlement}`)
   if (!targetSettlement) return []
   
   // Get all edges connected to this specific settlement
   const connectedEdges = getVertexEdges(state.board, targetSettlement)
-  console.log(`[DEBUG] getValidSetupRoadPositions: connectedEdges = ${connectedEdges.length}`)
   
   // Filter for unoccupied edges
   for (const edgeId of connectedEdges) {
     const edge = state.board.edges.get(edgeId)
     if (!edge?.connection) {
       validEdges.push(edgeId)
-      console.log(`[DEBUG] getValidSetupRoadPositions: valid edge ${edgeId}`)
-    } else {
-      console.log(`[DEBUG] getValidSetupRoadPositions: edge ${edgeId} occupied by ${edge.connection?.owner}`)
     }
   }
-  
-  console.log(`[DEBUG] getValidSetupRoadPositions: returning ${validEdges.length} valid edges`)
   return validEdges
 }
 
@@ -258,16 +252,15 @@ export function getValidSetupRoadPositions(state: GameState, playerId: PlayerId)
  */
 function getSetupPhaseTargetSettlement(state: GameState, playerId: PlayerId): string | null {
   const playerIds = Array.from(state.players.keys())
-  const playerCount = playerIds.length
+  // const playerCount = playerIds.length
   const currentIndex = playerIds.indexOf(playerId)
   
   if (currentIndex === -1) {
-    console.log(`[DEBUG] getSetupPhaseTargetSettlement: Player ${playerId} not found in player list`)
     return null
   }
   
   // Get all settlements owned by this player
-  const playerSettlements: Array<{vertexId: string, vertex: Vertex}> = []
+      const playerSettlements: Array<{vertexId: string, vertex: Vertex}> = []
   state.board.vertices.forEach((vertex, vertexId) => {
     if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
       playerSettlements.push({ vertexId, vertex })
@@ -326,20 +319,20 @@ function getSetupPhaseTargetSettlement(state: GameState, playerId: PlayerId): st
   }
   
   // Not in setup phase - this function shouldn't be called
-  console.log(`[DEBUG] getSetupPhaseTargetSettlement: Not in setup phase (${state.phase})`)
   return null
 }
 
 /**
  * Enhanced helper: Check if a settlement has any adjacent roads from the specified player
+ * Currently unused but kept for potential future use
  */
-function settlementHasAdjacentPlayerRoad(state: GameState, playerId: PlayerId, vertexId: string): boolean {
-  const connectedEdges = getVertexEdges(state.board, vertexId)
-  return connectedEdges.some(edgeId => {
-    const edge = state.board.edges.get(edgeId)
-    return edge?.connection?.owner === playerId
-  })
-}
+// function settlementHasAdjacentPlayerRoad(state: GameState, playerId: PlayerId, vertexId: string): boolean {
+//   const connectedEdges = getVertexEdges(state.board, vertexId)
+//   return connectedEdges.some(edgeId => {
+//     const edge = state.board.edges.get(edgeId)
+//     return edge?.connection?.owner === playerId
+//   })
+// }
 
 // ============= Advanced Network Analysis =============
 
@@ -449,24 +442,25 @@ function buildPlayerRoadNetwork(
 
 /**
  * Find endpoints (vertices with degree 1) in the road network
+ * Currently unused but kept for potential future use
  */
-function findNetworkEndpoints(network: RoadNetwork): string[] {
-  const endpoints: string[] = []
-  
-  for (const vertex of network.vertices) {
-    const connections = network.edges.get(vertex) || []
-    if (connections.length === 1) {  // Degree 1 = endpoint
-      endpoints.push(vertex)
-    }
-  }
-  
-  // If no endpoints (cycle), start from any vertex
-  if (endpoints.length === 0 && network.vertices.size > 0) {
-    endpoints.push(Array.from(network.vertices)[0])
-  }
-  
-  return endpoints
-}
+// function findNetworkEndpoints(network: RoadNetwork): string[] {
+//   const endpoints: string[] = []
+//   
+//   for (const vertex of network.vertices) {
+//     const connections = network.edges.get(vertex) || []
+//     if (connections.length === 1) {  // Degree 1 = endpoint
+//       endpoints.push(vertex)
+//     }
+//   }
+//   
+//   // If no endpoints (cycle), start from any vertex
+//   if (endpoints.length === 0 && network.vertices.size > 0) {
+//     endpoints.push(Array.from(network.vertices)[0])
+//   }
+//   
+//   return endpoints
+// }
 
 /**
  * DFS to find the longest path from a starting vertex

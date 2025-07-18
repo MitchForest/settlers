@@ -18,7 +18,7 @@ import { GuestProfileDialog } from './GuestProfileDialog'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
-import { getFriendsWebSocket } from '@/lib/websocket-friends'
+// Note: Friends functionality is handled through the unified websocket in gameStore
 import { getGuestSession } from '@/lib/guest-session'
 
 interface Friend {
@@ -71,56 +71,8 @@ const [showGuestProfile, setShowGuestProfile] = useState(false)
       loadFriends()
       loadFriendRequests()
       
-      // Connect to WebSocket for real-time updates
-      const friendsWS = getFriendsWebSocket()
-      
-      // Set up event listeners
-      const handleFriendRequestReceived = (data: unknown) => {
-        console.log('Friend request received:', data)
-        loadFriendRequests() // Refresh friend requests
-      }
-      
-      const handleFriendRequestAccepted = (data: unknown) => {
-        console.log('Friend request accepted:', data)
-        loadFriends() // Refresh friends list
-        loadFriendRequests() // Refresh requests (remove accepted one)
-      }
-      
-      const handleFriendRequestRejected = (data: unknown) => {
-        console.log('Friend request rejected:', data)
-        // No need to refresh anything, just the toast notification
-      }
-      
-      const handleFriendRemoved = (data: unknown) => {
-        console.log('Friend removed:', data)
-        loadFriends() // Refresh friends list
-      }
-      
-      const handlePresenceUpdate = (data: unknown) => {
-        console.log('Friend presence update:', data)
-        loadFriends() // Refresh friends list to update presence
-      }
-      
-      // Add listeners
-      friendsWS.on('friend_request_received', handleFriendRequestReceived)
-      friendsWS.on('friend_request_accepted', handleFriendRequestAccepted)
-      friendsWS.on('friend_request_rejected', handleFriendRequestRejected)
-      friendsWS.on('friend_removed', handleFriendRemoved)
-      friendsWS.on('friend_presence_update', handlePresenceUpdate)
-      
-      // Connect to WebSocket
-      friendsWS.connect(user.id).catch(error => {
-        console.error('Failed to connect to friends WebSocket:', error)
-      })
-      
-      // Cleanup function
-      return () => {
-        friendsWS.off('friend_request_received', handleFriendRequestReceived)
-        friendsWS.off('friend_request_accepted', handleFriendRequestAccepted)
-        friendsWS.off('friend_request_rejected', handleFriendRequestRejected)
-        friendsWS.off('friend_removed', handleFriendRemoved)
-        friendsWS.off('friend_presence_update', handlePresenceUpdate)
-      }
+      // TODO: Friends real-time updates will be handled by the unified WebSocket
+      // This functionality should be integrated into the gameStore WebSocket message handling
     }
   }, [user, isGuest])
 

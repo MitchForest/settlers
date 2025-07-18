@@ -11,6 +11,21 @@ interface BuildAction extends GameAction {
   }
 }
 
+interface BuildingAction extends GameAction {
+  type: 'placeBuilding'
+  data: {
+    buildingType: 'settlement' | 'city'
+    vertexId: string
+  }
+}
+
+interface RoadAction extends GameAction {
+  type: 'placeRoad'
+  data: {
+    edgeId: string
+  }
+}
+
 export class BuildActionProcessor extends BaseActionProcessor<BuildAction> {
   readonly actionType = 'build' as const
 
@@ -48,23 +63,23 @@ export class BuildActionProcessor extends BaseActionProcessor<BuildAction> {
     if (buildingType === 'settlement' || buildingType === 'city') {
       // Forward to building processor
       const buildingProcessor = new BuildingProcessor(this.stateManager, this.eventFactory, this.postProcessor)
-      const buildingAction = {
+      const buildingAction: BuildingAction = {
         type: 'placeBuilding' as const,
         playerId: action.playerId,
         data: { buildingType, vertexId: position }
       }
       
-      return buildingProcessor.execute(state, buildingAction as any)
+      return buildingProcessor.execute(state, buildingAction)
     } else if (buildingType === 'road') {
       // Forward to road processor
       const roadProcessor = new RoadProcessor(this.stateManager, this.eventFactory, this.postProcessor)
-      const roadAction = {
+      const roadAction: RoadAction = {
         type: 'placeRoad' as const,
         playerId: action.playerId,
         data: { edgeId: position }
       }
       
-      return roadProcessor.execute(state, roadAction as any)
+      return roadProcessor.execute(state, roadAction)
     }
     
     return {

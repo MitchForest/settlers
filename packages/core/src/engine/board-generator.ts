@@ -87,7 +87,7 @@ const SEA_HEX_POSITIONS: HexCoordinate[] = [
   { q: 2, r: -3, s: 1 }
 ]
 
-export function generateBoard(boardId: string = `board-${Date.now()}`): Board {
+export function generateBoard(): Board {
   // Create terrain pool based on standard distribution
   const terrainPool: TerrainType[] = []
   

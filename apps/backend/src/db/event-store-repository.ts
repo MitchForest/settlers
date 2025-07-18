@@ -1,6 +1,7 @@
-import { eq, and, asc, desc, gte, lte, inArray, or, sql } from 'drizzle-orm'
+import { eq, and, asc, desc, gte, lte, inArray, sql } from 'drizzle-orm'
+import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { db } from './index'
-import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences, NewGame, NewPlayer } from './schema'
+import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from './schema'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
 import { GameEvent } from '@settlers/core/src/events/event-store'
@@ -45,7 +46,7 @@ function isGameInviteEvent(eventType: EventType): eventType is GameInviteEventTy
 }
 
 // Basic validation function
-function validateEventData(eventType: string, data: any): boolean {
+function validateEventData(eventType: string, data: Record<string, unknown>): boolean {
   return typeof data === 'object' && data !== null
 }
 
@@ -78,9 +79,9 @@ export class EventStoreRepository {
   async createGame(gameData: {
     id: string
     gameCode: string
-    hostUserId?: string
+    hostUserId?: string | null
     hostPlayerName: string
-    hostAvatarEmoji?: string
+    hostAvatarEmoji?: string | null
   }): Promise<{ game: typeof games.$inferSelect; hostPlayer: typeof players.$inferSelect }> {
     
     return await db.transaction(async (tx) => {
@@ -141,7 +142,7 @@ export class EventStoreRepository {
     playerId?: string
     contextPlayerId?: string  // For game events that need player context
     eventType: EventType
-    data: Record<string, any>
+    data: Record<string, unknown>
   }): Promise<GameEvent> {
     return await db.transaction(async (tx) => {
       return await this.appendEventInTransaction(tx, event)
@@ -156,7 +157,7 @@ export class EventStoreRepository {
     playerId?: string
     contextPlayerId?: string
     eventType: EventType
-    data: Record<string, any>
+    data: Record<string, unknown>
   }>): Promise<GameEvent[]> {
     if (events.length === 0) return []
 
@@ -187,7 +188,7 @@ export class EventStoreRepository {
 
     // Build common where conditions
     const buildWhereConditions = (table: any) => {
-      let whereConditions = [eq(table.gameId, gameId)]
+      const whereConditions = [eq(table.gameId, gameId)]
 
       if (options?.fromSequence !== undefined) {
         whereConditions.push(gte(table.sequenceNumber, options.fromSequence))
@@ -204,7 +205,7 @@ export class EventStoreRepository {
     let playerEventsPromise = Promise.resolve<any[]>([])
     if (!options?.eventTypes || options.eventTypes.some(t => isPlayerEvent(t))) {
       const playerEventTypeFilter = options?.eventTypes?.filter(isPlayerEvent)
-      let playerWhereConditions = buildWhereConditions(playerEvents)
+      const playerWhereConditions = buildWhereConditions(playerEvents)
       
       if (playerEventTypeFilter && playerEventTypeFilter.length > 0) {
         playerWhereConditions.push(inArray(playerEvents.eventType, playerEventTypeFilter))
@@ -222,7 +223,7 @@ export class EventStoreRepository {
     let gameEventsPromise = Promise.resolve<any[]>([])
     if (!options?.eventTypes || options.eventTypes.some(t => isGameEvent(t))) {
       const gameEventTypeFilter = options?.eventTypes?.filter(isGameEvent)
-      let gameWhereConditions = buildWhereConditions(gameEvents)
+      const gameWhereConditions = buildWhereConditions(gameEvents)
       
       if (gameEventTypeFilter && gameEventTypeFilter.length > 0) {
         gameWhereConditions.push(inArray(gameEvents.eventType, gameEventTypeFilter))
@@ -355,13 +356,13 @@ export class EventStoreRepository {
    * Internal method to append event within a transaction to the correct table
    */
   private async appendEventInTransaction(
-    tx: any, // Transaction type
+    tx: PgTransaction<any, any, any>,
     event: {
       gameId: string
       playerId?: string
       contextPlayerId?: string
       eventType: EventType
-      data: Record<string, any>
+      data: Record<string, unknown>
     }
   ): Promise<GameEvent> {
     // Validate event data
@@ -404,7 +405,7 @@ export class EventStoreRepository {
       }).returning()
 
       return this.mapDbPlayerEventToGameEvent(dbEvent)
-    } else {
+    } else if (isGameEvent(event.eventType)) {
       // Insert into game_events table
       const [dbEvent] = await tx.insert(gameEvents).values({
         id: eventId,
@@ -416,6 +417,10 @@ export class EventStoreRepository {
       }).returning()
 
       return this.mapDbGameEventToGameEvent(dbEvent)
+    } else {
+      // For friend events and game invite events, we shouldn't be using this method
+      // They should use their respective repositories
+      throw new Error(`Invalid event type for game events: ${event.eventType}`)
     }
   }
 
@@ -459,7 +464,7 @@ export class EventStoreRepository {
   async appendFriendEvent(event: {
     aggregateId: string
     eventType: FriendEventType
-    data: Record<string, any>
+    data: Record<string, unknown>
   }): Promise<FriendEvent> {
     if (!isFriendEvent(event.eventType)) {
       throw new Error(`Invalid friend event type: ${event.eventType}`)
@@ -558,7 +563,7 @@ export class EventStoreRepository {
   async appendGameInviteEvent(event: {
     aggregateId: string
     eventType: GameInviteEventType
-    data: Record<string, any>
+    data: Record<string, unknown>
   }): Promise<GameInviteEvent> {
     if (!isGameInviteEvent(event.eventType)) {
       throw new Error(`Invalid game invite event type: ${event.eventType}`)

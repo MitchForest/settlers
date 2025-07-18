@@ -1,5 +1,4 @@
-import { GameState, Board, VertexPosition, EdgePosition, HexCoordinate, PlayerId, ResourceType, Building } from '../types'
-import { honeycombBridge } from '../geometry/honeycomb-bridge'
+import { GameState, Board, PlayerId, ResourceType, ResourceCards } from '../types'
 import {
   getAdjacentVertices,
   getVertexEdges,
@@ -133,7 +132,18 @@ export class BoardAnalyzer {
     const probability = diceNumber ? (NUMBER_PROBABILITIES[diceNumber] || 0) / 36 : 0 // Convert to 0-1
 
     // Calculate scarcity (how many hexes produce this resource)
-    const resourceType = this.getResourceTypeFromHex(hex.terrain!)
+    if (!hex.terrain) {
+      const emptyValue: ResourceValue = {
+        resourceType: 'wood', // default
+        probability: 0,
+        scarcity: 0,
+        portAccess: false,
+        expectedYield: 0
+      }
+      this.resourceValueCache.set(hexId, emptyValue)
+      return emptyValue
+    }
+    const resourceType = this.getResourceTypeFromHex(hex.terrain)
     const sameResourceHexes = Array.from(this.board.hexes.values())
       .filter(h => h.terrain && this.getResourceTypeFromHex(h.terrain) === resourceType && h.numberToken)
     const scarcity = Math.max(0, 1 - (sameResourceHexes.length / 4)) // Assume ~4 hexes per resource is normal
@@ -224,7 +234,7 @@ export class BoardAnalyzer {
     breakdown.push(`Production: ${productionValue.toFixed(1)} (${totalProduction.toFixed(2)} expected/turn)`)
 
     // 2. Diversification (25% weight)
-    const resourceTypes = Object.entries(production).filter(([_, val]) => val > 0).length
+    const resourceTypes = Object.entries(production).filter(([, val]) => val > 0).length
     const diversification = (resourceTypes / 5) * 100 // 5 resource types max
     breakdown.push(`Diversification: ${diversification.toFixed(1)} (${resourceTypes}/5 resources)`)
 
@@ -348,14 +358,14 @@ export class BoardAnalyzer {
    */
   calculateLongestRoadPotential(playerId: PlayerId): RoadPotential {
     const currentLength = calculateLongestRoad(this.state, playerId)
-    const playerRoads = getPlayerRoadNetwork(this.state, playerId)
+    // const playerRoads = getPlayerRoadNetwork(this.state, playerId)
     const possibleRoads = getPossibleRoadPositions(this.state, playerId)
     
     // Simulate adding all possible roads to find maximum potential
     const maxPossibleLength = currentLength + possibleRoads.length // Simplified calculation
 
-    // Find bottlenecks (vertices that could cut off expansion)
-    const bottlenecks = this.findRoadBottlenecks(playerId)
+    // Find bottlenecks (vertices that could be blocked)
+    const bottlenecks = this.findRoadBottlenecks()
 
     // Find expansion paths
     const expansionPaths = this.findExpansionOpportunities(playerId)
@@ -516,9 +526,14 @@ export class BoardAnalyzer {
           .sort(([,a], [,b]) => b - a)[0]
 
         if (mostNeeded[1] > 0) {
+          const giveResources: ResourceCards = { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 }
+          const receiveResources: ResourceCards = { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 }
+          giveResources[resource as ResourceType] = 4
+          receiveResources[mostNeeded[0] as ResourceType] = 1
+          
           opportunities.push({
-            giveResources: { [resource]: 4 } as any,
-            receiveResources: { [mostNeeded[0]]: 1 } as any,
+            giveResources,
+            receiveResources,
             tradePartner: 'bank',
             efficiency: 60, // 4:1 is not great but sometimes necessary
             urgency: mostNeeded[1] * 20
@@ -580,10 +595,10 @@ export class BoardAnalyzer {
     return null // No path found (simplified)
   }
 
-  private findRoadBottlenecks(playerId: PlayerId): string[] {
+  private findRoadBottlenecks(): string[] {
     // Find vertices that, if blocked, would significantly limit road expansion
     const bottlenecks: string[] = []
-    const playerRoads = getPlayerRoadNetwork(this.state, playerId)
+    // TODO: Implement graph analysis to find cut vertices
     
     // This would need graph analysis to find cut vertices
     // For now, return empty array - this is a complex algorithm
