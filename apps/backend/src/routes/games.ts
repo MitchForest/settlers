@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
 import { generateGameCode, isValidGameCodeFormat, normalizeGameCode } from '../utils/game-codes'
 import { eventStore } from '../db/event-store-repository'
 import { optionalAuthMiddleware } from '../middleware/auth'
@@ -257,36 +259,39 @@ app.post('/join', async (c) => {
 })
 
 /**
- * Get available games for joining
+ * Get available games with social discovery
  * GET /api/games/available
  */
-app.get('/available', async (c) => {
-  try {
-    const userId = c.get('user')?.id
-    const limit = parseInt(c.req.query('limit') || '20')
+app.get('/available', 
+  zValidator('query', z.object({
+    phase: z.enum(['lobby', 'initial_placement', 'main_game']).optional(),
+    minPlayers: z.coerce.number().min(0).max(8).optional(),
+    maxPlayers: z.coerce.number().min(1).max(8).optional(), 
+    search: z.string().min(1).max(50).optional(),
+    limit: z.coerce.number().min(1).max(50).default(20),
+    offset: z.coerce.number().min(0).default(0)
+  })),
+  async (c) => {
+    try {
+      const user = c.get('user')
+      const filters = c.req.valid('query')
 
-    if (isNaN(limit) || limit < 1 || limit > 100) {
+      const availableGames = await AvailableGamesService.getAvailableGames(user?.id, filters)
+
+      return c.json({
+        success: true,
+        data: availableGames
+      })
+
+    } catch (error) {
+      console.error('Error fetching available games:', error)
       return c.json({
         success: false,
-        error: 'Invalid limit. Must be between 1 and 100.'
-      }, 400)
+        error: 'Failed to fetch available games'
+      }, 500)
     }
-
-    const availableGames = await AvailableGamesService.getAvailableGames(userId, limit)
-
-    return c.json({
-      success: true,
-      data: availableGames
-    })
-
-  } catch (error) {
-    console.error('Error fetching available games:', error)
-    return c.json({
-      success: false,
-      error: 'Failed to fetch available games'
-    }, 500)
   }
-})
+)
 
 /**
  * Find game by code
@@ -303,18 +308,18 @@ app.get('/code/:gameCode', async (c) => {
       }, 400)
     }
 
-    const game = await AvailableGamesService.findGameByCode(gameCode)
+    const result = await AvailableGamesService.getGameByCode(gameCode)
 
-    if (!game) {
+    if (!result.success) {
       return c.json({
         success: false,
-        error: 'Game not found or not available for joining'
+        error: result.error
       }, 404)
     }
 
     return c.json({
       success: true,
-      data: game
+      data: result.game
     })
 
   } catch (error) {

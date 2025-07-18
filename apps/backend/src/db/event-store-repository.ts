@@ -1,9 +1,11 @@
 import { eq, and, asc, desc, gte, lte, inArray, or, sql } from 'drizzle-orm'
 import { db } from './index'
-import { games, players, gameEvents, playerEvents, gameEventSequences, NewGame, NewPlayer } from './schema'
+import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences, NewGame, NewPlayer } from './schema'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
 import { GameEvent } from '@settlers/core/src/events/event-store'
+import { FriendEvent, FriendEventType } from '@settlers/core/src/events/friend-event-store'
+import { GameInviteEvent, GameInviteEventType } from '@settlers/core/src/events/game-invite-event-store'
 
 // Event type mappings for segregated architecture
 export const PLAYER_EVENT_TYPES = ['player_joined', 'player_left', 'ai_player_added', 'ai_player_removed'] as const
@@ -13,10 +15,18 @@ export const GAME_EVENT_TYPES = [
   'trade_proposed', 'trade_accepted', 'trade_declined', 'robber_moved', 
   'resources_stolen', 'turn_ended', 'game_ended'
 ] as const
+export const FRIEND_EVENT_TYPES = [
+  'friend_request_sent', 'friend_request_accepted', 'friend_request_rejected',
+  'friend_request_cancelled', 'friend_removed', 'presence_updated'
+] as const
+export const GAME_INVITE_EVENT_TYPES = [
+  'game_invite_sent', 'game_invite_accepted', 'game_invite_declined',
+  'game_invite_expired', 'game_invite_cancelled'
+] as const
 
 export type PlayerEventType = typeof PLAYER_EVENT_TYPES[number]
 export type GameEventType = typeof GAME_EVENT_TYPES[number]
-export type EventType = PlayerEventType | GameEventType
+export type EventType = PlayerEventType | GameEventType | FriendEventType | GameInviteEventType
 
 function isPlayerEvent(eventType: EventType): eventType is PlayerEventType {
   return PLAYER_EVENT_TYPES.includes(eventType as PlayerEventType)
@@ -24,6 +34,14 @@ function isPlayerEvent(eventType: EventType): eventType is PlayerEventType {
 
 function isGameEvent(eventType: EventType): eventType is GameEventType {
   return GAME_EVENT_TYPES.includes(eventType as GameEventType)
+}
+
+function isFriendEvent(eventType: EventType): eventType is FriendEventType {
+  return FRIEND_EVENT_TYPES.includes(eventType as FriendEventType)
+}
+
+function isGameInviteEvent(eventType: EventType): eventType is GameInviteEventType {
+  return GAME_INVITE_EVENT_TYPES.includes(eventType as GameInviteEventType)
 }
 
 // Basic validation function
@@ -321,6 +339,19 @@ export class EventStoreRepository {
   }
 
   /**
+   * Get all active games
+   */
+  async getAllActiveGames(): Promise<typeof games.$inferSelect[]> {
+    const allGames = await db
+      .select()
+      .from(games)
+      .where(eq(games.isActive, true))
+      .orderBy(desc(games.createdAt))
+
+    return allGames
+  }
+
+  /**
    * Internal method to append event within a transaction to the correct table
    */
   private async appendEventInTransaction(
@@ -417,6 +448,204 @@ export class EventStoreRepository {
       sequenceNumber: Number(dbEvent.sequenceNumber),
       timestamp: new Date(dbEvent.timestamp),
       eventTable: 'game_events'
+    }
+  }
+
+  // **FRIEND EVENT METHODS** - Following exact same patterns as game events
+
+  /**
+   * Append a friend event to the friend events table
+   */
+  async appendFriendEvent(event: {
+    aggregateId: string
+    eventType: FriendEventType
+    data: Record<string, any>
+  }): Promise<FriendEvent> {
+    if (!isFriendEvent(event.eventType)) {
+      throw new Error(`Invalid friend event type: ${event.eventType}`)
+    }
+
+    if (!validateEventData(event.eventType, event.data)) {
+      throw new Error(`Invalid event data for type: ${event.eventType}`)
+    }
+
+    return await db.transaction(async (tx) => {
+      // Get next sequence number for this user
+      const [sequence] = await tx
+        .select({ nextSequence: friendEventSequences.nextSequence })
+        .from(friendEventSequences)
+        .where(eq(friendEventSequences.aggregateId, event.aggregateId))
+
+      let sequenceNumber = 1
+      if (sequence) {
+        sequenceNumber = Number(sequence.nextSequence)
+        // Update sequence
+        await tx
+          .update(friendEventSequences)
+          .set({ nextSequence: sequenceNumber + 1 })
+          .where(eq(friendEventSequences.aggregateId, event.aggregateId))
+      } else {
+        // Initialize sequence for new user
+        await tx.insert(friendEventSequences).values({
+          aggregateId: event.aggregateId,
+          nextSequence: 2
+        })
+      }
+
+      // Insert friend event
+      const eventId = createEventId()
+      const [dbEvent] = await tx.insert(friendEvents).values({
+        id: eventId,
+        aggregateId: event.aggregateId,
+        eventType: event.eventType,
+        data: event.data,
+        sequenceNumber
+      }).returning()
+
+      return this.mapDbFriendEventToFriendEvent(dbEvent)
+    })
+  }
+
+  /**
+   * Get all friend events for a user
+   */
+  async getFriendEvents(aggregateId: string): Promise<FriendEvent[]> {
+    const dbEvents = await db
+      .select()
+      .from(friendEvents)
+      .where(eq(friendEvents.aggregateId, aggregateId))
+      .orderBy(asc(friendEvents.sequenceNumber))
+      .limit(this.options.maxEventsPerQuery)
+
+    return dbEvents.map(event => this.mapDbFriendEventToFriendEvent(event))
+  }
+
+  /**
+   * Get friend events for multiple users (for cross-user events)
+   */
+  async getFriendEventsForUsers(aggregateIds: string[]): Promise<FriendEvent[]> {
+    if (aggregateIds.length === 0) return []
+
+    const dbEvents = await db
+      .select()
+      .from(friendEvents)
+      .where(inArray(friendEvents.aggregateId, aggregateIds))
+      .orderBy(asc(friendEvents.timestamp))
+      .limit(this.options.maxEventsPerQuery)
+
+    return dbEvents.map(event => this.mapDbFriendEventToFriendEvent(event))
+  }
+
+  /**
+   * Map database friend event to FriendEvent
+   */
+  private mapDbFriendEventToFriendEvent(dbEvent: typeof friendEvents.$inferSelect): FriendEvent {
+    return {
+      id: dbEvent.id,
+      aggregateId: dbEvent.aggregateId,
+      eventType: dbEvent.eventType as FriendEventType,
+      data: dbEvent.data as Record<string, any>,
+      sequenceNumber: Number(dbEvent.sequenceNumber),
+      timestamp: new Date(dbEvent.timestamp)
+    }
+  }
+
+  // **GAME INVITE EVENT METHODS** - Following exact same patterns as friend events
+
+  /**
+   * Append a game invite event to the game invite events table
+   */
+  async appendGameInviteEvent(event: {
+    aggregateId: string
+    eventType: GameInviteEventType
+    data: Record<string, any>
+  }): Promise<GameInviteEvent> {
+    if (!isGameInviteEvent(event.eventType)) {
+      throw new Error(`Invalid game invite event type: ${event.eventType}`)
+    }
+
+    if (!validateEventData(event.eventType, event.data)) {
+      throw new Error(`Invalid event data for type: ${event.eventType}`)
+    }
+
+    return await db.transaction(async (tx) => {
+      // Get next sequence number for this user
+      const [sequence] = await tx
+        .select({ nextSequence: gameInviteEventSequences.nextSequence })
+        .from(gameInviteEventSequences)
+        .where(eq(gameInviteEventSequences.aggregateId, event.aggregateId))
+
+      let sequenceNumber = 1
+      if (sequence) {
+        sequenceNumber = Number(sequence.nextSequence)
+        // Update sequence
+        await tx
+          .update(gameInviteEventSequences)
+          .set({ nextSequence: sequenceNumber + 1 })
+          .where(eq(gameInviteEventSequences.aggregateId, event.aggregateId))
+      } else {
+        // Initialize sequence for new user
+        await tx.insert(gameInviteEventSequences).values({
+          aggregateId: event.aggregateId,
+          nextSequence: 2
+        })
+      }
+
+      // Insert game invite event
+      const eventId = createEventId()
+      const [dbEvent] = await tx.insert(gameInviteEvents).values({
+        id: eventId,
+        aggregateId: event.aggregateId,
+        eventType: event.eventType,
+        data: event.data,
+        sequenceNumber
+      }).returning()
+
+      return this.mapDbGameInviteEventToGameInviteEvent(dbEvent)
+    })
+  }
+
+  /**
+   * Get all game invite events for a user
+   */
+  async getGameInviteEvents(aggregateId: string): Promise<GameInviteEvent[]> {
+    const dbEvents = await db
+      .select()
+      .from(gameInviteEvents)
+      .where(eq(gameInviteEvents.aggregateId, aggregateId))
+      .orderBy(asc(gameInviteEvents.sequenceNumber))
+      .limit(this.options.maxEventsPerQuery)
+
+    return dbEvents.map(event => this.mapDbGameInviteEventToGameInviteEvent(event))
+  }
+
+  /**
+   * Get game invite events for multiple users
+   */
+  async getGameInviteEventsForUsers(aggregateIds: string[]): Promise<GameInviteEvent[]> {
+    if (aggregateIds.length === 0) return []
+
+    const dbEvents = await db
+      .select()
+      .from(gameInviteEvents)
+      .where(inArray(gameInviteEvents.aggregateId, aggregateIds))
+      .orderBy(asc(gameInviteEvents.timestamp))
+      .limit(this.options.maxEventsPerQuery)
+
+    return dbEvents.map(event => this.mapDbGameInviteEventToGameInviteEvent(event))
+  }
+
+  /**
+   * Map database game invite event to GameInviteEvent
+   */
+  private mapDbGameInviteEventToGameInviteEvent(dbEvent: typeof gameInviteEvents.$inferSelect): GameInviteEvent {
+    return {
+      id: dbEvent.id,
+      aggregateId: dbEvent.aggregateId,
+      eventType: dbEvent.eventType as GameInviteEventType,
+      data: dbEvent.data as Record<string, any>,
+      sequenceNumber: Number(dbEvent.sequenceNumber),
+      timestamp: dbEvent.timestamp
     }
   }
 }

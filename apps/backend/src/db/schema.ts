@@ -31,6 +31,25 @@ export const gameEventType = pgEnum("game_event_type", [
   'game_ended'
 ])
 
+// Friend-specific event types that operate on friend relationships
+export const friendEventType = pgEnum("friend_event_type", [
+  'friend_request_sent',
+  'friend_request_accepted', 
+  'friend_request_rejected',
+  'friend_request_cancelled',
+  'friend_removed',
+  'presence_updated'
+])
+
+// Game invite event types that operate on game invitations
+export const gameInviteEventType = pgEnum("game_invite_event_type", [
+  'game_invite_sent',
+  'game_invite_accepted',
+  'game_invite_declined',
+  'game_invite_expired',
+  'game_invite_cancelled'
+])
+
 // Player types for distinguishing human vs AI players
 export const playerType = pgEnum("player_type", ['human', 'ai'])
 
@@ -91,29 +110,7 @@ export const tradeType = pgEnum("trade_type", [
   'harbor_trade'
 ])
 
-// Friend request status
-export const friendRequestStatus = pgEnum("friend_request_status", [
-  'pending',
-  'accepted', 
-  'rejected',
-  'cancelled'
-])
-
-// User presence status
-export const presenceStatus = pgEnum("presence_status", [
-  'online',
-  'away', 
-  'busy',
-  'offline'
-])
-
-// Game invite status
-export const gameInviteStatus = pgEnum("game_invite_status", [
-  'pending',
-  'accepted',
-  'declined',
-  'expired'
-])
+// Legacy enums removed - now using event-sourced architecture
 
 // **CORE TABLES**
 
@@ -160,181 +157,19 @@ export const userProfiles = pgTable("user_profiles", {
   }),
 }))
 
-// **FRIENDS SYSTEM TABLES**
-
-// Friend requests table
-export const friendRequests = pgTable("friend_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  fromUserId: uuid("from_user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  toUserId: uuid("to_user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  status: friendRequestStatus("status").default('pending').notNull(),
-  message: text("message"), // Optional message with friend request
-  createdAt: timestamp("created_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  respondedAt: timestamp("responded_at", { precision: 3, mode: 'string' }),
-}, (table) => ({
-  // Indexes
-  fromUserIdx: index("friend_requests_from_user_idx").on(table.fromUserId),
-  toUserIdx: index("friend_requests_to_user_idx").on(table.toUserId),
-  statusIdx: index("friend_requests_status_idx").on(table.status),
-  createdAtIdx: index("friend_requests_created_at_idx").on(table.createdAt),
-  
-  // Constraints
-  // Prevent duplicate requests between same users
-  uniqueRequest: unique("friend_requests_unique").on(table.fromUserId, table.toUserId),
-  // Prevent self-friend requests
-  noSelfRequest: check("no_self_friend_request", sql`${table.fromUserId} != ${table.toUserId}`),
-  
-  // RLS Policies
-  // Users can view requests they sent or received
-  viewOwnRequestsPolicy: pgPolicy("users_can_view_own_friend_requests", {
-    for: "select",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) IN (${table.fromUserId}, ${table.toUserId})`,
-  }),
-  
-  // Users can create requests (as sender)
-  createRequestPolicy: pgPolicy("users_can_create_friend_requests", {
-    for: "insert",
-    to: authenticatedRole,
-    withCheck: sql`(select auth.uid()) = ${table.fromUserId}`,
-  }),
-  
-  // Users can update requests they received (respond) or sent (cancel)
-  updateRequestPolicy: pgPolicy("users_can_update_friend_requests", {
-    for: "update",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) IN (${table.fromUserId}, ${table.toUserId})`,
-    withCheck: sql`(select auth.uid()) IN (${table.fromUserId}, ${table.toUserId})`,
-  }),
-}))
-
-// Friendships table (accepted friend requests become friendships)
-export const friendships = pgTable("friendships", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  user1Id: uuid("user1_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  user2Id: uuid("user2_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  // Track when friends last interacted
-  lastInteractionAt: timestamp("last_interaction_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-}, (table) => ({
-  // Indexes
-  user1Idx: index("friendships_user1_idx").on(table.user1Id),
-  user2Idx: index("friendships_user2_idx").on(table.user2Id),
-  lastInteractionIdx: index("friendships_last_interaction_idx").on(table.lastInteractionAt),
-  
-  // Constraints
-  // Ensure consistent ordering (user1Id < user2Id) and uniqueness
-  uniqueFriendship: unique("friendships_unique").on(table.user1Id, table.user2Id),
-  // Prevent self-friendships
-  noSelfFriendship: check("no_self_friendship", sql`${table.user1Id} != ${table.user2Id}`),
-  // Ensure consistent ordering
-  properOrdering: check("friendship_ordering", sql`${table.user1Id} < ${table.user2Id}`),
-  
-  // RLS Policies
-  // Users can view friendships they're part of
-  viewOwnFriendshipsPolicy: pgPolicy("users_can_view_own_friendships", {
-    for: "select",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) IN (${table.user1Id}, ${table.user2Id})`,
-  }),
-  
-  // Friendships are created by system when requests are accepted (not directly by users)
-  // Users can delete friendships (unfriend)
-  deleteFriendshipPolicy: pgPolicy("users_can_delete_friendships", {
-    for: "delete",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) IN (${table.user1Id}, ${table.user2Id})`,
-  }),
-}))
-
-// User presence table
-export const userPresence = pgTable("user_presence", {
-  userId: uuid("user_id").primaryKey().references(() => userProfiles.id, { onDelete: "cascade" }),
-  status: presenceStatus("status").default('offline').notNull(),
-  lastSeenAt: timestamp("last_seen_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  // Current activity context
-  currentGameId: text("current_game_id").references(() => games.id, { onDelete: "set null" }),
-  // WebSocket connection tracking
-  connectionCount: integer("connection_count").default(0).notNull(),
-  updatedAt: timestamp("updated_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-}, (table) => ({
-  // Indexes
-  statusIdx: index("user_presence_status_idx").on(table.status),
-  lastSeenIdx: index("user_presence_last_seen_idx").on(table.lastSeenAt),
-  currentGameIdx: index("user_presence_current_game_idx").on(table.currentGameId),
-  
-  // RLS Policies
-  // All authenticated users can view presence (for friends lists)
-  viewPresencePolicy: pgPolicy("authenticated_can_view_presence", {
-    for: "select",
-    to: authenticatedRole,
-    using: sql`true`,
-  }),
-  
-  // Users can only update their own presence
-  updateOwnPresencePolicy: pgPolicy("users_can_update_own_presence", {
-    for: "insert",
-    to: authenticatedRole,
-    withCheck: sql`(select auth.uid()) = ${table.userId}`,
-  }),
-  
-  updatePresencePolicy: pgPolicy("users_can_update_presence", {
-    for: "update",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) = ${table.userId}`,
-    withCheck: sql`(select auth.uid()) = ${table.userId}`,
-  }),
-}))
-
-// Game invites table
-export const gameInvites = pgTable("game_invites", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  gameId: text("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
-  fromUserId: uuid("from_user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  toUserId: uuid("to_user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
-  status: gameInviteStatus("status").default('pending').notNull(),
-  message: text("message"), // Optional invite message
-  createdAt: timestamp("created_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-  expiresAt: timestamp("expires_at", { precision: 3, mode: 'string' }).notNull(), // Auto-expire invites
-}, (table) => ({
-  // Indexes
-  gameIdx: index("game_invites_game_idx").on(table.gameId),
-  fromUserIdx: index("game_invites_from_user_idx").on(table.fromUserId),
-  toUserIdx: index("game_invites_to_user_idx").on(table.toUserId),
-  statusIdx: index("game_invites_status_idx").on(table.status),
-  expiresAtIdx: index("game_invites_expires_at_idx").on(table.expiresAt),
-  
-  // Constraints
-  // Prevent duplicate invites to same user for same game
-  uniqueGameInvite: unique("game_invites_unique").on(table.gameId, table.toUserId),
-  // Prevent self-invites
-  noSelfInvite: check("no_self_game_invite", sql`${table.fromUserId} != ${table.toUserId}`),
-  
-  // RLS Policies
-  // Users can view invites they sent or received
-  viewOwnInvitesPolicy: pgPolicy("users_can_view_own_game_invites", {
-    for: "select",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) IN (${table.fromUserId}, ${table.toUserId})`,
-  }),
-  
-  // Users can create invites for games they're in
-  createInvitePolicy: pgPolicy("users_can_create_game_invites", {
-    for: "insert",
-    to: authenticatedRole,
-    withCheck: sql`(select auth.uid()) = ${table.fromUserId}`,
-  }),
-  
-  // Users can update invites they received (respond)
-  updateInvitePolicy: pgPolicy("users_can_update_game_invites", {
-    for: "update",
-    to: authenticatedRole,
-    using: sql`(select auth.uid()) = ${table.toUserId}`,
-    withCheck: sql`(select auth.uid()) = ${table.toUserId}`,
-  }),
-}))
+// **LEGACY CRUD TABLES REMOVED FOR EVENT-SOURCED ARCHITECTURE**
+//
+// The following tables have been ELIMINATED to achieve 100% architectural consistency:
+// - friendRequests (replaced by friendEvents with 'friend_request_sent', 'friend_request_accepted' etc.)
+// - friendships (replaced by friendEvents projector reconstructing current friendships)
+// - userPresence (replaced by friendEvents with 'presence_updated' type)
+// - gameInvites (replaced by gameInviteEvents with 'game_invite_sent', 'game_invite_accepted' etc.)
+//
+// ALL social features now use event-sourced architecture with command services:
+// - FriendsCommandService + FriendsProjector for friend relationships
+// - GameInviteCommandService + GameInviteProjector for game invitations
+//
+// This eliminates technical debt and ensures architectural consistency with games domain.
 
 // Core games table - minimal state, events provide the truth
 export const games = pgTable("games", {
@@ -415,6 +250,50 @@ export const gameEvents = pgTable("game_events", {
 // Sequence tracking table for unified sequence numbers across event types
 export const gameEventSequences = pgTable("game_event_sequences", {
   gameId: text("game_id").primaryKey().references(() => games.id, { onDelete: "cascade" }),
+  nextSequence: bigint("next_sequence", { mode: "number" }).notNull().default(1),
+})
+
+// Friend events - operate on friend relationships, user-scoped event sourcing
+export const friendEvents = pgTable("friend_events", {
+  id: text("id").primaryKey(),
+  aggregateId: uuid("aggregate_id").notNull(), // userId who initiated the action
+  eventType: friendEventType("event_type").notNull(),
+  data: json("data").notNull(),
+  sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
+  timestamp: timestamp("timestamp", { precision: 3, mode: 'string' }).defaultNow().notNull(),
+}, (table) => ({
+  aggregateSequenceIdx: index("friend_events_aggregate_sequence_idx").on(table.aggregateId, table.sequenceNumber),
+  aggregateTypeIdx: index("friend_events_aggregate_type_idx").on(table.aggregateId, table.eventType),
+  timestampIdx: index("friend_events_timestamp_idx").on(table.timestamp),
+  // Ensure sequence numbers are unique within an aggregate (user)
+  aggregateSequenceUnique: unique().on(table.aggregateId, table.sequenceNumber),
+}))
+
+// Friend event sequences - separate from game sequences since friends are user-scoped
+export const friendEventSequences = pgTable("friend_event_sequences", {
+  aggregateId: uuid("aggregate_id").primaryKey(), // userId
+  nextSequence: bigint("next_sequence", { mode: "number" }).notNull().default(1),
+})
+
+// Game invite events - operate on game invitations, user-scoped event sourcing
+export const gameInviteEvents = pgTable("game_invite_events", {
+  id: text("id").primaryKey(),
+  aggregateId: uuid("aggregate_id").notNull(), // userId who received the invite (target user)
+  eventType: gameInviteEventType("event_type").notNull(),
+  data: json("data").notNull(),
+  sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
+  timestamp: timestamp("timestamp", { precision: 3, mode: 'string' }).defaultNow().notNull(),
+}, (table) => ({
+  aggregateSequenceIdx: index("invite_events_aggregate_sequence_idx").on(table.aggregateId, table.sequenceNumber),
+  aggregateTypeIdx: index("invite_events_aggregate_type_idx").on(table.aggregateId, table.eventType),
+  timestampIdx: index("invite_events_timestamp_idx").on(table.timestamp),
+  // Ensure sequence numbers are unique within an aggregate (user)
+  aggregateSequenceUnique: unique().on(table.aggregateId, table.sequenceNumber),
+}))
+
+// Game invite event sequences - separate sequences for invite events per user
+export const gameInviteEventSequences = pgTable("game_invite_event_sequences", {
+  aggregateId: uuid("aggregate_id").primaryKey(), // userId
   nextSequence: bigint("next_sequence", { mode: "number" }).notNull().default(1),
 })
 

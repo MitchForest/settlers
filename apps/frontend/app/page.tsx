@@ -130,7 +130,7 @@ export default function Home() {
       {/* Header */}
       <header className="relative z-10 flex justify-between items-center p-6">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">🏰 Settlers</h1>
+          <h1 className="text-2xl font-bold text-foreground">Builders</h1>
           <ConnectionStatus 
             status={isSystemConnected ? 'connected' : (apiStatus === 'testing' ? 'connecting' : 'error')}
             className="hidden sm:flex"

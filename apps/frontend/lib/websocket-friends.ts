@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 interface FriendsNotification {
   type: 'friend_request_received' | 'friend_request_accepted' | 'friend_request_rejected' | 
         'friend_removed' | 'friend_presence_update' | 'game_invite_received' | 'game_invite_responded'
-  data: any
+  data: Record<string, unknown>
   timestamp: string
 }
 
@@ -58,14 +58,11 @@ export class FriendsWebSocketClient {
           this.isConnecting = false
           this.reconnectAttempts = 0
           
-          // Join the lobby to register for notifications
+          // **NEW: Use proper 'connectSocial' message type**
           this.sendMessage({
-            type: 'joinLobby',
+            type: 'connectSocial',
             data: {
-              gameId: gameId || 'friends-only', // Use a special gameId for friends-only connections
-              userId,
-              playerName: 'FriendsConnection',
-              avatarEmoji: '👥'
+              userId
             }
           })
 
@@ -183,9 +180,9 @@ export class FriendsWebSocketClient {
   private showToastNotification(notification: FriendsNotification): void {
     switch (notification.type) {
       case 'friend_request_received':
-        const fromUser = notification.data.fromUser
+        const fromUser = notification.data.fromUser as { name: string }
         toast.success(`🤝 Friend request from ${fromUser.name}`, {
-          description: notification.data.request.message || 'Wants to be your friend',
+          description: (notification.data.request as { message?: string }).message || 'Wants to be your friend',
           action: {
             label: 'View',
             onClick: () => {
@@ -197,7 +194,7 @@ export class FriendsWebSocketClient {
         break
 
       case 'friend_request_accepted':
-        const newFriend = notification.data.newFriend
+        const newFriend = notification.data.newFriend as { name: string }
         toast.success(`🎉 ${newFriend.name} accepted your friend request!`, {
           description: 'You are now friends'
         })

@@ -45,6 +45,11 @@ export function GameLobby({
     setTimeout(() => setCodeCopied(false), 2000)
   }
 
+  // Check if a player is a guest (user ID starts with "guest_")
+  const isGuestPlayer = (player: LobbyPlayer) => {
+    return player.userId?.startsWith('guest_') || false
+  }
+
   const handleAddBot = async (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
     if (!onAddAIBot) return
     
@@ -161,6 +166,11 @@ export function GameLobby({
                                   🤖 {player.aiConfig?.difficulty || 'medium'} AI
                                 </Badge>
                               )}
+                              {!player.isAI && isGuestPlayer(player) && (
+                                <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs">
+                                  👤 Guest
+                                </Badge>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               {slotIndex === 0 && (
@@ -169,11 +179,7 @@ export function GameLobby({
                                   Host
                                 </Badge>
                               )}
-                              {player.isAI && (
-                                <Badge variant="outline" className="text-xs border-white/20">
-                                  {player.aiConfig?.personality || 'balanced'}
-                                </Badge>
-                              )}
+
                             </div>
                           </div>
                           {isHost && player.isAI && (

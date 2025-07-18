@@ -1,7 +1,7 @@
 import { GameState, GameAction, PlayerId, GamePhase } from '../types'
-import { ActionDecisionEngine, createActionDecisionEngine, ScoredAction } from './action-decision-engine'
+import { AICoordinator, createAIDecisionSystem, ScoredAction, getTopActionsForPlayer } from './action-decision-engine'
 import { GameFlowManager } from '../engine/game-flow'
-import { ProcessResult } from '../engine/action-processor'
+import { ProcessResult } from '../engine/action-processor-v2'
 
 /**
  * AutoPlayer - Complete AI Automation System
@@ -50,16 +50,15 @@ export interface TurnResult {
 export class AutoPlayer {
   private readonly config: AutoPlayerConfig
   private readonly gameFlow: GameFlowManager
-  private decisionEngine: ActionDecisionEngine
+  private decisionEngine: AICoordinator
   private stats: AutoPlayerStats
   private isProcessing = false
 
   constructor(gameFlow: GameFlowManager, config: AutoPlayerConfig) {
     this.gameFlow = gameFlow
     this.config = config
-    this.decisionEngine = createActionDecisionEngine(
+    this.decisionEngine = createAIDecisionSystem(
       gameFlow.getState(), 
-      config.playerId, 
       config.difficulty, 
       config.personality
     )
@@ -111,9 +110,8 @@ export class AutoPlayer {
       phaseTransitions.push(initialState.phase)
 
       // Update decision engine with current state
-      this.decisionEngine = createActionDecisionEngine(
+      this.decisionEngine = createAIDecisionSystem(
         this.gameFlow.getState(), 
-        this.config.playerId, 
         this.config.difficulty, 
         this.config.personality
       )
@@ -138,12 +136,11 @@ export class AutoPlayer {
           this.log(`Phase changed to: ${currentPhase}`)
           
           // Update decision engine for new phase
-          this.decisionEngine = createActionDecisionEngine(
-            state, 
-            this.config.playerId, 
-            this.config.difficulty, 
-            this.config.personality
-          )
+              this.decisionEngine = createAIDecisionSystem(
+      state, 
+      this.config.difficulty, 
+      this.config.personality
+    )
         }
 
         // Get best action for current situation
@@ -170,9 +167,8 @@ export class AutoPlayer {
           this.log(`Action successful: ${result.message || 'No message'}`)
           
           // Update decision engine with new state
-          this.decisionEngine = createActionDecisionEngine(
+          this.decisionEngine = createAIDecisionSystem(
             this.gameFlow.getState(), 
-            this.config.playerId, 
             this.config.difficulty, 
             this.config.personality
           )
@@ -247,7 +243,13 @@ export class AutoPlayer {
    * Select the best action based on AI personality and game state
    */
   private selectBestAction(): GameAction | null {
-    const actions = this.decisionEngine.getAllScoredActions()
+    const actions = getTopActionsForPlayer(
+      this.gameFlow.getState(),
+      this.config.playerId,
+      this.config.difficulty,
+      this.config.personality,
+      10
+    )
     if (actions.length === 0) return null
 
     // Apply personality modifiers to action selection
@@ -457,13 +459,18 @@ export class AutoPlayer {
   previewNextAction(): ScoredAction | null {
     if (!this.canAct()) return null
     
-    this.decisionEngine = createActionDecisionEngine(
+    this.decisionEngine = createAIDecisionSystem(
       this.gameFlow.getState(), 
-      this.config.playerId, 
       this.config.difficulty, 
       this.config.personality
     )
-    const actions = this.decisionEngine.getAllScoredActions()
+    const actions = getTopActionsForPlayer(
+      this.gameFlow.getState(),
+      this.config.playerId,
+      this.config.difficulty,
+      this.config.personality,
+      10
+    )
     const modifiedActions = this.applyPersonalityModifiers(actions)
     
     if (modifiedActions.length === 0) return null

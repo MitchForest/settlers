@@ -25,7 +25,7 @@ import {
   generatePlayerId
 } from '../calculations'
 import { generateBoard } from './board-generator'
-import { processAction, ProcessResult } from './action-processor'
+import { processAction, ProcessResult } from './action-processor-v2'
 
 // Game creation options
 export interface CreateGameOptions {

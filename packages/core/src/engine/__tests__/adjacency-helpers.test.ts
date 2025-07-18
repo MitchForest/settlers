@@ -239,6 +239,26 @@ describe('Adjacency Helpers', () => {
 
   describe('Setup Phase Validation', () => {
     test('checkSetupRoadPlacement finds most recent settlement', () => {
+      // Set game phase to setup (this was the issue!)
+      gameState.phase = 'setup1'
+      gameState.currentPlayer = 'player1' as PlayerId
+      
+      // Add player to game state (this was missing!)
+      gameState.players.set('player1' as PlayerId, {
+        id: 'player1' as PlayerId,
+        name: 'Test Player',
+        color: 0,
+        resources: { wood: 0, brick: 0, ore: 0, wheat: 0, sheep: 0 },
+        developmentCards: [],
+        buildings: { settlements: 4, cities: 4, roads: 14 },
+        score: { public: 0, hidden: 0, total: 0 },
+        knightsPlayed: 0,
+        hasLongestRoad: false,
+        hasLargestArmy: false,
+        isConnected: true,
+        isAI: false
+      })
+
       // Place settlement for player
       const vertex = board.vertices.get('v1')!
       vertex.building = {

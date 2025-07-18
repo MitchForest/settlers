@@ -1,34 +1,42 @@
 import { Hono } from 'hono'
-import { zValidator } from '@hono/zod-validator'
+import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
-import { PresenceService } from '../services/presence-service'
+import { zValidator } from '@hono/zod-validator'
 import { optionalAuthMiddleware } from '../middleware/auth'
+import { friendsCommandService } from '../services/friends-command-service'
 
-const presenceRouter = new Hono()
-presenceRouter.use('*', optionalAuthMiddleware)
+const app = new Hono()
+
+// Apply optional auth middleware
+app.use('*', optionalAuthMiddleware)
 
 // POST /api/presence/update - Update user presence
-presenceRouter.post('/update',
+app.post('/update',
   zValidator('json', z.object({
     status: z.enum(['online', 'away', 'busy', 'offline']),
-    gameId: z.string().optional(),
-    lastSeen: z.string().datetime().optional()
+    gameId: z.string().optional()
   })),
   async (c) => {
     const user = c.get('user')
     if (!user) {
       return c.json({ error: 'Authentication required' }, 401)
     }
-    
+
     try {
-      const { status, gameId, lastSeen } = c.req.valid('json')
-      const presence = await PresenceService.updatePresence(
-        user.id, 
-        status, 
-        gameId, 
-        lastSeen
-      )
-      return c.json({ presence })
+      const { status, gameId } = c.req.valid('json')
+
+      // Update presence using friends command service
+      const result = await friendsCommandService.updatePresence({
+        userId: user.id,
+        status,
+        gameId
+      })
+
+      if (result.success) {
+        return c.json({ success: true, data: result.data })
+      } else {
+        return c.json({ success: false, error: result.error }, 400)
+      }
     } catch (error) {
       console.error('Error updating presence:', error)
       return c.json({ error: 'Failed to update presence' }, 500)
@@ -36,20 +44,4 @@ presenceRouter.post('/update',
   }
 )
 
-// GET /api/presence/friends - Get friends' presence status
-presenceRouter.get('/friends', async (c) => {
-  const user = c.get('user')
-  if (!user) {
-    return c.json({ error: 'Authentication required' }, 401)
-  }
-  
-  try {
-    const friendsPresence = await PresenceService.getFriendsPresence(user.id)
-    return c.json({ friendsPresence })
-  } catch (error) {
-    console.error('Error getting friends presence:', error)
-    return c.json({ error: 'Failed to get friends presence' }, 500)
-  }
-})
-
-export { presenceRouter } 
+export { app as presenceRouter } 

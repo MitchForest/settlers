@@ -14,10 +14,12 @@ import { Input } from '@/components/ui/input'
 import { User, Settings, LogOut, Edit, Users, UserPlus, UserMinus, Check, X, Search } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { EditProfileDialog } from './EditProfileDialog'
+import { GuestProfileDialog } from './GuestProfileDialog'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import { getFriendsWebSocket } from '@/lib/websocket-friends'
+import { getGuestSession } from '@/lib/guest-session'
 
 interface Friend {
   id: string
@@ -51,8 +53,9 @@ interface SearchResult {
 }
 
 export function UserAvatarMenu() {
-  const { user, profile, isGuest } = useAuth()
-  const [showEditProfile, setShowEditProfile] = useState(false)
+const { user, profile, isGuest } = useAuth()
+const [showEditProfile, setShowEditProfile] = useState(false)
+const [showGuestProfile, setShowGuestProfile] = useState(false)
   
   // Friends state
   const [friends, setFriends] = useState<Friend[]>([])
@@ -72,28 +75,28 @@ export function UserAvatarMenu() {
       const friendsWS = getFriendsWebSocket()
       
       // Set up event listeners
-      const handleFriendRequestReceived = (data: any) => {
+      const handleFriendRequestReceived = (data: unknown) => {
         console.log('Friend request received:', data)
         loadFriendRequests() // Refresh friend requests
       }
       
-      const handleFriendRequestAccepted = (data: any) => {
+      const handleFriendRequestAccepted = (data: unknown) => {
         console.log('Friend request accepted:', data)
         loadFriends() // Refresh friends list
         loadFriendRequests() // Refresh requests (remove accepted one)
       }
       
-      const handleFriendRequestRejected = (data: any) => {
+      const handleFriendRequestRejected = (data: unknown) => {
         console.log('Friend request rejected:', data)
         // No need to refresh anything, just the toast notification
       }
       
-      const handleFriendRemoved = (data: any) => {
+      const handleFriendRemoved = (data: unknown) => {
         console.log('Friend removed:', data)
         loadFriends() // Refresh friends list
       }
       
-      const handlePresenceUpdate = (data: any) => {
+      const handlePresenceUpdate = (data: unknown) => {
         console.log('Friend presence update:', data)
         loadFriends() // Refresh friends list to update presence
       }
@@ -222,7 +225,112 @@ export function UserAvatarMenu() {
     }
   }
 
-  if (!user || isGuest) {
+  // Guest user menu
+  if (isGuest) {
+    const guestSession = getGuestSession()
+    
+    return (
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="h-12 w-12 rounded-full p-0 bg-white/5 border border-white/20 hover:bg-white/10 hover:border-white/30 transition-all"
+            >
+              <span className="text-3xl">{guestSession.avatarEmoji}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          
+          <DropdownMenuContent 
+            align="end" 
+            className="w-80 bg-black/90 backdrop-blur-sm border border-white/20 text-white"
+          >
+            {/* Guest Info Header */}
+            <div className="p-4 border-b border-white/10">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/20">
+                  <span className="text-2xl">{guestSession.avatarEmoji}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-white truncate">{guestSession.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs">
+                      Guest Player
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Guest Stats */}
+            <div className="p-4 border-b border-white/10">
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div>
+                  <div className="text-lg font-bold text-blue-400">{guestSession.stats.gamesJoined}</div>
+                  <div className="text-xs text-white/60">Games Joined</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-green-400">{guestSession.stats.gamesCompleted}</div>
+                  <div className="text-xs text-white/60">Completed</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrade Promo */}
+            <div className="p-4 border-b border-white/10">
+              <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-3 border border-blue-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-300 border-yellow-500/30 text-xs">
+                    ✨ Premium
+                  </Badge>
+                </div>
+                <p className="text-sm text-white">Unlock friends, game history, and more!</p>
+                <Button 
+                  onClick={() => setShowGuestProfile(true)}
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2 border-blue-500/50 text-blue-300 hover:bg-blue-500/10"
+                >
+                  Learn More
+                </Button>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="p-2">
+              <DropdownMenuItem 
+                onClick={() => setShowGuestProfile(true)}
+                className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/10 focus:bg-white/10 cursor-pointer"
+              >
+                <User className="w-4 h-4" />
+                <span>Guest Profile</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem 
+                disabled
+                className="flex items-center gap-2 px-3 py-2 text-white/50 cursor-not-allowed"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Settings (Create Account)</span>
+              </DropdownMenuItem>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <GuestProfileDialog 
+          open={showGuestProfile} 
+          onOpenChange={setShowGuestProfile}
+          onUpgradeClick={() => {
+            // TODO: Implement upgrade flow
+            toast.success('Account creation coming soon!')
+          }}
+        />
+      </>
+    )
+  }
+
+  // Authenticated user check
+  if (!user) {
     return null
   }
 
@@ -368,7 +476,7 @@ export function UserAvatarMenu() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-white truncate">{request.fromUser.name}</p>
                           {request.message && (
-                            <p className="text-xs text-white/60 truncate">"{request.message}"</p>
+                            <p className="text-xs text-white/60 truncate">&ldquo;{request.message}&rdquo;</p>
                           )}
                         </div>
                       </div>

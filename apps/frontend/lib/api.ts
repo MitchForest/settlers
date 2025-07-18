@@ -113,6 +113,26 @@ async function getAuthHeaders() {
   return headers
 }
 
+/**
+ * Get optional authentication headers for API requests (supports guest users)
+ */
+async function getOptionalAuthHeaders() {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`
+    }
+  } catch {
+    // Guest users don't have auth, which is fine
+  }
+  
+  return headers
+}
+
 // Friends API
 export async function getFriends() {
   const headers = await getAuthHeaders()
@@ -296,4 +316,134 @@ export async function getFriendsPresence() {
   }
   
   return response.json()
-} 
+}
+
+// Available Games API
+export interface AvailableGamesFilters {
+  phase?: 'lobby' | 'initial_placement' | 'main_game'
+  minPlayers?: number
+  maxPlayers?: number
+  search?: string
+  limit?: number
+  offset?: number
+}
+
+export interface GameInfo {
+  id: string
+  gameCode: string
+  hostUserId?: string
+  hostPlayerName: string
+  hostAvatarEmoji: string
+  playerCount: number
+  maxPlayers: number
+  isPublic: boolean
+  createdAt: string
+  phase: 'lobby' | 'initial_placement' | 'main_game' | 'ended'
+  hostFriend?: {
+    id: string
+    name: string
+    email: string
+    avatarEmoji: string | null
+  }
+}
+
+export interface AvailableGamesResponse {
+  friendsGames: GameInfo[]
+  publicGames: GameInfo[]
+  total: number
+}
+
+export async function getAvailableGames(filters: AvailableGamesFilters = {}): Promise<AvailableGamesResponse> {
+  try {
+    const headers = await getOptionalAuthHeaders() // Support both auth and guest users
+    
+    // Build query string
+    const searchParams = new URLSearchParams()
+    if (filters.phase) searchParams.append('phase', filters.phase)
+    if (filters.minPlayers) searchParams.append('minPlayers', filters.minPlayers.toString())
+    if (filters.maxPlayers) searchParams.append('maxPlayers', filters.maxPlayers.toString())
+    if (filters.search) searchParams.append('search', filters.search)
+    if (filters.limit) searchParams.append('limit', filters.limit.toString())
+    if (filters.offset) searchParams.append('offset', filters.offset.toString())
+    
+    const queryString = searchParams.toString()
+    const url = `${API_URL}/api/games/available${queryString ? `?${queryString}` : ''}`
+    
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    })
+    
+    if (!response.ok) {
+      let errorMessage = `Failed to fetch available games (${response.status})`
+      
+      if (response.status === 401) {
+        errorMessage = 'Authentication required'
+      } else if (response.status === 403) {
+        errorMessage = 'Access denied'
+      } else if (response.status === 404) {
+        errorMessage = 'Games service not found'
+      } else if (response.status >= 500) {
+        errorMessage = 'Server error - please try again later'
+      }
+      
+      throw new Error(errorMessage)
+    }
+    
+    const result = await response.json()
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch available games')
+    }
+    
+    return result.data
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error - please check your connection')
+    }
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('Request timed out - please try again')
+    }
+    throw error
+  }
+}
+
+export async function getGameByCode(gameCode: string): Promise<GameInfo> {
+  try {
+    const headers = await getOptionalAuthHeaders()
+    const response = await fetch(`${API_URL}/api/games/code/${gameCode}`, {
+      headers,
+      signal: AbortSignal.timeout(8000) // 8 second timeout
+    })
+    
+    if (!response.ok) {
+      let errorMessage = `Failed to find game (${response.status})`
+      
+      if (response.status === 404) {
+        errorMessage = 'Game not found'
+      } else if (response.status === 401) {
+        errorMessage = 'Authentication required'
+      } else if (response.status === 403) {
+        errorMessage = 'Access denied'
+      } else if (response.status >= 500) {
+        errorMessage = 'Server error - please try again later'
+      }
+      
+      throw new Error(errorMessage)
+    }
+    
+    const result = await response.json()
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to find game')
+    }
+    
+    return result.data
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error - please check your connection')
+    }
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('Request timed out - please try again')
+    }
+    throw error
+  }
+}
