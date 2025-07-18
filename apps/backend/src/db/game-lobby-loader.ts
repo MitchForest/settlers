@@ -4,15 +4,60 @@
 import { 
   LobbyState, 
   GameState,
-  loadLobbyFromDB
+  loadLobbyFromDB,
+  LobbyPlayer
 } from '@settlers/core'
 import { loadGameStateFromDB } from './game-state-serializer'
-import { games, db } from './index'
+import { games, players, db } from './index'
 import { eq } from 'drizzle-orm'
 
 export type LoadedState = 
   | { type: 'lobby'; state: LobbyState }
   | { type: 'game'; state: GameState }
+
+/**
+ * Load lobby state with current players from database
+ * This ensures AI bots and other players added after lobby creation are included
+ */
+async function loadLobbyStateWithPlayers(gameRecord: any): Promise<LobbyState> {
+  // Start with the base lobby state from JSON
+  const baseLobbyState = loadLobbyFromDB(gameRecord)
+  
+  // Load current players from database
+  const currentPlayers = await db
+    .select()
+    .from(players)
+    .where(eq(players.gameId, gameRecord.id))
+  
+  // Convert database players to LobbyPlayer format
+  const lobbyPlayers = new Map<string, LobbyPlayer>()
+  
+  for (const dbPlayer of currentPlayers) {
+    const lobbyPlayer: LobbyPlayer = {
+      id: dbPlayer.id,
+      name: dbPlayer.name,
+      userId: dbPlayer.userId || undefined,
+      avatarEmoji: dbPlayer.avatarEmoji || '👤',
+      isHost: dbPlayer.isHost,
+      isAI: dbPlayer.isAI,
+      isConnected: dbPlayer.isConnected,
+      joinedAt: dbPlayer.joinedAt,
+      aiConfig: dbPlayer.isAI ? {
+        difficulty: dbPlayer.aiDifficulty as any || 'medium',
+        personality: dbPlayer.aiPersonality as any || 'balanced',
+        thinkingTimeMs: dbPlayer.aiThinkingTimeMs || 1000,
+        maxActionsPerTurn: dbPlayer.aiMaxActionsPerTurn || 10
+      } : undefined
+    }
+    lobbyPlayers.set(dbPlayer.id, lobbyPlayer)
+  }
+  
+  // Update the lobby state with current players
+  return {
+    ...baseLobbyState,
+    players: lobbyPlayers
+  }
+}
 
 /**
  * Unified loader that determines whether to load lobby or game state
@@ -36,7 +81,7 @@ export async function loadGameOrLobbyState(gameId: string): Promise<LoadedState>
     if (!game.lobbyState) {
       throw new Error('Lobby state not found for lobby game')
     }
-    const lobbyState = loadLobbyFromDB(game)
+    const lobbyState = await loadLobbyStateWithPlayers(game)
     return { type: 'lobby', state: lobbyState }
   }
   
@@ -68,11 +113,22 @@ export async function loadGameOrLobbyState(gameId: string): Promise<LoadedState>
  * Load lobby state specifically (throws if not a lobby)
  */
 export async function loadLobbyState(gameId: string): Promise<LobbyState> {
-  const loaded = await loadGameOrLobbyState(gameId)
-  if (loaded.type !== 'lobby') {
-    throw new Error(`Game ${gameId} is not a lobby (status: ${loaded.type})`)
+  const gameRecord = await db
+    .select()
+    .from(games)
+    .where(eq(games.id, gameId))
+    .limit(1)
+
+  if (gameRecord.length === 0) {
+    throw new Error('Game not found')
   }
-  return loaded.state
+
+  const game = gameRecord[0]
+  if (game.status !== 'lobby') {
+    throw new Error(`Game ${gameId} is not a lobby (status: ${game.status})`)
+  }
+
+  return await loadLobbyStateWithPlayers(game)
 }
 
 /**

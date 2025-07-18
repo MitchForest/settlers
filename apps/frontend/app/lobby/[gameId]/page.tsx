@@ -26,7 +26,8 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
     startGame,
     disconnect,
     addAIBot,
-    removeAIBot
+    removeAIBot,
+    setLocalPlayerId
   } = useGameStore()
 
   const [isStartingGame, setIsStartingGame] = useState(false)
@@ -34,18 +35,39 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
   useEffect(() => {
     // Add a small delay to allow store to initialize
     const timer = setTimeout(() => {
-      if (!localPlayerId) {
-        console.warn('No localPlayerId found, redirecting to home')
+      // Check both store and localStorage for player ID
+      const storedPlayerId = localStorage.getItem(`playerId_${gameId}`)
+      const effectivePlayerId = localPlayerId || storedPlayerId
+      
+      if (!effectivePlayerId) {
+        console.warn('No localPlayerId found in store or localStorage, redirecting to home')
         router.push('/')
         return
       }
       
-      // Connect to lobby
-      connectToLobby(gameId, localPlayerId)
+      // If we got player ID from localStorage but not store, update the store
+      if (!localPlayerId && storedPlayerId) {
+        console.log('Restoring player ID from localStorage:', storedPlayerId)
+        setLocalPlayerId(storedPlayerId)
+      }
+      
+      // Only connect if not already connecting or connected
+      if (connectionStatus === 'disconnected') {
+        connectToLobby(gameId, effectivePlayerId)
+      }
     }, 100)
+    
+    // Listen for game navigation events from the store
+    const handleNavigateToGame = (event: CustomEvent) => {
+      const { gameId: targetGameId } = event.detail
+      router.push(`/game/${targetGameId}`)
+    }
+    
+    window.addEventListener('navigateToGame', handleNavigateToGame as EventListener)
     
     return () => {
       clearTimeout(timer)
+      window.removeEventListener('navigateToGame', handleNavigateToGame as EventListener)
       if (localPlayerId) {
         disconnect()
       }

@@ -38,7 +38,7 @@ export default function Home() {
   const [pendingAction, setPendingAction] = useState<'create' | 'join' | 'observe' | null>(null)
   
   const router = useRouter()
-  const { connectToLobby } = useGameStore()
+  const { connectToLobby, setLocalPlayerId } = useGameStore()
   const { user, profile, loading: authLoading } = useAuth()
 
   useEffect(() => {
@@ -64,7 +64,18 @@ export default function Home() {
 
   const handleGameCreated = async (gameCode: string, gameId: string, hostPlayerId?: string) => {
     if (hostPlayerId) {
+      console.log('Game created successfully:', { gameCode, gameId, hostPlayerId })
+      
+      // Set the player ID in the store immediately to avoid race conditions
+      setLocalPlayerId(hostPlayerId)
+      
+      // Also store in localStorage as backup for game page access
+      localStorage.setItem(`playerId_${gameId}`, hostPlayerId)
+      
+      // Connect to lobby with the player ID
       connectToLobby(gameId, hostPlayerId)
+      
+      // Navigate to lobby
       router.push(`/lobby/${gameId}`)
     } else {
       console.error('No host player ID provided to handleGameCreated')

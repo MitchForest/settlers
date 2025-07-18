@@ -4,6 +4,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import { GameState, GameAction, PlayerId, Player } from '@settlers/core'
 import type { ReactFlowInstance } from 'reactflow'
 import { API_URL } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 interface GameStore {
   // Core State
@@ -22,7 +23,7 @@ interface GameStore {
   lobbyState: 'idle' | 'creating' | 'joining' | 'waiting' | 'starting'
   gameCode: string | null
   isHost: boolean
-  lobbyPlayers: Player[]
+  lobbyPlayers: any[] // LobbyPlayer[] // Changed to any[] for now as LobbyPlayer type is removed
   
   // UI State
   placementMode: 'none' | 'settlement' | 'city' | 'road'
@@ -45,6 +46,7 @@ interface GameStore {
   updateGameState: (state: GameState) => void
   setHoveredHex: (hexId: string | null) => void
   setSelectedHex: (hexId: string | null) => void
+  setLocalPlayerId: (playerId: string) => void
   
   // Lobby Actions
   createGame: (playerCount: 3 | 4, playerName: string) => Promise<{ gameCode: string; gameId: string }>
@@ -194,12 +196,29 @@ export const useGameStore = create<GameStore>()(
         set({ lobbyState: 'creating' })
         
         try {
+          // Get current authenticated user
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.user) {
+            throw new Error('Must be authenticated to create a game')
+          }
+
+          // Get auth headers
+          const { data: { session: currentSession } } = await supabase.auth.getSession()
+          const headers: Record<string, string> = { 
+            'Content-Type': 'application/json'
+          }
+          if (currentSession?.access_token) {
+            headers['Authorization'] = `Bearer ${currentSession.access_token}`
+          }
+          
           const response = await fetch(`${API_URL}/api/games`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
-              playerNames: [playerName],
-              hostPlayerName: playerName
+              hostUserId: session.user.id,
+              maxPlayers: playerCount,
+              allowObservers: true,
+              isPublic: true
             })
           })
           
@@ -227,9 +246,23 @@ export const useGameStore = create<GameStore>()(
         set({ lobbyState: 'joining' })
         
         try {
+          // Get current authenticated user
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.user) {
+            throw new Error('Must be authenticated to join a game')
+          }
+
+          // Get auth headers
+          const headers: Record<string, string> = { 
+            'Content-Type': 'application/json'
+          }
+          if (session?.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`
+          }
+          
           const response = await fetch(`${API_URL}/api/games/join-by-code`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ gameCode, playerName })
           })
           
@@ -252,17 +285,38 @@ export const useGameStore = create<GameStore>()(
       },
 
       connectToLobby: (gameId, playerId) => {
+        // Close existing WebSocket connection first
+        const existingWs = get().ws
+        if (existingWs) {
+          console.log('🔌 Closing existing WebSocket connection')
+          existingWs.close()
+        }
+
         // Set the player ID immediately to prevent redirects
         set({ 
           localPlayerId: playerId,
           connectionStatus: 'connecting',
-          lobbyState: 'joining'
+          lobbyState: 'joining',
+          ws: null // Clear old connection
         })
         
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
         const ws = new WebSocket(`${wsUrl}/ws?gameId=${gameId}&playerId=${playerId}`)
         
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (get().connectionStatus === 'connecting') {
+            console.log('🕐 WebSocket connection timeout')
+            ws.close()
+            set({ 
+              connectionStatus: 'error', 
+              lobbyState: 'idle'
+            })
+          }
+        }, 10000) // 10 second timeout
+        
         ws.onopen = () => {
+          clearTimeout(connectionTimeout)
           console.log('🔌 WebSocket connected to lobby:', gameId)
           set({ connectionStatus: 'connected' })
           ws.send(JSON.stringify({ type: 'joinLobby', gameId, playerId }))
@@ -284,15 +338,28 @@ export const useGameStore = create<GameStore>()(
               case 'lobbyUpdate':
                 set({ lobbyPlayers: data.players })
                 break
-              case 'gameStarting':
+              case 'gameStarted':
                 set({ lobbyState: 'starting' })
-                // Redirect to game
-                window.location.href = `/game/${data.gameId}`
+                // Store player ID for game page access
+                const currentPlayerId = get().localPlayerId
+                const targetGameId = data.gameState?.id || gameId // Use gameId from closure
+                if (currentPlayerId && targetGameId) {
+                  localStorage.setItem(`playerId_${targetGameId}`, currentPlayerId)
+                }
+                // Use Next.js navigation to preserve React state
+                if (typeof window !== 'undefined' && targetGameId) {
+                  const event = new CustomEvent('navigateToGame', { detail: { gameId: targetGameId } })
+                  window.dispatchEvent(event)
+                }
                 break
               case 'aiBotAdded':
                 // Update lobby players list with new AI bot
                 set((state) => {
-                  state.lobbyPlayers.push(data.bot)
+                  // Check if bot already exists to prevent duplicates
+                  const existingBot = state.lobbyPlayers.find(p => p.id === data.bot.id)
+                  if (!existingBot) {
+                    state.lobbyPlayers.push(data.bot)
+                  }
                 })
                 break
               case 'aiBotRemoved':
@@ -311,24 +378,33 @@ export const useGameStore = create<GameStore>()(
         }
         
         ws.onerror = (error) => {
+          clearTimeout(connectionTimeout)
           console.error('❌ Lobby WebSocket error:', error)
           set({ connectionStatus: 'error', lobbyState: 'idle' })
         }
         
         ws.onclose = (event) => {
+          clearTimeout(connectionTimeout)
           console.log('🔌 Lobby WebSocket closed:', event.code, event.reason)
-          set({ 
-            connectionStatus: 'disconnected', 
-            ws: null,
-            lobbyState: 'idle'
-          })
           
-          // Attempt reconnection if it wasn't a clean close
-          if (event.code !== 1000 && event.code !== 1001) {
-            console.log('🔄 Attempting to reconnect to lobby...')
+          // Only set disconnected if we're not already in error state
+          const currentStatus = get().connectionStatus
+          if (currentStatus !== 'error') {
+            set({ 
+              connectionStatus: 'disconnected', 
+              ws: null,
+              lobbyState: 'idle'
+            })
+          }
+          
+          // Only attempt reconnection for unexpected closures and if not already in error state
+          if (event.code !== 1000 && event.code !== 1001 && currentStatus !== 'error') {
+            console.log('🔄 Attempting to reconnect to lobby in 3 seconds...')
             setTimeout(() => {
               const state = get()
-              if (state.localPlayerId && gameId) {
+              // Only reconnect if still disconnected and have player ID
+              if (state.connectionStatus === 'disconnected' && state.localPlayerId && gameId) {
+                console.log('🔄 Reconnecting to lobby...')
                 get().connectToLobby(gameId, state.localPlayerId)
               }
             }, 3000)
@@ -342,9 +418,18 @@ export const useGameStore = create<GameStore>()(
         const { localPlayerId } = get()
         if (!localPlayerId) throw new Error('No player ID')
         
+        // Get current authenticated user and headers
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: Record<string, string> = { 
+          'Content-Type': 'application/json'
+        }
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        
         const response = await fetch(`${API_URL}/api/games/${gameId}/start`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ hostPlayerId: localPlayerId })
         })
         
@@ -380,13 +465,33 @@ export const useGameStore = create<GameStore>()(
       setPlacementMode: (mode) => set({ placementMode: mode }),
       
       updateGameState: (state) => {
-        set({ gameState: state })
+        // Convert objects to Maps if needed for compatibility
+        const processedState = {
+          ...state,
+          players: state.players instanceof Map 
+            ? state.players 
+            : new Map(Object.entries(state.players as Record<string, any>)),
+          board: {
+            ...state.board,
+            hexes: state.board.hexes instanceof Map
+              ? state.board.hexes
+              : new Map(Object.entries(state.board.hexes as Record<string, any>)),
+            vertices: state.board.vertices instanceof Map
+              ? state.board.vertices
+              : new Map(Object.entries(state.board.vertices as Record<string, any>)),
+            edges: state.board.edges instanceof Map
+              ? state.board.edges
+              : new Map(Object.entries(state.board.edges as Record<string, any>))
+          }
+        } as GameState
+        set({ gameState: processedState })
         // TODO: Update valid placements based on new state
         // This would call validation functions from core
       },
       
       setHoveredHex: (hexId) => set({ hoveredHex: hexId }),
       setSelectedHex: (hexId) => set({ selectedHex: hexId }),
+      setLocalPlayerId: (playerId) => set({ localPlayerId: playerId }),
       
       // Computed
       currentPlayer: () => {

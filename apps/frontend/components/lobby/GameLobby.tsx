@@ -1,25 +1,18 @@
 'use client'
 
-import { Player } from '@settlers/core'
+import { LobbyPlayer } from '@settlers/core'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Crown, Copy, Check, Bot, Plus, X } from 'lucide-react'
+import { Users, Crown, Copy, Check, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { AddAIBotDialog } from './AddAIBotDialog'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
-// Extended player interface for AI players
-interface AIPlayer extends Player {
-  avatarEmoji?: string
-  aiDifficulty?: 'easy' | 'medium' | 'hard'
-  aiPersonality?: 'aggressive' | 'balanced' | 'defensive' | 'economic'
-}
-
 interface GameLobbyProps {
   gameCode: string
-  players: Player[]
+  players: LobbyPlayer[]
   isHost: boolean
   canStart: boolean
   onStartGame: () => void
@@ -106,220 +99,251 @@ export function GameLobby({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] p-4">
-      <div className="container mx-auto max-w-4xl">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] py-8 px-4">
+      <div className="container mx-auto max-w-6xl">
+        <div className="space-y-8">
           {/* Header */}
           <div className="text-center space-y-4">
-            <h1 className="text-4xl font-bold text-white">Game Lobby</h1>
-            <div className={ds(designSystem.glass.primary, 'inline-flex items-center gap-2 rounded-lg px-4 py-2')}>
-              <span className={designSystem.text.body}>Game Code:</span>
-              <code className="text-2xl font-mono font-bold text-yellow-400">{gameCode}</code>
+            <h1 className={ds(designSystem.text.heading, 'text-4xl font-bold')}>Game Lobby</h1>
+            <div className={ds(componentStyles.glassCard, 'inline-flex items-center gap-3 rounded-lg px-6 py-3 border-white/30')}>
+              <span className={ds(designSystem.text.body, 'text-lg')}>Game Code:</span>
+              <code className="text-3xl font-mono font-bold text-yellow-400">{gameCode}</code>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={copyGameCode}
-                className={ds(designSystem.interactive.subtle.base, designSystem.interactive.subtle.hover, 'rounded-md')}
+                className={ds(
+                  componentStyles.buttonSecondary,
+                  'rounded-md hover:scale-105 transition-all duration-200'
+                )}
               >
                 {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="text-white/80">Share this code with friends to join the game</p>
+            <p className={ds(designSystem.text.muted, 'text-lg')}>Share this code with friends to join the game</p>
           </div>
 
-          {/* Players */}
-          <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+          {/* Main Content Grid */}
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
+            {/* Left Column - Players */}
+            <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
+              <CardHeader>
                 <CardTitle className={ds(designSystem.text.heading, 'flex items-center gap-2')}>
                   <Users className="h-5 w-5" />
                   Players ({players.length}/4)
                 </CardTitle>
-                {isHost && players.length < 4 && (
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  {/* Player Slots - Always show 4 slots */}
+                  {Array.from({ length: 4 }).map((_, slotIndex) => {
+                    const player = players[slotIndex]
+                    
+                    if (player) {
+                      // Occupied slot
+                      return (
+                        <div
+                          key={`player-${player.id}-${slotIndex}`}
+                          className={ds(
+                            componentStyles.glassCard,
+                            'flex items-center gap-3 p-4 border-white/20',
+                            'hover:bg-white/10 hover:border-white/30 hover:scale-[1.02]',
+                            'transition-all duration-200'
+                          )}
+                        >
+                          <div className={ds(
+                            componentStyles.avatarButton,
+                            'text-white font-bold border-white/20 text-lg'
+                          )}
+                          style={{ backgroundColor: getPlayerColor(slotIndex) }}>
+                            {player.avatarEmoji || player.name[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <div className={ds(designSystem.text.body, 'font-medium flex items-center gap-2')}>
+                              {player.name}
+                              {player.isAI && (
+                                <Badge variant="secondary" className="text-xs">
+                                  🤖 {player.aiConfig?.difficulty || 'medium'} AI
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {slotIndex === 0 && (
+                                <Badge variant="outline" className="text-yellow-400 border-yellow-400 text-xs">
+                                  <Crown className="h-3 w-3 mr-1" />
+                                  Host
+                                </Badge>
+                              )}
+                              {player.isAI && (
+                                <Badge variant="outline" className="text-xs border-white/20">
+                                  {player.aiConfig?.personality || 'balanced'}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          {isHost && player.isAI && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveAIBot(player.id)}
+                              disabled={removingBotIds.has(player.id)}
+                              className={ds(
+                                'h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20',
+                                'transition-all duration-200',
+                                removingBotIds.has(player.id) && 'opacity-50 cursor-not-allowed'
+                              )}
+                            >
+                              {removingBotIds.has(player.id) ? (
+                                <div className="animate-spin">⚡</div>
+                              ) : (
+                                <X className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      )
+                    } else {
+                      // Empty slot
+                      return (
+                        <div
+                          key={`empty-slot-${slotIndex}`}
+                          onClick={isHost ? () => setShowAddBotDialog(true) : undefined}
+                          className={ds(
+                            componentStyles.glassCard,
+                            'flex items-center gap-3 p-4 border-2 border-dashed border-white/20',
+                            isHost ? 'cursor-pointer hover:bg-white/5 hover:border-white/30 hover:scale-[1.01]' : 'opacity-60',
+                            'transition-all duration-200'
+                          )}
+                        >
+                          <div className={ds(
+                            'w-12 h-12 rounded-md bg-white/5 flex items-center justify-center',
+                            'border border-white/10'
+                          )}>
+                            {isHost ? <Plus className="h-6 w-6 text-white/40" /> : <Users className="h-6 w-6 text-white/40" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className={ds(designSystem.text.body, 'font-medium text-white/60')}>
+                              {isHost ? 'Add Player' : 'Waiting for player...'}
+                            </div>
+                            <div className={ds(designSystem.text.muted, 'text-sm')}>
+                              {isHost ? 'Click to add AI bot or invite friend' : 'Host will add player'}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Right Column - Rules & Actions */}
+            <div className="space-y-6">
+              {/* Game Rules */}
+              <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
+                <CardHeader>
+                  <CardTitle className={ds(designSystem.text.heading, 'text-xl')}>Game Rules & Resources</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Left - Core Rules */}
+                    <div className="space-y-3">
+                      <h4 className={ds(designSystem.text.body, 'font-semibold text-white mb-2')}>Core Rules</h4>
+                      <ul className="space-y-2 text-sm text-white/80">
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>First to 10 victory points wins</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>Build settlements, cities, and roads</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>Trade resources with other players</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>Use development cards strategically</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span>Watch out for the robber!</span>
+                        </li>
+                      </ul>
+                    </div>
+                    
+                    {/* Right - Resources & Costs */}
+                    <div className="space-y-3">
+                      <h4 className={ds(designSystem.text.body, 'font-semibold text-white mb-2')}>Resources & Costs</h4>
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-white/80 mb-1">Resources:</p>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="bg-green-500/20 px-2 py-1 rounded text-xs">🌲 Wood</span>
+                            <span className="bg-red-500/20 px-2 py-1 rounded text-xs">🧱 Brick</span>
+                            <span className="bg-yellow-500/20 px-2 py-1 rounded text-xs">🌾 Wheat</span>
+                            <span className="bg-blue-500/20 px-2 py-1 rounded text-xs">🐑 Sheep</span>
+                            <span className="bg-gray-500/20 px-2 py-1 rounded text-xs">🪨 Ore</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-white/80 mb-1">Building Costs:</p>
+                          <div className="space-y-1 text-xs">
+                            <div>🏠 Settlement: 🌲🧱🌾🐑</div>
+                            <div>🏛️ City: 🌾🌾🪨🪨🪨</div>
+                            <div>🛤️ Road: 🌲🧱</div>
+                            <div>📜 Dev Card: 🌾🐑🪨</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-4">
+                {isHost ? (
                   <Button
-                    onClick={() => setShowAddBotDialog(true)}
-                    disabled={isAddingBot}
-                    size="sm"
+                    onClick={onStartGame}
+                    disabled={!canStart}
+                    size="lg"
                     className={ds(
                       componentStyles.buttonPrimary,
-                      'bg-gradient-to-r from-blue-500/20 to-purple-500/20',
-                      'hover:from-blue-500/30 hover:to-purple-500/30',
-                      'border-blue-400/30',
-                      isAddingBot && 'opacity-50 cursor-not-allowed'
+                      'bg-green-500/20 border-green-400/30 hover:bg-green-500/30 hover:scale-[1.02]',
+                      'transition-all duration-200 py-3 text-lg',
+                      !canStart && 'opacity-50 cursor-not-allowed'
                     )}
                   >
-                    {isAddingBot ? (
-                      <>
-                        <div className="animate-spin mr-1">⚡</div>
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <Bot className="h-4 w-4 mr-1" />
-                        Add AI Bot
-                      </>
-                    )}
+                    {canStart ? 'Start Game' : `Need ${3 - players.length} more players`}
                   </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-2">
-                {players.map((player, index) => (
-                  <div
-                    key={`player-${player.id}-${index}`}
-                    className={ds(
-                      designSystem.glass.secondary,
-                      'flex items-center gap-3 p-3 rounded-lg border-white/10',
-                      designSystem.animation.normal,
-                      'hover:bg-white/10 hover:border-white/20 hover:scale-[1.02]',
-                      'transition-all duration-200 cursor-pointer'
-                    )}
-                  >
-                    <div className={ds(
-                      componentStyles.avatarButton,
-                      'text-white font-bold border-white/20'
-                    )}
-                    style={{ backgroundColor: getPlayerColor(index) }}>
-                      {player.isAI ? (player as AIPlayer).avatarEmoji || '🤖' : player.name[0].toUpperCase()}
+                ) : (
+                  <div className={ds(
+                    componentStyles.glassCard,
+                    'text-center py-4 border-white/20'
+                  )}>
+                    <div className={ds(designSystem.text.body, 'text-white/80')}>
+                      Waiting for host to start the game...
                     </div>
-                    <div className="flex-1">
-                      <div className={ds(designSystem.text.body, 'font-medium flex items-center gap-2')}>
-                        {player.name}
-                                                 {player.isAI && (
-                           <Badge variant="secondary" className="text-xs">
-                             🤖 {(player as AIPlayer).aiDifficulty || 'medium'} AI
-                           </Badge>
-                         )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {index === 0 && (
-                          <Badge variant="outline" className="text-yellow-400 border-yellow-400 text-xs">
-                            <Crown className="h-3 w-3 mr-1" />
-                            Host
-                          </Badge>
-                        )}
-                                                 {player.isAI && (
-                           <Badge variant="outline" className="text-xs border-white/20">
-                             {(player as AIPlayer).aiPersonality || 'balanced'}
-                           </Badge>
-                         )}
-                      </div>
-                    </div>
-                    {isHost && player.isAI && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveAIBot(player.id)}
-                        disabled={removingBotIds.has(player.id)}
-                        className={ds(
-                          componentStyles.dropdownItemDestructive,
-                          'h-8 w-8 p-0',
-                          removingBotIds.has(player.id) && 'opacity-50 cursor-not-allowed'
-                        )}
-                      >
-                        {removingBotIds.has(player.id) ? (
-                          <div className="animate-spin">⚡</div>
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </Button>
-                    )}
                   </div>
-                ))}
+                )}
                 
-                {/* Empty slots - only show if we can add more players */}
-                {isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
-                  <div
-                    key={`empty-slot-${i}`}
-                    className={ds(
-                      designSystem.glass.tertiary,
-                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
-                      designSystem.animation.normal,
-                      'hover:bg-white/5 hover:border-white/20 hover:scale-[1.01]',
-                      'transition-all duration-200 cursor-pointer'
-                    )}
-                  >
-                    <div className={ds(
-                      'w-10 h-10 rounded-md bg-white/5 flex items-center justify-center',
-                      'border border-white/10'
-                    )}>
-                      <Plus className="h-5 w-5 text-white/40" />
-                    </div>
-                    <div className={ds(designSystem.text.muted, 'text-sm')}>
-                      Add player or AI bot...
-                    </div>
-                  </div>
-                )) || (!isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
-                  <div
-                    key={`waiting-slot-${i}`}
-                    className={ds(
-                      designSystem.glass.tertiary,
-                      'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
-                      'hover:bg-white/5 hover:border-white/15',
-                      'transition-all duration-200'
-                    )}
-                  >
-                    <div className={ds(
-                      'w-10 h-10 rounded-md bg-white/5 flex items-center justify-center',
-                      'border border-white/10'
-                    )}>
-                      <Users className="h-5 w-5 text-white/40" />
-                    </div>
-                    <div className={ds(designSystem.text.muted, 'text-sm')}>
-                      Waiting for player...
-                    </div>
-                  </div>
-                )))}
+                <Button
+                  onClick={onLeave}
+                  variant="outline"
+                  size="lg"
+                  className={ds(
+                    componentStyles.buttonSecondary,
+                    'hover:scale-[1.02] transition-all duration-200'
+                  )}
+                >
+                  Leave Lobby
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Actions */}
-          <div className="flex items-center justify-center gap-4">
-            {isHost ? (
-              <Button
-                onClick={onStartGame}
-                disabled={!canStart}
-                size="lg"
-                className={ds(
-                  componentStyles.buttonPrimary,
-                  'bg-green-500/20 border-green-400/30 hover:bg-green-500/30',
-                  !canStart && 'opacity-50 cursor-not-allowed'
-                )}
-              >
-                {canStart ? 'Start Game' : `Need ${3 - players.length} more players`}
-              </Button>
-            ) : (
-              <div className="text-center text-white/60">
-                Waiting for host to start the game...
-              </div>
-            )}
-            
-            <Button
-              onClick={onLeave}
-              variant="outline"
-              size="lg"
-              className={componentStyles.buttonSecondary}
-            >
-              Leave Lobby
-            </Button>
+            </div>
           </div>
-
-          {/* Instructions */}
-          <Card className={ds(componentStyles.glassCard, 'border-white/20')}>
-            <CardContent className="pt-6">
-              <div className="text-center space-y-2">
-                <h3 className="text-white font-medium">Game Rules</h3>
-                <ul className="text-white/70 text-sm space-y-1">
-                  <li>• First to 10 victory points wins</li>
-                  <li>• Build settlements, cities, and roads to expand</li>
-                  <li>• Trade resources with other players</li>
-                  <li>• Use development cards for strategic advantages</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
       

@@ -207,4 +207,43 @@ export function prepareGameStateForDB(gameState: GameState) {
     gameState: serializeGameState(gameState),
     updatedAt: gameState.updatedAt
   }
+}
+
+/**
+ * Prepare game state for frontend transmission via WebSocket
+ * Converts Maps to Objects but keeps the structure the frontend expects
+ */
+export function prepareGameStateForFrontend(gameState: GameState): any {
+  // Convert players Map to Object but preserve structure
+  const playersObject: Record<string, any> = {}
+  for (const [playerId, player] of gameState.players) {
+    playersObject[playerId] = player
+  }
+
+  // Convert board Maps to Objects
+  const hexesObject: Record<string, any> = {}
+  for (const [hexId, hex] of gameState.board.hexes) {
+    hexesObject[hexId] = hex
+  }
+
+  const verticesObject: Record<string, any> = {}
+  for (const [vertexId, vertex] of gameState.board.vertices) {
+    verticesObject[vertexId] = vertex
+  }
+
+  const edgesObject: Record<string, any> = {}
+  for (const [edgeId, edge] of gameState.board.edges) {
+    edgesObject[edgeId] = edge
+  }
+
+  return {
+    ...gameState,
+    players: playersObject,
+    board: {
+      ...gameState.board,
+      hexes: hexesObject,
+      vertices: verticesObject,
+      edges: edgesObject
+    }
+  }
 } 

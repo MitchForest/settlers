@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Loader2 } from 'lucide-react'
@@ -10,164 +10,97 @@ function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [message, setMessage] = useState('Signing you in...')
+  const handledRef = useRef(false)
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      // Prevent double execution
+      if (handledRef.current) return
+      handledRef.current = true
+
       try {
-        console.log('Starting auth callback process...')
-        console.log('Current URL:', window.location.href)
+        console.log('Auth callback started')
         
-        // Check for PKCE flow first (code in query params)
+        // Check for URL errors first
         const urlParams = new URLSearchParams(window.location.search)
-        const authCode = urlParams.get('code')
         const error = urlParams.get('error')
         const errorDescription = urlParams.get('error_description')
         
-        console.log('URL params - code:', !!authCode, 'error:', error)
-        
         if (error) {
-          console.error('Auth error from URL params:', { error, errorDescription })
+          console.error('Auth error:', error, errorDescription)
           setStatus('error')
-          setTimeout(() => router.push('/?auth=error'), 3000)
+          setMessage('Authentication failed. Redirecting...')
+          setTimeout(() => router.push('/'), 2000)
           return
-        }
-        
-        if (authCode) {
-          console.log('PKCE flow detected, setting up auth state listener...')
-          
-          // For PKCE flow, use auth state change listener since the code exchange
-          // happens automatically in the background by Supabase
-          const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log('Auth state change in callback:', event, session?.user?.email)
-            
-            if (event === 'SIGNED_IN' && session) {
-              console.log('PKCE authentication successful for user:', session.user.email)
-              setStatus('success')
-              
-              // Clear the code from URL
-              window.history.replaceState({}, document.title, window.location.pathname)
-              
-              const redirectTo = searchParams.get('redirect_to') || '/'
-              console.log('Redirecting to:', redirectTo)
-              
-              // Cleanup listener
-              authListener.subscription.unsubscribe()
-              
-              setTimeout(() => router.push(redirectTo), 1500)
-            } else if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-              console.error('Authentication failed or user signed out')
-              authListener.subscription.unsubscribe()
-              setStatus('error')
-              setTimeout(() => router.push('/?auth=error'), 3000)
-            }
-          })
-          
-          // Also check if there's already a session (race condition)
-          const { data, error: sessionError } = await supabase.auth.getSession()
-          if (!sessionError && data.session) {
-            console.log('Session already exists:', data.session.user.email)
-            authListener.subscription.unsubscribe()
-            setStatus('success')
-            
-            window.history.replaceState({}, document.title, window.location.pathname)
-            const redirectTo = searchParams.get('redirect_to') || '/'
-            setTimeout(() => router.push(redirectTo), 1500)
-          }
-          
-          // Set a timeout as fallback
-          setTimeout(() => {
-            console.warn('Auth callback timed out after 10 seconds')
-            authListener.subscription.unsubscribe()
-            setStatus('error')
-            setTimeout(() => router.push('/?auth=timeout'), 3000)
-          }, 10000)
-          
-          return
-        }
-        
-        // Fallback: Check for legacy hash-based flow
-        const hashParams = new URLSearchParams(window.location.hash.substring(1))
-        const authError = hashParams.get('error')
-        const errorCode = hashParams.get('error_code')
-        const hashErrorDescription = hashParams.get('error_description')
-        
-        if (authError) {
-          console.error('Auth error from hash:', { authError, errorCode, hashErrorDescription })
-          
-          if (errorCode === 'otp_expired') {
-            setStatus('error')
-            setTimeout(() => router.push('/?auth=expired'), 3000)
-            return
-          }
-          
-          setStatus('error')
-          setTimeout(() => router.push('/?auth=error'), 3000)
-          return
-        }
-        
-        // Get auth tokens from hash (legacy implicit flow)
-        const accessToken = hashParams.get('access_token')
-        const refreshToken = hashParams.get('refresh_token')
-        
-        console.log('Hash params - access_token:', !!accessToken, 'refresh_token:', !!refreshToken)
-        
-        if (accessToken && refreshToken) {
-          console.log('Setting session with hash tokens...')
-          
-          // Set the session directly with the tokens
-          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          })
-          
-          console.log('Set session result:', sessionData, sessionError)
-          
-          if (sessionError) {
-            console.error('Error setting session:', sessionError)
-            setStatus('error')
-            setTimeout(() => router.push('/?auth=error'), 3000)
-            return
-          }
-          
-          if (sessionData.session && sessionData.user) {
-            console.log('Session set successfully for user:', sessionData.user.email)
-            setStatus('success')
-            
-            // Clear the hash from URL to clean it up
-            window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
-            
-            const redirectTo = searchParams.get('redirect_to') || '/'
-            console.log('Redirecting to:', redirectTo)
-            setTimeout(() => router.push(redirectTo), 1500)
-          } else {
-            console.error('No user in session data')
-            setStatus('error')
-            setTimeout(() => router.push('/?auth=error'), 3000)
-          }
-        } else {
-          console.log('No auth code or hash tokens found, checking existing session...')
-          
-          // Fallback: check if there's already a valid session
-          const { data, error } = await supabase.auth.getSession()
-          console.log('Existing session check:', data, error)
-          
-          if (error || !data.session) {
-            console.log('No valid session found')
-            setStatus('error')
-            setTimeout(() => router.push('/?auth=error'), 3000)
-            return
-          }
-          
-          console.log('Found existing session for user:', data.session.user.email)
-          setStatus('success')
-          const redirectTo = searchParams.get('redirect_to') || '/'
-          setTimeout(() => router.push(redirectTo), 1500)
         }
 
-      } catch (error) {
-        console.error('Unexpected auth error:', error)
+        // Modern PKCE flow - check for existing session first (most common case)
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+        
+        if (!sessionError && sessionData.session) {
+          console.log('Existing session found:', sessionData.session.user.email)
+          setStatus('success')
+          setMessage('Welcome back! Redirecting...')
+          
+          const redirectTo = searchParams.get('redirect_to') || '/'
+          // Redirect immediately - no need for delay
+          router.push(redirectTo)
+          return
+        }
+
+        // If no session yet, wait for auth state change (PKCE code exchange happening)
+        const authCode = urlParams.get('code')
+        if (authCode) {
+          console.log('PKCE code found, waiting for auth state change...')
+          
+          let cleanup: (() => void) | null = null
+          let timeoutId: NodeJS.Timeout | null = null
+
+          const handleAuthStateChange = (event: string, session: any) => {
+            console.log('Auth state change:', event)
+            
+            if (event === 'SIGNED_IN' && session) {
+              console.log('Authentication successful:', session.user.email)
+              setStatus('success')
+              setMessage('Welcome! Redirecting...')
+              
+              // Cleanup and redirect immediately
+              if (cleanup) cleanup()
+              if (timeoutId) clearTimeout(timeoutId)
+              
+              const redirectTo = searchParams.get('redirect_to') || '/'
+              router.push(redirectTo)
+            }
+          }
+
+          // Set up auth state listener
+          const { data: authListener } = supabase.auth.onAuthStateChange(handleAuthStateChange)
+          cleanup = () => authListener.subscription.unsubscribe()
+
+          // Set reasonable timeout (5 seconds)
+          timeoutId = setTimeout(() => {
+            console.warn('Auth callback timed out')
+            setStatus('error')
+            setMessage('Authentication timed out. Redirecting...')
+            if (cleanup) cleanup()
+            setTimeout(() => router.push('/'), 2000)
+          }, 5000)
+
+          return
+        }
+
+        // Fallback for edge cases
+        console.log('No auth code found, redirecting to home')
         setStatus('error')
-        setTimeout(() => router.push('/?auth=error'), 3000)
+        setMessage('No authentication data found. Redirecting...')
+        setTimeout(() => router.push('/'), 2000)
+
+      } catch (error) {
+        console.error('Auth callback error:', error)
+        setStatus('error')
+        setMessage('Authentication error. Redirecting...')
+        setTimeout(() => router.push('/'), 2000)
       }
     }
 
@@ -187,7 +120,7 @@ function AuthCallbackContent() {
               Signing you in...
             </h1>
             <p className={ds(designSystem.text.muted)}>
-              Please wait while we verify your magic link.
+              {message}
             </p>
           </>
         )}
@@ -196,8 +129,7 @@ function AuthCallbackContent() {
           <>
             <div className={ds(
               'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
-              'bg-green-500/20 border border-green-400/30',
-              'animate-pulse'
+              'bg-green-500/20 border border-green-400/30'
             )}>
               <span className="text-2xl">✅</span>
             </div>
@@ -205,7 +137,7 @@ function AuthCallbackContent() {
               Welcome to Settlers!
             </h1>
             <p className={ds(designSystem.text.muted)}>
-              You&apos;re now signed in. Redirecting...
+              {message}
             </p>
           </>
         )}
@@ -216,13 +148,13 @@ function AuthCallbackContent() {
               'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
               'bg-red-500/20 border border-red-400/30'
             )}>
-              <span className="text-2xl">⏰</span>
+              <span className="text-2xl">❌</span>
             </div>
             <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
-              Magic Link Expired
+              Authentication Issue
             </h1>
             <p className={ds(designSystem.text.muted)}>
-              Your magic link has expired. Please request a new one from the homepage.
+              {message}
             </p>
           </>
         )}
