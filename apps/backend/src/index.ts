@@ -1,16 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createBunWebSocket } from 'hono/bun'
-
-/**
- * WebSocket utilities with type support
- */
-interface WSData {
-  gameId: string | null
-  playerId: string | null
-}
-
-const { upgradeWebSocket, websocket } = createBunWebSocket<WSData>()
+import gameRoutes from './routes/games'
+import { websocketHandler, upgradeWebSocket as wsUpgrade, type WSData } from './websocket/server'
 
 /**
  * Initialize Hono app - ULTRA MINIMAL VERSION
@@ -22,17 +13,6 @@ app.use('/*', cors({
   origin: 'http://localhost:3000',
   credentials: true
 }))
-
-/**
- * Health check endpoint
- */
-app.get('/health', (c) => {
-  return c.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    message: 'Minimal backend is working'
-  })
-})
 
 /**
  * Test endpoint
@@ -79,68 +59,10 @@ app.get('/health', async (c) => {
 })
 
 /**
- * WebSocket endpoint
+ * Mount game routes
  */
-app.get('/ws', upgradeWebSocket((c) => {
-  const url = new URL(c.req.url)
-  const gameId = url.searchParams.get('gameId')
-  const playerId = url.searchParams.get('playerId')
-  
-  console.log(`🔌 WebSocket connection attempt: gameId=${gameId}, playerId=${playerId}`)
-  
-  return {
-    onOpen(event, ws) {
-      console.log(`🔌 WebSocket opened: ${playerId} joined game ${gameId}`)
-      // Store connection metadata on the raw WebSocket
-      if ('raw' in ws && ws.raw) {
-        (ws.raw as any).data = { gameId, playerId }
-      }
-    },
-    
-    onMessage(event, ws) {
-      try {
-        const message = JSON.parse(event.data.toString())
-        const wsData = ('raw' in ws && ws.raw) ? (ws.raw as any).data : null
-        console.log(`📨 WebSocket message from ${wsData?.playerId}:`, message)
-        
-        // Echo back for now
-        ws.send(JSON.stringify({
-          type: 'echo',
-          originalMessage: message,
-          timestamp: new Date().toISOString()
-        }))
-      } catch (error) {
-        console.error('❌ WebSocket message error:', error)
-        ws.send(JSON.stringify({
-          type: 'error',
-          error: 'Invalid message format'
-        }))
-      }
-    },
-    
-    onClose(event, ws) {
-      const wsData = ('raw' in ws && ws.raw) ? (ws.raw as any).data : null
-      console.log(`🔌 WebSocket closed: ${wsData?.playerId} left game ${wsData?.gameId}`)
-    },
-    
-    onError(event, ws) {
-      console.error('❌ WebSocket error:', event)
-    }
-  }
-}))
-
-/**
- * Add game routes dynamically
- */
-setTimeout(async () => {
-  try {
-    const gameRoutes = await import('./routes/games')
-    app.route('/api', gameRoutes.default)
-    console.log('✅ Game routes loaded successfully')
-  } catch (error) {
-    console.error('❌ Failed to load game routes:', error)
-  }
-}, 100)
+app.route('/api/games', gameRoutes)
+console.log('✅ Game routes mounted successfully')
 
 /**
  * Start minimal server
@@ -152,11 +74,20 @@ console.log(`🚀 Starting ULTRA MINIMAL backend on port ${PORT}`)
 const server = Bun.serve({
   port: PORT,
   idleTimeout: 120,
-  fetch: app.fetch,
-  websocket
+  fetch(req: Request): Response | Promise<Response> {
+    // Handle WebSocket upgrade
+    if (req.url.includes('/ws')) {
+      const upgrade = wsUpgrade(req, server)
+      if (upgrade) return upgrade
+    }
+    
+    // Handle regular HTTP requests
+    return app.fetch(req)
+  },
+  websocket: websocketHandler
 })
 
 console.log(`✅ Server started at http://localhost:${PORT}`)
 console.log(`🔌 WebSocket available at ws://localhost:${PORT}/ws`)
 
-export default server
+export { server }

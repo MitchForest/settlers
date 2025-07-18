@@ -304,7 +304,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   // Handle connection states
   if (connectionStatus === 'connecting' || isConnecting) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
           <div className="text-white text-lg">Connecting to game...</div>
@@ -315,7 +315,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   if (connectionStatus === 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="text-white text-xl">Failed to connect to game</div>
           <div className="flex gap-4">
@@ -345,7 +345,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   if (!gameState || !gameManager) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
           <div className="text-white text-lg">Loading game...</div>
@@ -401,7 +401,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                 // TODO: Implement restart functionality for real games
                 toast.info('Restart functionality coming soon')
               }}
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
               title="Restart Game"
             >
               <RotateCcw className="h-6 w-6" />
@@ -414,7 +414,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                 // TODO: Implement theme toggle
                 toast.info('Theme toggle coming soon')
               }}
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
               title="Toggle Theme Assets"
             >
               <Palette className="h-6 w-6" />
@@ -427,7 +427,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                 toast.info('Auto mode coming soon')
               }}
               disabled
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white/50 border border-white/20 rounded-lg cursor-not-allowed"
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white/50 cursor-not-allowed opacity-60 rounded-lg"
               title="Auto Mode (Coming Soon)"
             >
               <Play className="h-6 w-6" />
@@ -437,7 +437,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
             <Button
               size="icon"
               onClick={() => router.push('/')}
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
               title="Exit Game"
             >
               <LogOut className="h-6 w-6" />
@@ -449,7 +449,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
               onClick={() => {
                 toast.info('Game information coming soon')
               }}
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm hover:bg-black/40 text-white border border-white/20 rounded-lg"
+              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
               title="Game Information"
             >
               <Info className="h-6 w-6" />

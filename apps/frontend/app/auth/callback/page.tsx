@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Loader2 } from 'lucide-react'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 function AuthCallbackContent() {
   const router = useRouter()
@@ -12,12 +13,6 @@ function AuthCallbackContent() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      // Set a timeout to prevent infinite hanging
-      const timeoutId = setTimeout(() => {
-        console.warn('Auth callback timed out after 10 seconds')
-        setStatus('error')
-        setTimeout(() => router.push('/?auth=timeout'), 3000)
-      }, 10000)
       try {
         console.log('Starting auth callback process...')
         console.log('Current URL:', window.location.href)
@@ -38,9 +33,10 @@ function AuthCallbackContent() {
         }
         
         if (authCode) {
-          console.log('PKCE flow detected, waiting for auth state change...')
+          console.log('PKCE flow detected, setting up auth state listener...')
           
-          // For PKCE flow, listen for auth state changes instead of polling
+          // For PKCE flow, use auth state change listener since the code exchange
+          // happens automatically in the background by Supabase
           const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
             console.log('Auth state change in callback:', event, session?.user?.email)
             
@@ -77,6 +73,14 @@ function AuthCallbackContent() {
             const redirectTo = searchParams.get('redirect_to') || '/'
             setTimeout(() => router.push(redirectTo), 1500)
           }
+          
+          // Set a timeout as fallback
+          setTimeout(() => {
+            console.warn('Auth callback timed out after 10 seconds')
+            authListener.subscription.unsubscribe()
+            setStatus('error')
+            setTimeout(() => router.push('/?auth=timeout'), 3000)
+          }, 10000)
           
           return
         }
@@ -141,7 +145,7 @@ function AuthCallbackContent() {
             setTimeout(() => router.push('/?auth=error'), 3000)
           }
         } else {
-          console.log('No hash tokens found, checking existing session...')
+          console.log('No auth code or hash tokens found, checking existing session...')
           
           // Fallback: check if there's already a valid session
           const { data, error } = await supabase.auth.getSession()
@@ -164,9 +168,6 @@ function AuthCallbackContent() {
         console.error('Unexpected auth error:', error)
         setStatus('error')
         setTimeout(() => router.push('/?auth=error'), 3000)
-      } finally {
-        // Clear the timeout
-        clearTimeout(timeoutId)
       }
     }
 
@@ -175,32 +176,52 @@ function AuthCallbackContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center px-4">
-      <div className="bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-8 text-center max-w-md w-full">
+      <div className={ds(
+        componentStyles.glassCard,
+        'p-8 text-center max-w-md w-full border-white/30'
+      )}>
         {status === 'loading' && (
           <>
             <Loader2 className="w-8 h-8 text-white animate-spin mx-auto mb-4" />
-            <h1 className="text-xl font-semibold text-white mb-2">Signing you in...</h1>
-            <p className="text-white/60">Please wait while we verify your magic link.</p>
+            <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
+              Signing you in...
+            </h1>
+            <p className={ds(designSystem.text.muted)}>
+              Please wait while we verify your magic link.
+            </p>
           </>
         )}
         
         {status === 'success' && (
           <>
-            <div className="w-16 h-16 mx-auto mb-4 bg-green-500/20 rounded-full flex items-center justify-center">
+            <div className={ds(
+              'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
+              'bg-green-500/20 border border-green-400/30',
+              'animate-pulse'
+            )}>
               <span className="text-2xl">✅</span>
             </div>
-            <h1 className="text-xl font-semibold text-white mb-2">Welcome to Settlers!</h1>
-            <p className="text-white/60">You&apos;re now signed in. Redirecting...</p>
+            <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
+              Welcome to Settlers!
+            </h1>
+            <p className={ds(designSystem.text.muted)}>
+              You&apos;re now signed in. Redirecting...
+            </p>
           </>
         )}
         
         {status === 'error' && (
           <>
-            <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
+            <div className={ds(
+              'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
+              'bg-red-500/20 border border-red-400/30'
+            )}>
               <span className="text-2xl">⏰</span>
             </div>
-            <h1 className="text-xl font-semibold text-white mb-2">Magic Link Expired</h1>
-            <p className="text-white/60">
+            <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
+              Magic Link Expired
+            </h1>
+            <p className={ds(designSystem.text.muted)}>
               Your magic link has expired. Please request a new one from the homepage.
             </p>
           </>
@@ -214,10 +235,17 @@ export default function AuthCallback() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center px-4">
-        <div className="bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg p-8 text-center max-w-md w-full">
+        <div className={ds(
+          componentStyles.glassCard,
+          'p-8 text-center max-w-md w-full border-white/30'
+        )}>
           <Loader2 className="w-8 h-8 text-white animate-spin mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-white mb-2">Loading...</h1>
-          <p className="text-white/60">Please wait...</p>
+          <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
+            Loading...
+          </h1>
+          <p className={ds(designSystem.text.muted)}>
+            Please wait...
+          </p>
         </div>
       </div>
     }>

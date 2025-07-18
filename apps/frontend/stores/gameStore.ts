@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { GameState, GameAction, PlayerId, Player } from '@settlers/core'
 import type { ReactFlowInstance } from 'reactflow'
+import { API_URL } from '../lib/api'
 
 interface GameStore {
   // Core State
@@ -193,7 +194,7 @@ export const useGameStore = create<GameStore>()(
         set({ lobbyState: 'creating' })
         
         try {
-          const response = await fetch('/api/games', {
+          const response = await fetch(`${API_URL}/api/games`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -226,7 +227,7 @@ export const useGameStore = create<GameStore>()(
         set({ lobbyState: 'joining' })
         
         try {
-          const response = await fetch('/api/games/join-by-code', {
+          const response = await fetch(`${API_URL}/api/games/join-by-code`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gameCode, playerName })
@@ -341,7 +342,7 @@ export const useGameStore = create<GameStore>()(
         const { localPlayerId } = get()
         if (!localPlayerId) throw new Error('No player ID')
         
-        const response = await fetch(`/api/games/${gameId}/start`, {
+        const response = await fetch(`${API_URL}/api/games/${gameId}/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hostPlayerId: localPlayerId })

@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { GameLobby } from '@/components/lobby/GameLobby'
 import { Button } from '@/components/ui/button'
 import { use } from 'react'
+import { componentStyles, ds } from '@/lib/design-system'
 
 interface PageParams {
   gameId: string
@@ -103,14 +104,17 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
           <div className="text-white text-xl">Failed to connect to lobby</div>
           <Button 
             onClick={() => connectToLobby(gameId, localPlayerId!)}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className={ds(
+              componentStyles.buttonPrimary,
+              'bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30'
+            )}
           >
             Retry Connection
           </Button>
           <Button 
             onClick={() => router.push('/')}
             variant="outline"
-            className="border-white/20 text-white hover:bg-white/10"
+            className={componentStyles.buttonSecondary}
           >
             Back to Home
           </Button>

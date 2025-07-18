@@ -2,6 +2,7 @@
 
 import { Player, GameState, GameAction, BUILDING_COSTS, hasResources } from '@settlers/core'
 import { Button } from '@/components/ui/button'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface PlayerSidebarProps {
   gameState: GameState
@@ -105,7 +106,10 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
   }
 
   return (
-    <div className="h-full flex flex-col bg-black/30 backdrop-blur-sm border border-white/20 rounded-lg">
+    <div className={ds(
+      componentStyles.glassCard,
+      'h-full flex flex-col border-white/20'
+    )}>
       {/* Timer Section */}
       <div className="p-4 border-b border-white/20">
         <div className="flex flex-col space-y-3">
@@ -134,9 +138,13 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
         <h3 className="text-sm font-semibold text-white mb-2 text-left">Resources</h3>
         <div className="flex flex-wrap gap-3 justify-center">
           {Object.entries(localPlayer.resources).map(([resource, count]) => (
-            <div key={resource} className="flex items-center space-x-1 bg-white/10 rounded-full px-2 py-1">
+            <div key={resource} className={ds(
+              designSystem.glass.secondary,
+              'flex items-center space-x-1 rounded-full px-3 py-1.5 border-white/10',
+              'hover:bg-white/15 hover:scale-105 transition-all duration-200 cursor-pointer'
+            )}>
               <span className="text-lg">{RESOURCE_EMOJIS[resource as keyof typeof RESOURCE_EMOJIS]}</span>
-              <span className="text-white text-sm font-medium">{count}</span>
+              <span className={ds(designSystem.text.body, 'text-sm font-medium')}>{count}</span>
             </div>
           ))}
         </div>
@@ -156,13 +164,18 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                 <Button 
                   onClick={() => handleAction('roll')}
                   variant="outline"
-                  className="w-full justify-start text-left text-sm p-2 h-auto bg-blue-600/20 border-blue-400/20 hover:bg-blue-600/30 text-white"
+                  className={ds(
+                    'w-full justify-start text-left text-sm p-3 h-auto',
+                    'bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30',
+                    'hover:scale-[1.02] transition-all duration-200',
+                    designSystem.text.body
+                  )}
                 >
-                  <div className="flex items-start space-x-2 w-full">
+                  <div className="flex items-start space-x-3 w-full">
                     <span className="text-lg">🎲</span>
                     <div className="flex-1 text-left">
-                      <div className="font-medium text-white text-left">Roll Dice</div>
-                      <div className="text-xs text-white/60 text-left">Roll to start your turn</div>
+                      <div className={ds(designSystem.text.body, 'font-medium text-left')}>Roll Dice</div>
+                      <div className={ds(designSystem.text.muted, 'text-xs text-left')}>Roll to start your turn</div>
                     </div>
                   </div>
                 </Button>
@@ -222,17 +235,21 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     onClick={() => handleAction('build', { buildingType: 'settlement' })}
                     disabled={!canBuildSettlement}
                     variant="outline"
-                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                    className={ds(
+                      'w-full justify-start text-left text-sm p-3 h-auto',
                       canBuildSettlement 
-                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
-                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
-                    }`}
+                        ? ds(
+                            componentStyles.buttonSecondary,
+                            'hover:scale-[1.02] transition-all duration-200'
+                          )
+                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed opacity-60'
+                    )}
                   >
-                    <div className="flex items-start space-x-2 w-full">
+                    <div className="flex items-start space-x-3 w-full">
                       <span className="text-lg">{ACTION_INFO.buildSettlement.emoji}</span>
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{ACTION_INFO.buildSettlement.name}</div>
-                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildSettlement.description}</div>
+                        <div className={ds(designSystem.text.body, 'font-medium text-left')}>{ACTION_INFO.buildSettlement.name}</div>
+                        <div className={ds(designSystem.text.muted, 'text-xs text-left')}>{ACTION_INFO.buildSettlement.description}</div>
                         <div className="flex items-center space-x-1 text-xs mt-1">
                           {ACTION_INFO.buildSettlement.cost.map((emoji, i) => (
                             <span key={i}>{emoji}</span>

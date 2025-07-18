@@ -6,6 +6,7 @@ import { PlayerAvatar } from './AvatarPicker'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Crown, Shield, Sword } from 'lucide-react'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface PlayersPanelProps {
   gameState: GameState
@@ -23,7 +24,7 @@ export function PlayersPanel({
   return (
     <div className="absolute top-4 left-4 right-4 z-20 pointer-events-auto">
       {/* Players List - Edge to edge spacing */}
-      <div className="flex items-center justify-between w-full">
+      <div className="flex items-center justify-between w-full gap-2">
           {sortedPlayers.map(([playerId, player]) => {
             const isCurrentTurn = gameState.currentPlayer === playerId
             const playerInfo = playerAvatars[playerId] || { 
@@ -63,14 +64,15 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
-        <div className={`
-          flex items-center space-x-3 p-2 rounded-lg transition-all duration-200 cursor-pointer
-          bg-black/30 backdrop-blur-sm hover:bg-black/40
-          ${isCurrentTurn 
-            ? 'border border-yellow-400/50 shadow-lg' 
-            : 'border border-white/20'
-          }
-        `}>
+        <div className={ds(
+          designSystem.glass.primary,
+          'flex items-center space-x-3 p-3 rounded-lg cursor-pointer',
+          designSystem.animation.normal,
+          'hover:bg-white/10 hover:scale-[1.02] hover:shadow-lg',
+          isCurrentTurn 
+            ? 'border-yellow-400/60 shadow-lg shadow-yellow-400/20 bg-yellow-400/5' 
+            : 'border-white/20 hover:border-white/30'
+        )}>
           {/* Avatar & Name */}
           <PlayerAvatar
             avatar={avatar}
@@ -92,21 +94,33 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
           <div className="hidden lg:flex items-center space-x-4 text-sm">
             {/* Cards - Stacked */}
             <div className="flex flex-col space-y-1">
-              <Badge variant="outline" className="bg-white/10 border-white/20 text-blue-300">
+              <Badge variant="outline" className={ds(
+                'bg-blue-500/10 border-blue-400/30 text-blue-300',
+                'hover:bg-blue-500/20 transition-colors duration-200'
+              )}>
                 🃏 {totalResources}
               </Badge>
-              <Badge variant="outline" className="bg-white/10 border-white/20 text-purple-300">
+              <Badge variant="outline" className={ds(
+                'bg-purple-500/10 border-purple-400/30 text-purple-300',
+                'hover:bg-purple-500/20 transition-colors duration-200'
+              )}>
                 📜 {unplayedDevCards}
               </Badge>
             </div>
 
             {/* Knights & Roads - Stacked */}
             <div className="flex flex-col space-y-1">
-              <Badge variant="outline" className="bg-white/10 border-white/20 text-red-300">
+              <Badge variant="outline" className={ds(
+                'bg-red-500/10 border-red-400/30 text-red-300',
+                'hover:bg-red-500/20 transition-colors duration-200'
+              )}>
                 <Sword className="w-3 h-3" />
                 {player.knightsPlayed}
               </Badge>
-              <Badge variant="outline" className="bg-white/10 border-white/20 text-orange-300">
+              <Badge variant="outline" className={ds(
+                'bg-orange-500/10 border-orange-400/30 text-orange-300',
+                'hover:bg-orange-500/20 transition-colors duration-200'
+              )}>
                 🛤️ {15 - player.buildings.roads}
               </Badge>
             </div>
@@ -129,7 +143,11 @@ function PlayerCard({ player, avatar, displayName, isCurrentTurn }: PlayerCardPr
       </HoverCardTrigger>
       
       {/* Mobile/Tablet: Show details on hover */}
-      <HoverCardContent className="lg:hidden bg-black/90 backdrop-blur-sm border border-white/20 text-white">
+      <HoverCardContent className={ds(
+        'lg:hidden text-white',
+        componentStyles.glassCard,
+        'border-white/30 bg-black/80'
+      )}>
         <div className="space-y-2">
           <h4 className="font-semibold">{displayName}</h4>
           

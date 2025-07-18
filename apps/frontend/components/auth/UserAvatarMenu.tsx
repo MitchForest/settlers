@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { User, Trophy, LogOut, Settings } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
-import { componentStyles } from '@/lib/design-system'
+import { componentStyles, ds } from '@/lib/design-system'
 import { EditProfileDialog } from './EditProfileDialog'
 
 interface UserAvatarMenuProps {
@@ -49,7 +49,11 @@ export function UserAvatarMenu({ className = "" }: UserAvatarMenuProps) {
           <Button
             variant="ghost"
             size="lg"
-            className="h-16 w-16 p-0 bg-black/30 backdrop-blur-sm border border-white/20 hover:bg-black/40 hover:border-white/30 rounded-full transition-all duration-200"
+            className={ds(
+              'h-16 w-16 p-0 rounded-full',
+              componentStyles.buttonSecondary,
+              'hover:scale-110 transition-all duration-200'
+            )}
           >
             <span className="text-3xl">{profile?.avatar_emoji}</span>
           </Button>

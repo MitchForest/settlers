@@ -15,6 +15,7 @@ import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
 import { useRouter } from 'next/navigation'
 import { useGameStore } from '@/stores/gameStore'
 import { useAuth } from '@/lib/auth-context'
+import { ds, componentStyles } from '@/lib/design-system'
 
 // Terrain assets for honeycomb background
 const TERRAIN_ASSETS = [
@@ -235,7 +236,11 @@ export default function Home() {
               onClick={() => handleGameAction('create')}
               size="lg"
               disabled={!isSystemConnected}
-              className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
+              className={ds(
+                componentStyles.buttonPrimary,
+                'w-full sm:w-auto px-8 py-4 text-lg font-medium',
+                'hover:scale-[1.02] transition-all duration-200'
+              )}
             >
               Create
             </Button>
@@ -244,7 +249,11 @@ export default function Home() {
               onClick={() => handleGameAction('join')}
               size="lg"
               disabled={!isSystemConnected}
-              className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
+              className={ds(
+                componentStyles.buttonPrimary,
+                'w-full sm:w-auto px-8 py-4 text-lg font-medium',
+                'hover:scale-[1.02] transition-all duration-200'
+              )}
             >
               Join
             </Button>
@@ -253,7 +262,11 @@ export default function Home() {
               onClick={() => handleGameAction('observe')}
               size="lg"
               disabled={!isSystemConnected}
-              className="w-full sm:w-auto bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:border-white/30 transition-all duration-200 px-8 py-4 text-lg font-medium"
+              className={ds(
+                componentStyles.buttonPrimary,
+                'w-full sm:w-auto px-8 py-4 text-lg font-medium',
+                'hover:scale-[1.02] transition-all duration-200'
+              )}
             >
               Observe
             </Button>

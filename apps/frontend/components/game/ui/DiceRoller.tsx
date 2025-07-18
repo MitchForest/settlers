@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { DiceRoll, GameAction } from '@settlers/core'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface DiceRollerProps {
   onRoll: (action: GameAction) => void
@@ -42,9 +43,9 @@ export function DiceRoller({
   }
 
   return (
-    <Card className="p-4 bg-white/10 backdrop-blur-sm border-white/20">
+    <Card className={ds(componentStyles.glassCard, 'p-6 border-white/30')}>
       <div className="flex flex-col items-center space-y-4">
-        <h3 className="text-lg font-semibold text-white">Roll Dice</h3>
+        <h3 className={ds(designSystem.text.heading, 'text-lg font-semibold')}>Roll Dice</h3>
         
         {/* Dice Display */}
         <div className="flex space-x-4">
@@ -55,10 +56,10 @@ export function DiceRoller({
         {/* Roll Result */}
         {currentRoll && !_isRolling && (
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">
+            <div className={ds(designSystem.text.heading, 'text-2xl font-bold')}>
               {currentRoll.sum}
             </div>
-            <div className="text-sm text-white/70">
+            <div className={ds(designSystem.text.muted, 'text-sm')}>
               {currentRoll.die1} + {currentRoll.die2}
             </div>
           </div>
@@ -69,10 +70,12 @@ export function DiceRoller({
           onClick={handleRoll}
           disabled={disabled || _isRolling || !canRoll}
           size="lg"
-          className={cn(
-            "transition-all duration-200",
-            _isRolling && "scale-95",
-            canRoll && !disabled && !_isRolling && "hover:scale-105"
+          className={ds(
+            componentStyles.buttonPrimary,
+            'bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30',
+            'transition-all duration-200',
+            _isRolling && 'scale-95',
+            canRoll && !disabled && !_isRolling && 'hover:scale-105'
           )}
         >
           {_isRolling ? (
@@ -87,7 +90,7 @@ export function DiceRoller({
 
         {/* Roll Status */}
         {!canRoll && !disabled && (
-          <div className="text-xs text-white/60 text-center">
+          <div className={ds(designSystem.text.muted, 'text-xs text-center')}>
             Not your turn to roll
           </div>
         )}

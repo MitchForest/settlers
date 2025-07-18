@@ -41,6 +41,7 @@ export function GameLobby({
   const [codeCopied, setCodeCopied] = useState(false)
   const [showAddBotDialog, setShowAddBotDialog] = useState(false)
   const [isAddingBot, setIsAddingBot] = useState(false)
+  const [removingBotIds, setRemovingBotIds] = useState<Set<string>>(new Set())
 
   const copyGameCode = async () => {
     try {
@@ -68,14 +69,28 @@ export function GameLobby({
     }
   }
 
+  // Reset adding state when dialog closes
+  const handleCloseDialog = () => {
+    setShowAddBotDialog(false)
+    setIsAddingBot(false)
+  }
+
   const handleRemoveAIBot = async (botId: string) => {
-    if (!onRemoveAIBot) return
+    if (!onRemoveAIBot || removingBotIds.has(botId)) return
+    
+    setRemovingBotIds(prev => new Set(prev).add(botId))
     
     try {
       await onRemoveAIBot(botId)
       toast.success('AI bot removed')
     } catch (_error) {
       toast.error('Failed to remove AI bot')
+    } finally {
+      setRemovingBotIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(botId)
+        return newSet
+      })
     }
   }
 
@@ -123,16 +138,27 @@ export function GameLobby({
                 {isHost && players.length < 4 && (
                   <Button
                     onClick={() => setShowAddBotDialog(true)}
+                    disabled={isAddingBot}
                     size="sm"
                     className={ds(
                       componentStyles.buttonPrimary,
                       'bg-gradient-to-r from-blue-500/20 to-purple-500/20',
                       'hover:from-blue-500/30 hover:to-purple-500/30',
-                      'border-blue-400/30'
+                      'border-blue-400/30',
+                      isAddingBot && 'opacity-50 cursor-not-allowed'
                     )}
                   >
-                    <Bot className="h-4 w-4 mr-1" />
-                    Add AI Bot
+                    {isAddingBot ? (
+                      <>
+                        <div className="animate-spin mr-1">⚡</div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="h-4 w-4 mr-1" />
+                        Add AI Bot
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
@@ -141,7 +167,7 @@ export function GameLobby({
               <div className="grid gap-3 md:grid-cols-2">
                 {players.map((player, index) => (
                   <div
-                    key={player.id}
+                    key={`player-${player.id}-${index}`}
                     className={ds(
                       designSystem.glass.secondary,
                       'flex items-center gap-3 p-3 rounded-lg border-white/10',
@@ -185,12 +211,18 @@ export function GameLobby({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRemoveAIBot(player.id)}
+                        disabled={removingBotIds.has(player.id)}
                         className={ds(
                           componentStyles.dropdownItemDestructive,
-                          'h-8 w-8 p-0'
+                          'h-8 w-8 p-0',
+                          removingBotIds.has(player.id) && 'opacity-50 cursor-not-allowed'
                         )}
                       >
-                        <X className="h-4 w-4" />
+                        {removingBotIds.has(player.id) ? (
+                          <div className="animate-spin">⚡</div>
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
                       </Button>
                     )}
                   </div>
@@ -199,7 +231,7 @@ export function GameLobby({
                 {/* Empty slots - only show if we can add more players */}
                 {isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
                   <div
-                    key={`empty-${i}`}
+                    key={`empty-slot-${i}`}
                     className={ds(
                       designSystem.glass.tertiary,
                       'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
@@ -220,7 +252,7 @@ export function GameLobby({
                   </div>
                 )) || (!isHost && Array.from({ length: 4 - players.length }).map((_, i) => (
                   <div
-                    key={`empty-${i}`}
+                    key={`waiting-slot-${i}`}
                     className={ds(
                       designSystem.glass.tertiary,
                       'flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-white/10',
@@ -294,7 +326,7 @@ export function GameLobby({
       {/* Add AI Bot Dialog */}
       <AddAIBotDialog
         isOpen={showAddBotDialog}
-        onClose={() => setShowAddBotDialog(false)}
+        onClose={handleCloseDialog}
         onAdd={handleAddAIBot}
         isLoading={isAddingBot}
       />

@@ -46,6 +46,9 @@ const lobbyRooms = new Map<string, LobbyRoom>()
 // Player socket tracking
 const playerSockets = new Map<string, ServerWebSocket<WSData>>()
 
+// Request deduplication for AI operations
+const pendingAIOperations = new Map<string, { operation: string; timestamp: number }>()
+
 /**
  * WebSocket upgrade handler
  */
@@ -77,14 +80,8 @@ export const websocketHandler: WebSocketHandler<WSData> = {
     
     console.log(`WebSocket connected: ${playerId || 'spectator'} to game ${gameId}`)
     
-    if (gameId) {
-      await joinGameRoom(ws, gameId)
-      
-      // Handle potential reconnection for AI management
-      if (playerId && !isSpectator) {
-        aiManager.handlePlayerReconnection(gameId, playerId, ws)
-      }
-    }
+    // Don't automatically join game room - wait for explicit joinGame or joinLobby message
+    // This prevents "Cannot join game room - game is not active" errors for lobby connections
     
     if (playerId && !isSpectator) {
       playerSockets.set(playerId, ws)
@@ -736,6 +733,25 @@ async function handleAddAIBot(ws: ServerWebSocket<WSData>, payload: { gameId: st
     }))
     return
   }
+
+  // Prevent duplicate requests within 2 seconds
+  const operationKey = `addAI-${gameId}-${playerId}`
+  const now = Date.now()
+  const existing = pendingAIOperations.get(operationKey)
+  
+  if (existing && (now - existing.timestamp) < 2000) {
+    console.log(`🚫 Duplicate AI bot add request ignored for ${playerId} in ${gameId}`)
+    return
+  }
+  
+  pendingAIOperations.set(operationKey, { operation: 'addAI', timestamp: now })
+  
+  // Clean up old operations (older than 10 seconds)
+  for (const [key, op] of pendingAIOperations) {
+    if (now - op.timestamp > 10000) {
+      pendingAIOperations.delete(key)
+    }
+  }
   
   try {
     // Verify host permissions
@@ -847,6 +863,25 @@ async function handleRemoveAIBot(ws: ServerWebSocket<WSData>, payload: { gameId:
       error: 'No player ID provided'
     }))
     return
+  }
+
+  // Prevent duplicate requests within 2 seconds
+  const operationKey = `removeAI-${gameId}-${playerId}-${botPlayerId}`
+  const now = Date.now()
+  const existing = pendingAIOperations.get(operationKey)
+  
+  if (existing && (now - existing.timestamp) < 2000) {
+    console.log(`🚫 Duplicate AI bot remove request ignored for ${playerId} removing ${botPlayerId} in ${gameId}`)
+    return
+  }
+  
+  pendingAIOperations.set(operationKey, { operation: 'removeAI', timestamp: now })
+  
+  // Clean up old operations (older than 10 seconds)
+  for (const [key, op] of pendingAIOperations) {
+    if (now - op.timestamp > 10000) {
+      pendingAIOperations.delete(key)
+    }
   }
   
   try {

@@ -106,7 +106,9 @@ app.get('/', async (c) => {
 /**
  * GET /games/:id - Get specific game
  */
-app.get('/:id', async (c) => {
+app.get('/:id', 
+  optionalAuthMiddleware,
+  async (c) => {
   try {
     const gameId = c.req.param('id')
     
@@ -240,6 +242,7 @@ app.post('/',
  * POST /games/join-by-code - Join game by code
  */
 app.post('/join-by-code',
+  authMiddleware,
   zValidator('json', joinByCodeSchema),
   async (c) => {
     const { gameCode, playerName } = c.req.valid('json')
@@ -489,6 +492,7 @@ app.post('/legacy',
  * POST /games/:id/actions - Process game action
  */
 app.post('/:id/actions',
+  authMiddleware,
   zValidator('json', gameActionSchema),
   async (c) => {
     const gameId = c.req.param('id')
@@ -576,7 +580,9 @@ app.post('/:id/actions',
 /**
  * GET /games/:id/events - Get game events history
  */
-app.get('/:id/events', async (c) => {
+app.get('/:id/events', 
+  optionalAuthMiddleware,
+  async (c) => {
   const gameId = c.req.param('id')
   
   try {
@@ -602,7 +608,9 @@ app.get('/:id/events', async (c) => {
 /**
  * DELETE /games/:id - Delete game
  */
-app.delete('/:id', async (c) => {
+app.delete('/:id', 
+  authMiddleware,
+  async (c) => {
   const gameId = c.req.param('id')
   
   try {

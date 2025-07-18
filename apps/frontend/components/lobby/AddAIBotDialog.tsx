@@ -111,7 +111,7 @@ export function AddAIBotDialog({ isOpen, onClose, onAdd, isLoading = false }: Ad
                   variant="outline"
                   className={ds(
                     componentStyles.input,
-                    'h-12 justify-between'
+                    'h-12 justify-between pl-4'
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -172,7 +172,7 @@ export function AddAIBotDialog({ isOpen, onClose, onAdd, isLoading = false }: Ad
                   variant="outline"
                   className={ds(
                     componentStyles.input,
-                    'h-12 justify-between'
+                    'h-12 justify-between pl-4'
                   )}
                 >
                   <div className="flex items-center gap-2">

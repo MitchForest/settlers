@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 
 interface TradingInterfaceProps {
@@ -140,10 +141,16 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
     max: number
     min?: number
   }) => (
-    <div className="flex items-center justify-between p-2 border rounded">
-      <div className="flex items-center gap-2">
+    <div className={ds(
+      designSystem.glass.secondary,
+      'flex items-center justify-between p-3 border-white/20 rounded-lg',
+      'hover:bg-white/10 transition-all duration-200'
+    )}>
+      <div className="flex items-center gap-3">
         <span className="text-lg">{RESOURCE_EMOJIS[resource]}</span>
-        <span className="text-sm font-medium">{RESOURCE_NAMES[resource]}</span>
+        <span className={ds(designSystem.text.body, 'text-sm font-medium')}>
+          {RESOURCE_NAMES[resource]}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <Button
@@ -151,15 +158,27 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
           size="sm"
           onClick={() => onChange(Math.max(min, value - 1))}
           disabled={value <= min}
+          className={ds(
+            'h-8 w-8 p-0',
+            componentStyles.buttonSecondary,
+            'hover:scale-110 transition-all duration-200'
+          )}
         >
           -
         </Button>
-        <span className="w-8 text-center">{value}</span>
+        <span className={ds(designSystem.text.body, 'w-8 text-center font-medium')}>
+          {value}
+        </span>
         <Button
           variant="outline"
           size="sm"
           onClick={() => onChange(Math.min(max, value + 1))}
           disabled={value >= max}
+          className={ds(
+            'h-8 w-8 p-0',
+            componentStyles.buttonSecondary,
+            'hover:scale-110 transition-all duration-200'
+          )}
         >
           +
         </Button>
@@ -190,12 +209,14 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
 
     return (
       <div className="space-y-4">
-        <div className="text-sm text-muted-foreground">
+        <div className={ds(designSystem.text.muted, 'text-sm')}>
           Bank trades allow you to exchange 4 resources of any type for 1 resource of your choice.
         </div>
         
         <div className="space-y-3">
-          <h4 className="font-medium">Offering (4 resources required)</h4>
+          <h4 className={ds(designSystem.text.heading, 'font-medium')}>
+            Offering (4 resources required)
+          </h4>
           {(Object.keys(RESOURCE_EMOJIS) as ResourceType[]).map(resource => (
             <ResourceCounter
               key={resource}
@@ -205,15 +226,17 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
               max={localPlayer.resources[resource]}
             />
           ))}
-          <div className="text-sm text-muted-foreground">
+          <div className={ds(designSystem.text.muted, 'text-sm')}>
             Total offering: {offeringTotal}/4
           </div>
         </div>
 
-        <Separator />
+        <Separator className="bg-white/20" />
 
         <div className="space-y-3">
-          <h4 className="font-medium">Requesting (1 resource)</h4>
+          <h4 className={ds(designSystem.text.heading, 'font-medium')}>
+            Requesting (1 resource)
+          </h4>
           {(Object.keys(RESOURCE_EMOJIS) as ResourceType[]).map(resource => (
             <ResourceCounter
               key={resource}
@@ -223,20 +246,32 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
               max={1}
             />
           ))}
-          <div className="text-sm text-muted-foreground">
+          <div className={ds(designSystem.text.muted, 'text-sm')}>
             Total requesting: {requestingTotal}/1
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Button 
             onClick={handleBankTrade}
             disabled={!isValid || !isMyTurn}
-            className="flex-1"
+            className={ds(
+              componentStyles.buttonPrimary,
+              'flex-1 bg-green-500/20 border-green-400/30 hover:bg-green-500/30',
+              'hover:scale-[1.02] transition-all duration-200',
+              (!isValid || !isMyTurn) && 'opacity-60 cursor-not-allowed'
+            )}
           >
             Execute Bank Trade
           </Button>
-          <Button variant="outline" onClick={resetBankTrade}>
+          <Button 
+            variant="outline" 
+            onClick={resetBankTrade}
+            className={ds(
+              componentStyles.buttonSecondary,
+              'hover:scale-105 transition-all duration-200'
+            )}
+          >
             Reset
           </Button>
         </div>
@@ -339,15 +374,27 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Button 
             onClick={handlePortTrade}
             disabled={!isValid || !isMyTurn}
-            className="flex-1"
+            className={ds(
+              componentStyles.buttonPrimary,
+              'flex-1 bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30',
+              'hover:scale-[1.02] transition-all duration-200',
+              (!isValid || !isMyTurn) && 'opacity-60 cursor-not-allowed'
+            )}
           >
             Execute Port Trade
           </Button>
-          <Button variant="outline" onClick={resetPortTrade}>
+          <Button 
+            variant="outline" 
+            onClick={resetPortTrade}
+            className={ds(
+              componentStyles.buttonSecondary,
+              'hover:scale-105 transition-all duration-200'
+            )}
+          >
             Reset
           </Button>
         </div>
@@ -665,24 +712,74 @@ export default function TradingInterface({ gameState, localPlayer, isMyTurn, onA
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full">
+        <Button 
+          variant="outline" 
+          className={ds(
+            componentStyles.buttonSecondary,
+            'w-full hover:scale-[1.02] transition-all duration-200'
+          )}
+        >
           🤝 Trading
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className={ds(
+        componentStyles.glassCard,
+        'max-w-2xl max-h-[80vh] overflow-y-auto border-white/30'
+      )}>
         <DialogHeader>
-          <DialogTitle>Trading Center</DialogTitle>
+          <DialogTitle className={ds(designSystem.text.heading, 'text-xl')}>
+            Trading Center
+          </DialogTitle>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="bank">Bank</TabsTrigger>
-            <TabsTrigger value="port">Ports</TabsTrigger>
-            <TabsTrigger value="player">Players</TabsTrigger>
-            <TabsTrigger value="active">
+          <TabsList className={ds(
+            designSystem.glass.secondary,
+            'grid w-full grid-cols-4 border-white/20'
+          )}>
+            <TabsTrigger 
+              value="bank"
+              className={ds(
+                'data-[state=active]:bg-white/20 data-[state=active]:text-white',
+                'hover:bg-white/10 transition-all duration-200'
+              )}
+            >
+              Bank
+            </TabsTrigger>
+            <TabsTrigger 
+              value="port"
+              className={ds(
+                'data-[state=active]:bg-white/20 data-[state=active]:text-white',
+                'hover:bg-white/10 transition-all duration-200'
+              )}
+            >
+              Ports
+            </TabsTrigger>
+            <TabsTrigger 
+              value="player"
+              className={ds(
+                'data-[state=active]:bg-white/20 data-[state=active]:text-white',
+                'hover:bg-white/10 transition-all duration-200'
+              )}
+            >
+              Players
+            </TabsTrigger>
+            <TabsTrigger 
+              value="active"
+              className={ds(
+                'data-[state=active]:bg-white/20 data-[state=active]:text-white',
+                'hover:bg-white/10 transition-all duration-200'
+              )}
+            >
               Active 
               {gameState.activeTrades.length > 0 && (
-                <Badge variant="secondary" className="ml-1">
+                <Badge 
+                  variant="secondary" 
+                  className={ds(
+                    'ml-1 bg-blue-500/20 border-blue-400/30 text-blue-300',
+                    'hover:bg-blue-500/30 transition-colors duration-200'
+                  )}
+                >
                   {gameState.activeTrades.length}
                 </Badge>
               )}
