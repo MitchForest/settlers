@@ -101,7 +101,7 @@ export function AddAIBotDialog({ isOpen, onClose, onAdd, isLoading = false }: Ad
         
         <div className="space-y-6 py-4">
           {/* Difficulty Selection */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <Label className={ds(designSystem.text.body, 'text-sm font-medium')}>
               Difficulty Level
             </Label>
@@ -162,7 +162,7 @@ export function AddAIBotDialog({ isOpen, onClose, onAdd, isLoading = false }: Ad
           </div>
 
           {/* Personality Selection */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <Label className={ds(designSystem.text.body, 'text-sm font-medium')}>
               AI Personality
             </Label>

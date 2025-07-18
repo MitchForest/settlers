@@ -344,8 +344,8 @@ async function handleStartGame(ws: ServerWebSocket<WSData>, payload: { gameId: s
       lobbyRooms.delete(gameId)
     }
     
-    // Broadcast game starting to all members
-    broadcastToGameRoom(gameId, {
+    // Broadcast game starting to all lobby members first
+    broadcastToLobby(gameId, {
       type: 'gameStarted',
       gameState: gameState
     })
