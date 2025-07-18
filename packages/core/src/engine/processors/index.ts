@@ -199,16 +199,93 @@ export class VictoryChecker implements PostProcessor {
 
 export class LongestRoadUpdater implements PostProcessor {
   process(state: GameState): GameState {
-    // Implementation would go here - calculate longest road
-    // This is complex logic that deserves its own dedicated implementation
-    return state
+    // Import the longest road calculation function
+    const { calculateLongestRoad } = require('../adjacency-helpers')
+    const { GAME_RULES } = require('../../constants')
+    
+    // Calculate longest road for each player
+    const playerRoadLengths = new Map<PlayerId, number>()
+    let longestRoadLength = 0
+    let longestRoadHolder: PlayerId | null = null
+    
+    for (const [playerId, player] of state.players) {
+      const roadLength = calculateLongestRoad(state, playerId)
+      playerRoadLengths.set(playerId, roadLength)
+      
+      if (roadLength >= GAME_RULES.longestRoadMinimum && roadLength > longestRoadLength) {
+        longestRoadLength = roadLength
+        longestRoadHolder = playerId
+      }
+    }
+    
+    // Update player states
+    const newState = { ...state }
+    newState.players = new Map()
+    
+    for (const [playerId, player] of state.players) {
+      const hasLongestRoad = playerId === longestRoadHolder
+      const wasChanged = player.hasLongestRoad !== hasLongestRoad
+      
+      // Update player with longest road status
+      const updatedPlayer = { ...player, hasLongestRoad }
+      
+      // Update score if longest road status changed
+      if (wasChanged) {
+        const scoreDelta = hasLongestRoad ? GAME_RULES.pointsFor.longestRoad : -GAME_RULES.pointsFor.longestRoad
+        updatedPlayer.score = {
+          ...player.score,
+          public: player.score.public + scoreDelta,
+          total: player.score.total + scoreDelta
+        }
+      }
+      
+      newState.players.set(playerId, updatedPlayer)
+    }
+    
+    return newState
   }
 }
 
 export class LargestArmyUpdater implements PostProcessor {
   process(state: GameState): GameState {
-    // Implementation would go here - calculate largest army
-    return state
+    const { GAME_RULES } = require('../../constants')
+    
+    // Find player with largest army
+    let largestArmySize = 0
+    let largestArmyHolder: PlayerId | null = null
+    
+    for (const [playerId, player] of state.players) {
+      if (player.knightsPlayed >= GAME_RULES.largestArmyMinimum && player.knightsPlayed > largestArmySize) {
+        largestArmySize = player.knightsPlayed
+        largestArmyHolder = playerId
+      }
+    }
+    
+    // Update player states
+    const newState = { ...state }
+    newState.players = new Map()
+    
+    for (const [playerId, player] of state.players) {
+      const hasLargestArmy = playerId === largestArmyHolder
+      const wasChanged = player.hasLargestArmy !== hasLargestArmy
+      
+      // Update player with largest army status
+      const updatedPlayer = { ...player, hasLargestArmy }
+      
+      // Update score if largest army status changed
+      if (wasChanged) {
+        const scoreDelta = hasLargestArmy ? GAME_RULES.pointsFor.largestArmy : -GAME_RULES.pointsFor.largestArmy
+        updatedPlayer.score = {
+          ...player.score,
+          public: player.score.public + scoreDelta,
+          total: player.score.total + scoreDelta
+        }
+      }
+      
+      newState.players.set(playerId, updatedPlayer)
+    }
+    
+    return newState
   }
 }
 

@@ -59,6 +59,7 @@ export class AutoPlayer {
     this.config = config
     this.decisionEngine = createAIDecisionSystem(
       gameFlow.getState(), 
+      config.playerId,
       config.difficulty, 
       config.personality
     )
@@ -112,6 +113,7 @@ export class AutoPlayer {
       // Update decision engine with current state
       this.decisionEngine = createAIDecisionSystem(
         this.gameFlow.getState(), 
+        this.config.playerId,
         this.config.difficulty, 
         this.config.personality
       )
@@ -136,11 +138,12 @@ export class AutoPlayer {
           this.log(`Phase changed to: ${currentPhase}`)
           
           // Update decision engine for new phase
-              this.decisionEngine = createAIDecisionSystem(
-      state, 
-      this.config.difficulty, 
-      this.config.personality
-    )
+          this.decisionEngine = createAIDecisionSystem(
+            state, 
+            this.config.playerId,
+            this.config.difficulty, 
+            this.config.personality
+          )
         }
 
         // Get best action for current situation
@@ -169,6 +172,7 @@ export class AutoPlayer {
           // Update decision engine with new state
           this.decisionEngine = createAIDecisionSystem(
             this.gameFlow.getState(), 
+            this.config.playerId,
             this.config.difficulty, 
             this.config.personality
           )
@@ -461,6 +465,7 @@ export class AutoPlayer {
     
     this.decisionEngine = createAIDecisionSystem(
       this.gameFlow.getState(), 
+      this.config.playerId,
       this.config.difficulty, 
       this.config.personality
     )

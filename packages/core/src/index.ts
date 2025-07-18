@@ -12,5 +12,11 @@ export * from './geometry/honeycomb-bridge'
 // Export lobby types for frontend components
 export * from './lobby-types'
 
+// Export unified error handling system
+export * from './shared/errors'
+
+// Export comprehensive validation system
+export * from './shared/validation'
+
 // Remove lobby exports - now handled by event sourcing
 // export * from './lobby' // ❌ Old lobby manager - removed 
