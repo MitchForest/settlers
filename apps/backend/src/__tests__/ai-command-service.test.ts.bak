@@ -1,0 +1,360 @@
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
+import { eventStore } from '../db/event-store-repository'
+import { lobbyCommandService } from '../services/lobby-command-service'
+import { db } from '../db/index'
+import { userProfiles } from '../db/schema'
+
+// Helper to create a test user profile
+async function createTestUser(name: string = 'Test User'): Promise<string> {
+  const userId = crypto.randomUUID()
+  const timestamp = Date.now()
+  await db.insert(userProfiles).values({
+    id: userId,
+    email: `test${timestamp}${Math.random().toString(36).substr(2, 4)}@example.com`,
+    name,
+    avatarEmoji: '👤'
+  })
+  return userId
+}
+
+// Generate a proper UUID for testing
+function generateTestUUID(): string {
+  return crypto.randomUUID()
+}
+
+describe('AI Command Service Tests', () => {
+  let testGameId: string
+  let hostUserId: string
+  let hostPlayerId: string
+
+  beforeAll(async () => {
+    // Create a test game for AI operations
+    hostUserId = generateTestUUID()
+    const gameCode = `AI${Math.random().toString(36).substr(2, 4).toUpperCase()}`
+    const gameResult = await eventStore.createGame({
+      id: `ai_test_game_${Date.now()}`,
+      gameCode,
+      hostUserId,
+      hostPlayerName: 'AI Test Host',
+      hostAvatarEmoji: '🤖'
+    })
+    
+    testGameId = gameResult.game.id
+    hostPlayerId = gameResult.hostPlayer.id
+  })
+
+  describe('AI Player Addition', () => {
+    it('should add AI player with correct configuration', async () => {
+      const result = await lobbyCommandService.addAIPlayer({
+        gameId: testGameId,
+        name: 'Strategic Bot',
+        difficulty: 'hard',
+        personality: 'aggressive',
+        requestedBy: hostUserId
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.playerId).toBeTruthy()
+
+      // Verify event was created
+      const events = await eventStore.getGameEvents(testGameId)
+      const aiEvent = events.find(e => e.eventType === 'ai_player_added')
+      
+      expect(aiEvent).toBeTruthy()
+      expect(aiEvent!.data.name).toBe('Strategic Bot')
+      expect(aiEvent!.data.aiSettings.difficulty).toBe('hard')
+      expect(aiEvent!.data.aiSettings.personality).toBe('aggressive')
+      expect(aiEvent!.data.color).toBeTruthy()
+    })
+
+    it('should add multiple AI players with different personalities', async () => {
+      const aiConfigs = [
+        { name: 'Defensive Bot', difficulty: 'medium', personality: 'defensive' },
+        { name: 'Economic Bot', difficulty: 'easy', personality: 'economic' },
+        { name: 'Balanced Bot', difficulty: 'medium', personality: 'balanced' }
+      ]
+
+      const results = []
+      
+      for (const config of aiConfigs) {
+        const result = await lobbyCommandService.addAIPlayer({
+          gameId: testGameId,
+          name: config.name,
+          difficulty: config.difficulty as 'easy' | 'medium' | 'hard',
+          personality: config.personality as 'aggressive' | 'balanced' | 'defensive' | 'economic',
+          requestedBy: hostUserId
+        })
+        
+        results.push(result)
+      }
+
+      // All should succeed
+      for (const result of results) {
+        expect(result.success).toBe(true)
+        expect(result.playerId).toBeTruthy()
+      }
+
+      // Verify final state
+      const lobbyState = await lobbyCommandService.getLobbyState(testGameId)
+      expect(lobbyState.success).toBe(true)
+      expect(lobbyState.state?.players.size).toBe(4) // 1 host + 3 AI bots
+
+      const aiPlayers = Array.from(lobbyState.state!.players.values()).filter(p => p.playerType === 'ai')
+      expect(aiPlayers.length).toBe(3)
+      
+      // Check that AI personalities are preserved
+      const personalities = aiPlayers.map(p => p.aiSettings?.personality).filter(Boolean)
+      expect(personalities).toContain('defensive')
+      expect(personalities).toContain('economic')
+      expect(personalities).toContain('balanced')
+    })
+
+    it('should prevent adding AI player when lobby is full', async () => {
+      // Lobby should now be full (4 players)
+      const result = await lobbyCommandService.addAIPlayer({
+        gameId: testGameId,
+        name: 'Overflow Bot',
+        difficulty: 'medium',
+        personality: 'balanced',
+        requestedBy: hostUserId
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('full')
+    })
+
+    it('should validate AI player name is required', async () => {
+      const result = await lobbyCommandService.addAIPlayer({
+        gameId: testGameId,
+        name: '',
+        difficulty: 'medium',
+        personality: 'balanced',
+        requestedBy: hostUserId
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('AI player name is required')
+    })
+
+    it('should validate AI player name is not just whitespace', async () => {
+      const result = await lobbyCommandService.addAIPlayer({
+        gameId: testGameId,
+        name: '   ',
+        difficulty: 'medium',
+        personality: 'balanced',
+        requestedBy: hostUserId
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('AI player name is required')
+    })
+
+    it('should handle non-existent game', async () => {
+      const result = await lobbyCommandService.addAIPlayer({
+        gameId: 'non-existent-game',
+        name: 'Test Bot',
+        difficulty: 'medium',
+        personality: 'balanced',
+        requestedBy: hostUserId
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Game not found')
+    })
+  })
+
+  describe('AI Player Removal', () => {
+    it('should remove AI player successfully', async () => {
+      // Get current AI players
+      const currentState = await lobbyCommandService.getLobbyState(testGameId)
+      const aiPlayers = Array.from(currentState.state!.players.values()).filter(p => p.playerType === 'ai')
+      
+      if (aiPlayers.length > 0) {
+        const aiToRemove = aiPlayers[0]
+        
+        // Remove AI player
+        const result = await lobbyCommandService.leaveGame({
+          gameId: testGameId,
+          playerId: aiToRemove.id,
+          reason: 'voluntary'
+        })
+
+        expect(result.success).toBe(true)
+
+        // Verify removal
+        const newState = await lobbyCommandService.getLobbyState(testGameId)
+        const remainingPlayers = Array.from(newState.state!.players.values())
+        
+        expect(remainingPlayers.find(p => p.id === aiToRemove.id)).toBeFalsy()
+        expect(newState.state!.players.size).toBe(currentState.state!.players.size - 1)
+
+        // Verify removal event was created
+        const events = await eventStore.getGameEvents(testGameId)
+        const removalEvent = events.find(e => 
+          e.eventType === 'ai_player_removed' && 
+          e.data.playerId === aiToRemove.id
+        )
+        expect(removalEvent).toBeTruthy()
+      }
+    })
+
+    it('should handle removal of non-existent player', async () => {
+      const result = await lobbyCommandService.leaveGame({
+        gameId: testGameId,
+        playerId: 'non-existent-player',
+        reason: 'voluntary'
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Player not found in lobby')
+    })
+  })
+
+  describe('AI Configuration Validation', () => {
+    it('should assign unique colors to AI players', async () => {
+      const newGameCode = `COLOR${Math.random().toString(36).substr(2, 2).toUpperCase()}`
+      const newHostUserId = generateTestUUID()
+      const newGameResult = await eventStore.createGame({
+        id: `color_test_${Date.now()}`,
+        gameCode: newGameCode,
+        hostUserId: newHostUserId,
+        hostPlayerName: 'Color Test Host',
+        hostAvatarEmoji: '🎨'
+      })
+
+      // Add multiple AI players
+      const aiNames = ['Red Bot', 'Blue Bot', 'Green Bot']
+      for (const name of aiNames) {
+        await lobbyCommandService.addAIPlayer({
+          gameId: newGameResult.game.id,
+          name,
+          difficulty: 'medium',
+          personality: 'balanced',
+          requestedBy: newHostUserId
+        })
+      }
+
+      // Verify unique colors
+      const lobbyState = await lobbyCommandService.getLobbyState(newGameResult.game.id)
+      const allPlayers = Array.from(lobbyState.state!.players.values())
+      const colors = allPlayers.map(p => p.color)
+      const uniqueColors = new Set(colors)
+      
+      expect(colors.length).toBe(uniqueColors.size)
+    })
+
+    it('should assign sequential join orders', async () => {
+      const newGameCode = `ORDER${Math.random().toString(36).substr(2, 2).toUpperCase()}`
+      const newHostUserId = generateTestUUID()
+      const newGameResult = await eventStore.createGame({
+        id: `order_test_${Date.now()}`,
+        gameCode: newGameCode,
+        hostUserId: newHostUserId,
+        hostPlayerName: 'Order Test Host',
+        hostAvatarEmoji: '📋'
+      })
+
+      // Add AI players
+      const aiNames = ['First Bot', 'Second Bot']
+      for (const name of aiNames) {
+        await lobbyCommandService.addAIPlayer({
+          gameId: newGameResult.game.id,
+          name,
+          difficulty: 'medium',
+          personality: 'balanced',
+          requestedBy: newHostUserId
+        })
+      }
+
+      // Verify join orders
+      const lobbyState = await lobbyCommandService.getLobbyState(newGameResult.game.id)
+      const allPlayers = Array.from(lobbyState.state!.players.values())
+      const joinOrders = allPlayers.map(p => p.joinOrder).sort((a, b) => a - b)
+      
+      expect(joinOrders).toEqual([1, 2, 3]) // Host + 2 AI bots
+    })
+  })
+
+  describe('Concurrent Operations', () => {
+    it('should handle rapid AI bot additions with atomic sequence generation', async () => {
+      const concurrentGameCode = `CONC${Math.random().toString(36).substr(2, 2).toUpperCase()}`
+      const concurrentHostUserId = generateTestUUID()
+      const concurrentGameResult = await eventStore.createGame({
+        id: `concurrent_test_${Date.now()}`,
+        gameCode: concurrentGameCode,
+        hostUserId: concurrentHostUserId,
+        hostPlayerName: 'Concurrent Test Host',
+        hostAvatarEmoji: '⚡'
+      })
+
+      // Try to add multiple AI bots concurrently
+      const promises = []
+      for (let i = 0; i < 3; i++) {
+        promises.push(
+          lobbyCommandService.addAIPlayer({
+            gameId: concurrentGameResult.game.id,
+            name: `Concurrent Bot ${i}`,
+            difficulty: 'medium',
+            personality: 'balanced',
+            requestedBy: concurrentHostUserId
+          })
+        )
+      }
+
+      const results = await Promise.all(promises)
+      
+      // All should succeed due to atomic sequence generation
+      for (const result of results) {
+        expect(result.success).toBe(true)
+      }
+
+      // Verify final state is consistent
+      const finalState = await lobbyCommandService.getLobbyState(concurrentGameResult.game.id)
+      expect(finalState.state?.players.size).toBe(4) // 1 host + 3 AI bots
+
+      // Verify events have proper sequence ordering
+      const events = await eventStore.getGameEvents(concurrentGameResult.game.id)
+      for (let i = 1; i < events.length; i++) {
+        expect(events[i].sequenceNumber).toBe(events[i-1].sequenceNumber + 1)
+      }
+    })
+  })
+
+  describe('Event Structure Validation', () => {
+    it('should create properly structured AI player events', async () => {
+      const structureGameCode = `STRUCT${Math.random().toString(36).substr(2, 1).toUpperCase()}`
+      const structureHostUserId = generateTestUUID()
+      const structureGameResult = await eventStore.createGame({
+        id: `structure_test_${Date.now()}`,
+        gameCode: structureGameCode,
+        hostUserId: structureHostUserId,
+        hostPlayerName: 'Structure Test Host',
+        hostAvatarEmoji: '🏗️'
+      })
+
+      await lobbyCommandService.addAIPlayer({
+        gameId: structureGameResult.game.id,
+        name: 'Structure Test Bot',
+        difficulty: 'hard',
+        personality: 'economic',
+        requestedBy: structureHostUserId
+      })
+
+      // Get AI-related events
+      const events = await eventStore.getGameEvents(structureGameResult.game.id)
+      const aiEvent = events.find(e => e.eventType === 'ai_player_added')
+      
+      expect(aiEvent).toBeTruthy()
+      expect(aiEvent!.data.name).toBe('Structure Test Bot')
+      expect(aiEvent!.data.aiSettings).toBeTruthy()
+      expect(aiEvent!.data.aiSettings.difficulty).toBe('hard')
+      expect(aiEvent!.data.aiSettings.personality).toBe('economic')
+      expect(aiEvent!.data.aiSettings.autoPlay).toBe(true)
+      expect(aiEvent!.data.aiSettings.thinkingTimeMs).toBe(2000)
+      expect(aiEvent!.data.color).toBeTruthy()
+      expect(aiEvent!.data.joinOrder).toBeGreaterThan(0)
+      expect(aiEvent!.sequenceNumber).toBeGreaterThan(0)
+      expect(aiEvent!.timestamp).toBeTruthy()
+    })
+  })
+}) 

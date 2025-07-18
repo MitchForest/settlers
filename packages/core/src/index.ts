@@ -1,14 +1,13 @@
-// Core game logic exports
+// Export only the necessary types and functions for the new event-sourced architecture
 export * from './types'
 export * from './constants'
 export * from './calculations'
+
+// Export game engine components (still needed for actual game play)
 export * from './engine'
 
-// Lobby system exports
-export * from './lobby'
+// Export geometry utilities
+export * from './geometry/honeycomb-bridge'
 
-// AI exports
-export * from './ai/board-analyzer'
-export * from './ai/action-decision-engine'
-export * from './ai/auto-player'
-export * from './ai/initial-placement' 
+// Remove lobby exports - now handled by event sourcing
+// export * from './lobby' // ❌ Old lobby manager - removed 

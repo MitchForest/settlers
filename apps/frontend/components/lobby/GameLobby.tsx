@@ -5,21 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Users, Crown, Copy, Check, Plus, X } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { AddAIBotDialog } from './AddAIBotDialog'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
-
-// Terrain assets for honeycomb background
-const TERRAIN_ASSETS = [
-  { name: 'forest', image: '/themes/settlers/assets/terrains/forest.png' },
-  { name: 'pasture', image: '/themes/settlers/assets/terrains/pasture.png' },
-  { name: 'wheat', image: '/themes/settlers/assets/terrains/wheat.png' },
-  { name: 'brick', image: '/themes/settlers/assets/terrains/brick.png' },
-  { name: 'ore', image: '/themes/settlers/assets/terrains/ore.png' },
-  { name: 'desert', image: '/themes/settlers/assets/terrains/desert.png' },
-  { name: 'sea', image: '/themes/settlers/assets/terrains/sea.png' },
-]
 
 interface GameLobbyProps {
   gameCode: string
@@ -38,7 +27,7 @@ export function GameLobby({
   players, 
   isHost, 
   canStart, 
-  maxPlayers,
+  maxPlayers: _maxPlayers,
   onStartGame, 
   onLeave,
   onAddAIBot,
@@ -48,77 +37,22 @@ export function GameLobby({
   const [showAddBotDialog, setShowAddBotDialog] = useState(false)
   const [isAddingBot, setIsAddingBot] = useState(false)
   const [removingBotIds, setRemovingBotIds] = useState<Set<string>>(new Set())
-  
-  // Honeycomb background state
-  const [isMounted, setIsMounted] = useState(false)
-  const [honeycombBackground, setHoneycombBackground] = useState<{
-    id: string;
-    x: number;
-    y: number;
-    terrain: typeof TERRAIN_ASSETS[0];
-    animationDelay: number;
-    animationDuration: number;
-  }[]>([])
 
-  useEffect(() => {
-    // Generate honeycomb background after component mounts
-    const hexes = []
-    const hexRadius = 80
-    const rows = 12
-    const cols = 20
-    
-    // Simple seeded pseudo-random function for deterministic results
-    const seededRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000
-      return x - Math.floor(x)
-    }
-    
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const x = col * (hexRadius * 1.5) - hexRadius
-        const y = row * (hexRadius * Math.sqrt(3)) + (col % 2) * (hexRadius * Math.sqrt(3) / 2) - hexRadius
-        
-        const seed = row * cols + col
-        const terrainIndex = Math.floor(seededRandom(seed) * TERRAIN_ASSETS.length)
-        const terrain = TERRAIN_ASSETS[terrainIndex]
-        
-        const animationDelay = seededRandom(seed + 1000) * 5
-        const animationDuration = 3 + seededRandom(seed + 2000) * 4
-        
-        hexes.push({
-          id: `hex-${row}-${col}`,
-          x,
-          y,
-          terrain,
-          animationDelay,
-          animationDuration,
-        })
-      }
-    }
-    
-    setHoneycombBackground(hexes)
-    setIsMounted(true)
-  }, [])
-
-  const copyGameCode = async () => {
-    try {
-      await navigator.clipboard.writeText(gameCode)
-      setCodeCopied(true)
-      toast.success('Game code copied!')
-      setTimeout(() => setCodeCopied(false), 2000)
-    } catch (_error) {
-      toast.error('Failed to copy code')
-    }
+  const copyGameCode = () => {
+    navigator.clipboard.writeText(gameCode)
+    setCodeCopied(true)
+    toast.success('Game code copied to clipboard!')
+    setTimeout(() => setCodeCopied(false), 2000)
   }
 
-  const handleAddAIBot = async (difficulty: string, personality: string) => {
+  const handleAddBot = async (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
     if (!onAddAIBot) return
     
     setIsAddingBot(true)
     try {
-      await onAddAIBot(difficulty as 'easy' | 'medium' | 'hard', personality as 'aggressive' | 'balanced' | 'defensive' | 'economic')
+      await onAddAIBot(difficulty, personality)
       setShowAddBotDialog(false)
-      toast.success('AI bot added successfully!')
+      toast.success('AI bot added to the lobby')
     } catch (_error) {
       toast.error('Failed to add AI bot')
     } finally {
@@ -126,29 +60,26 @@ export function GameLobby({
     }
   }
 
-  // Reset adding state when dialog closes
-  const handleCloseDialog = () => {
-    setShowAddBotDialog(false)
-    setIsAddingBot(false)
-  }
-
-  const handleRemoveAIBot = async (botId: string) => {
-    if (!onRemoveAIBot || removingBotIds.has(botId)) return
+  const handleRemoveBot = async (botPlayerId: string) => {
+    if (!onRemoveAIBot) return
     
-    setRemovingBotIds(prev => new Set(prev).add(botId))
-    
+    setRemovingBotIds(prev => new Set([...prev, botPlayerId]))
     try {
-      await onRemoveAIBot(botId)
-      toast.success('AI bot removed')
+      await onRemoveAIBot(botPlayerId)
+      toast.success('AI bot removed from the lobby')
     } catch (_error) {
       toast.error('Failed to remove AI bot')
     } finally {
       setRemovingBotIds(prev => {
         const newSet = new Set(prev)
-        newSet.delete(botId)
+        newSet.delete(botPlayerId)
         return newSet
       })
     }
+  }
+
+  const handleCloseDialog = () => {
+    setShowAddBotDialog(false)
   }
 
   // Define player colors based on index
@@ -163,41 +94,8 @@ export function GameLobby({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] relative overflow-hidden">
-      {/* Honeycomb Background */}
-      {isMounted && (
-        <div className="absolute inset-0 overflow-hidden">
-          <svg className="w-full h-full" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
-            <defs>
-              {TERRAIN_ASSETS.map(terrain => (
-                <pattern key={terrain.name} id={`pattern-${terrain.name}`} patternUnits="objectBoundingBox" width="1" height="1">
-                  <image href={terrain.image} x="0" y="0" width="160" height="160" preserveAspectRatio="xMidYMid slice"/>
-                </pattern>
-              ))}
-            </defs>
-            {honeycombBackground.map(hex => (
-              <polygon
-                key={hex.id}
-                points="40,0 120,0 160,69 120,138 40,138 0,69"
-                transform={`translate(${hex.x}, ${hex.y})`}
-                fill={`url(#pattern-${hex.terrain.name})`}
-                className="opacity-40 animate-pulse"
-                style={{
-                  animationDelay: `${hex.animationDelay}s`,
-                  animationDuration: `${hex.animationDuration}s`
-                }}
-              />
-            ))}
-          </svg>
-        </div>
-      )}
-
-      {/* Overlay gradient for better content contrast */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/40" />
-      
-      {/* Content */}
-      <div className="relative z-10 py-8 px-4">
-        <div className="container mx-auto max-w-6xl">
+    <div className="py-8 px-4">
+      <div className="container mx-auto max-w-6xl">
         <div className="space-y-8">
           {/* Header */}
           <div className="text-center space-y-4">
@@ -282,7 +180,7 @@ export function GameLobby({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveAIBot(player.id)}
+                              onClick={() => handleRemoveBot(player.id)}
                               disabled={removingBotIds.has(player.id)}
                               className={ds(
                                 'h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20',
@@ -442,14 +340,13 @@ export function GameLobby({
             </div>
           </div>
         </div>
-        </div>
       </div>
       
       {/* Add AI Bot Dialog */}
       <AddAIBotDialog
         isOpen={showAddBotDialog}
         onClose={handleCloseDialog}
-        onAdd={handleAddAIBot}
+        onAdd={handleAddBot}
         isLoading={isAddingBot}
       />
     </div>

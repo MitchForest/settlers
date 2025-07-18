@@ -10,10 +10,13 @@ import { DiceRoller } from '@/components/game/ui/DiceRoller'
 import { Button } from '@/components/ui/button'
 // Removed unused Dialog components
 import { toast } from 'sonner'
-import { RotateCcw, Palette, Play, LogOut, Info } from 'lucide-react'
+import { RotateCcw, Palette, LogOut, Info } from 'lucide-react'
 import { GameAction, GameFlowManager } from '@settlers/core'
 import { useGameStore } from '@/stores/gameStore'
 import { useRouter } from 'next/navigation'
+import { HoneycombBackground } from '@/components/ui/honeycomb-background'
+import { ConnectionStatus } from '@/components/ui/connection-status'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface PageParams {
   gameId: string
@@ -276,81 +279,91 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   // Handle loading states
   if (themeLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-          <div className="text-white text-lg">Loading game theme...</div>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            <div className={ds(designSystem.text.body, 'text-lg')}>Loading game theme...</div>
+          </div>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
   if (!theme) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Failed to load game theme</div>
-          <Button 
-            onClick={() => loadTheme('settlers')}
-            variant="outline"
-          >
-            Retry Loading Theme
-          </Button>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
+            <div className={ds(designSystem.text.heading, 'text-xl')}>Failed to load game theme</div>
+            <Button 
+              onClick={() => loadTheme('settlers')}
+              className={ds(componentStyles.buttonSecondary)}
+            >
+              Retry Loading Theme
+            </Button>
+          </div>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
   // Handle connection states
   if (connectionStatus === 'connecting' || isConnecting) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-          <div className="text-white text-lg">Connecting to game...</div>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            <div className={ds(designSystem.text.body, 'text-lg')}>Connecting to game...</div>
+          </div>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
   if (connectionStatus === 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Failed to connect to game</div>
-          <div className="flex gap-4">
-            <Button 
-              onClick={() => {
-                const playerId = getPlayerIdForGame()
-                if (playerId) {
-                  setIsConnecting(true)
-                  connect(gameId, playerId)
-                }
-              }}
-              variant="outline"
-            >
-              Retry Connection
-            </Button>
-            <Button 
-              onClick={() => router.push('/')}
-              variant="outline"
-            >
-              Back to Home
-            </Button>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
+            <div className={ds(designSystem.text.heading, 'text-xl')}>Failed to connect to game</div>
+            <div className="flex gap-4">
+              <Button 
+                onClick={() => {
+                  const playerId = getPlayerIdForGame()
+                  if (playerId) {
+                    setIsConnecting(true)
+                    connect(gameId, playerId)
+                  }
+                }}
+                className={ds(componentStyles.buttonSecondary)}
+              >
+                Retry Connection
+              </Button>
+              <Button 
+                onClick={() => router.push('/')}
+                className={ds(componentStyles.buttonSecondary)}
+              >
+                Back to Home
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
   if (!gameState || !gameManager) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-          <div className="text-white text-lg">Loading game...</div>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            <div className={ds(designSystem.text.body, 'text-lg')}>Loading game...</div>
+          </div>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
@@ -358,7 +371,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   const isMyTurn = gameState.currentPlayer === localPlayerId
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] relative overflow-hidden">
+    <HoneycombBackground className="h-screen">
       {/* Main game display */}
       <div className="relative w-full h-full">
         {/* Game Board */}
@@ -398,52 +411,40 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
             <Button
               size="icon"
               onClick={() => {
-                // TODO: Implement restart functionality for real games
-                toast.info('Restart functionality coming soon')
+                toast.info('Game restart coming soon')
               }}
               className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
               title="Restart Game"
             >
               <RotateCcw className="h-6 w-6" />
             </Button>
-            
+
             {/* Theme Toggle Button */}
             <Button
               size="icon"
               onClick={() => {
-                // TODO: Implement theme toggle
-                toast.info('Theme toggle coming soon')
+                toast.info('Theme change coming soon')
               }}
               className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
-              title="Toggle Theme Assets"
+              title="Change Theme"
             >
               <Palette className="h-6 w-6" />
             </Button>
-            
-            {/* Auto Mode Button */}
+
+            {/* Leave Game Button */}
             <Button
               size="icon"
               onClick={() => {
-                toast.info('Auto mode coming soon')
+                disconnect()
+                router.push('/')
               }}
-              disabled
-              className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white/50 cursor-not-allowed opacity-60 rounded-lg"
-              title="Auto Mode (Coming Soon)"
-            >
-              <Play className="h-6 w-6" />
-            </Button>
-            
-            {/* Exit Button */}
-            <Button
-              size="icon"
-              onClick={() => router.push('/')}
               className="h-12 w-12 bg-black/30 backdrop-blur-sm border border-white/20 text-white hover:bg-black/40 hover:scale-105 transition-all duration-200 rounded-lg"
-              title="Exit Game"
+              title="Leave Game"
             >
               <LogOut className="h-6 w-6" />
             </Button>
-            
-            {/* Info Button */}
+
+            {/* Game Info Button */}
             <Button
               size="icon"
               onClick={() => {
@@ -471,6 +472,9 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           </div>
         )}
       </div>
-    </div>
+      
+      {/* Connection Status */}
+      <ConnectionStatus status={connectionStatus} />
+    </HoneycombBackground>
   )
 } 

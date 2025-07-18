@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 interface CreateGameDialogProps {
   open: boolean
   onClose: () => void
-  onGameCreated: (gameCode: string, gameId: string, hostPlayerId?: string) => void
+  onGameCreated: (gameCode: string, gameId: string, hostPlayerId?: string, lobbyUrl?: string) => void
 }
 
 export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDialogProps) {
@@ -32,6 +32,7 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
   const [gameCode, setGameCode] = useState('')
   const [gameId, setGameId] = useState('')
   const [hostPlayerId, setHostPlayerId] = useState('')
+  const [lobbyUrl, setLobbyUrl] = useState('')
 
   const handleCreateGame = async () => {
     if (!profile?.display_name || !user?.id) {
@@ -52,10 +53,11 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
         setGameCode(data.gameCode)
         setGameId(data.gameId)
         setHostPlayerId(data.hostPlayerId)
+        setLobbyUrl(data.lobbyUrl || '')
         
         if (isPublic) {
           // Public game - go straight to lobby
-          onGameCreated(data.gameCode, data.gameId, data.hostPlayerId)
+          onGameCreated(data.gameCode, data.gameId, data.hostPlayerId, data.lobbyUrl)
           handleClose()
           toast.success(`Game created! Code: ${data.gameCode}`)
         } else {
@@ -74,7 +76,7 @@ export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDia
   }
 
   const handleJoinLobby = () => {
-    onGameCreated(gameCode, gameId, hostPlayerId)
+    onGameCreated(gameCode, gameId, hostPlayerId, lobbyUrl)
     handleClose()
   }
 

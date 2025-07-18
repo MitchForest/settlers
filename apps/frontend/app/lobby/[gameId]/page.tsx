@@ -1,183 +1,494 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useGameStore } from '@/stores/gameStore'
 import { GameLobby } from '@/components/lobby/GameLobby'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Loader2, AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { use } from 'react'
-import { componentStyles, ds } from '@/lib/design-system'
+import { 
+  extractSessionFromURL, 
+  cleanSessionFromURL, 
+  hasPermission,
+  analyzeSessionError 
+} from '@/lib/session-utils'
+import { validatePlayerSession } from '@/lib/api'
+import { 
+  GameSessionPayload, 
+  SessionValidation, 
+  SessionError,
+  RecoveryAction 
+} from '@/lib/session-types'
+import { LobbyPlayer } from '@settlers/core'
+import { ConnectionStatus } from '@/components/ui/connection-status'
+import { HoneycombBackground } from '@/components/ui/honeycomb-background'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
+import { toast } from 'sonner'
 
 interface PageParams {
   gameId: string
+}
+
+interface LobbyPageState {
+  loading: boolean
+  session: GameSessionPayload | null
+  validation: SessionValidation | null
+  error: SessionError | null
+  lobbyData: {
+    gameCode: string
+    players: LobbyPlayer[]
+    isHost: boolean
+    canStart: boolean
+  } | null
+  webSocket: WebSocket | null
+  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error'
 }
 
 export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
   const { gameId } = use(params)
   const router = useRouter()
   
-  const { 
-    lobbyPlayers, 
-    gameCode, 
-    isHost, 
-    localPlayerId,
-    connectionStatus,
-    connectToLobby, 
-    startGame,
-    disconnect,
-    addAIBot,
-    removeAIBot,
-    setLocalPlayerId
-  } = useGameStore()
+  const [state, setState] = useState<LobbyPageState>({
+    loading: true,
+    session: null,
+    validation: null,
+    error: null,
+    lobbyData: null,
+    webSocket: null,
+    connectionStatus: 'disconnected'
+  })
 
   const [isStartingGame, setIsStartingGame] = useState(false)
+  
+  // Use ref to track current connection and prevent multiple connections
+  const currentConnectionRef = useRef<WebSocket | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Initialize session from URL and validate
   useEffect(() => {
-    // Add a small delay to allow store to initialize
-    const timer = setTimeout(() => {
-      // Check both store and localStorage for player ID
-      const storedPlayerId = localStorage.getItem(`playerId_${gameId}`)
-      const effectivePlayerId = localPlayerId || storedPlayerId
-      
-      if (!effectivePlayerId) {
-        console.warn('No localPlayerId found in store or localStorage, redirecting to home')
-        router.push('/')
-        return
+    const initializeSession = async () => {
+      try {
+        setState(prev => ({ ...prev, loading: true, error: null }))
+        
+        // Extract session from URL
+        const { token, session, error: urlError } = extractSessionFromURL()
+        
+        if (urlError || !session || !token) {
+          setState(prev => ({ 
+            ...prev, 
+            loading: false, 
+            error: urlError || { 
+              type: 'malformed_token', 
+              message: 'No valid session found in URL',
+              gameId,
+              canRecover: true
+            }
+          }))
+          return
+        }
+        
+        // Validate session with backend
+        const validation = await validatePlayerSession(token)
+        
+        if (!validation.valid) {
+          setState(prev => ({ 
+            ...prev, 
+            loading: false,
+            error: {
+              type: 'invalid_signature',
+              message: validation.reason || 'Session validation failed',
+              gameId,
+              canRecover: true
+            }
+          }))
+          return
+        }
+        
+        // Check if this session is for the correct game
+        if (session.gameId !== gameId) {
+          setState(prev => ({ 
+            ...prev, 
+            loading: false,
+            error: {
+              type: 'game_not_found',
+              message: 'Session is for a different game',
+              gameId,
+              canRecover: false
+            }
+          }))
+          return
+        }
+        
+        // Clean session from URL for cleaner appearance
+        cleanSessionFromURL()
+        
+        // Set successful state
+        setState(prev => ({ 
+          ...prev, 
+          loading: false,
+          session,
+          validation,
+          error: null
+        }))
+        
+        // Connect to WebSocket with session
+        await connectWebSocket(token, session)
+        
+      } catch (error) {
+        console.error('Session initialization error:', error)
+        setState(prev => ({ 
+          ...prev, 
+          loading: false,
+          error: {
+            type: 'malformed_token',
+            message: 'Failed to initialize session',
+            gameId,
+            canRecover: true
+          }
+        }))
       }
-      
-      // If we got player ID from localStorage but not store, update the store
-      if (!localPlayerId && storedPlayerId) {
-        console.log('Restoring player ID from localStorage:', storedPlayerId)
-        setLocalPlayerId(storedPlayerId)
-      }
-      
-      // Only connect if not already connecting or connected
-      if (connectionStatus === 'disconnected') {
-        connectToLobby(gameId, effectivePlayerId)
-      }
-    }, 100)
-    
-    // Listen for game navigation events from the store
-    const handleNavigateToGame = (event: CustomEvent) => {
-      const { gameId: targetGameId } = event.detail
-      router.push(`/game/${targetGameId}`)
     }
     
-    window.addEventListener('navigateToGame', handleNavigateToGame as EventListener)
-    
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('navigateToGame', handleNavigateToGame as EventListener)
-      if (localPlayerId) {
-        disconnect()
-      }
-    }
-  }, [gameId, localPlayerId, connectToLobby, disconnect, router])
+    initializeSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId])
 
-  const handleStartGame = async () => {
-    setIsStartingGame(true)
+  // Connect to WebSocket with session token
+  const connectWebSocket = useCallback(async (sessionToken: string, session: GameSessionPayload) => {
     try {
-      await startGame(gameId)
-      // WebSocket will trigger redirect to game
+      // Close any existing connection first
+      if (currentConnectionRef.current) {
+        console.log('🔌 Closing existing WebSocket connection...')
+        currentConnectionRef.current.close(1000, 'New connection starting')
+        currentConnectionRef.current = null
+      }
+      
+      // Clear any pending reconnection
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+      
+      setState(prev => ({ ...prev, connectionStatus: 'connecting' }))
+      
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
+      const ws = new WebSocket(`${wsUrl}/ws?s=${encodeURIComponent(sessionToken)}`)
+      
+      // Track this connection
+      currentConnectionRef.current = ws
+      
+      ws.onopen = () => {
+        console.log('🔌 WebSocket connected with session')
+        // Only update state if this is still the current connection
+        if (currentConnectionRef.current === ws) {
+          setState(prev => ({ 
+            ...prev, 
+            webSocket: ws, 
+            connectionStatus: 'connected' 
+          }))
+        }
+        
+        // Session is automatically validated on server, no need to send joinWithSession
+      }
+      
+      ws.onmessage = (event) => {
+        // Only handle messages if this is still the current connection
+        if (currentConnectionRef.current !== ws) return
+        
+        try {
+          const data = JSON.parse(event.data)
+          console.log('📨 WebSocket message:', data.type)
+          
+          switch (data.type) {
+            case 'lobbyJoined':
+              setState(prev => ({ 
+                ...prev, 
+                lobbyData: {
+                  gameCode: data.gameCode,
+                  players: data.players,
+                  isHost: data.isHost,
+                  canStart: data.canStart
+                }
+              }))
+              break
+              
+            case 'lobbyUpdate':
+              setState(prev => ({ 
+                ...prev,
+                lobbyData: prev.lobbyData ? {
+                  ...prev.lobbyData,
+                  players: data.players,
+                  canStart: data.canStart
+                } : null
+              }))
+              break
+              
+            case 'gameStarted':
+              // Navigate to game page with current session
+              const gameUrl = `/game/${gameId}?s=${encodeURIComponent(sessionToken)}`
+              router.push(gameUrl)
+              break
+              
+            case 'error':
+              const errorMessage = data?.error || 'Unknown error'
+              console.error('❌ WebSocket error message:', errorMessage)
+              toast.error(`Error: ${errorMessage}`)
+              setState(prev => ({ ...prev, connectionStatus: 'error' }))
+              break
+              
+            default:
+              console.log('📨 Unhandled message type:', data.type)
+          }
+        } catch (error) {
+          console.error('❌ Failed to parse WebSocket message:', error)
+        }
+      }
+      
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error)
+        if (currentConnectionRef.current === ws) {
+          setState(prev => ({ ...prev, connectionStatus: 'error' }))
+        }
+      }
+      
+      ws.onclose = (event) => {
+        console.log('🔌 WebSocket closed:', event.code, event.reason)
+        
+        // Only handle close if this was the current connection
+        if (currentConnectionRef.current === ws) {
+          currentConnectionRef.current = null
+          setState(prev => ({ 
+            ...prev, 
+            webSocket: null, 
+            connectionStatus: 'disconnected' 
+          }))
+          
+          // Only auto-reconnect for unexpected closures, not normal ones
+          // Code 1005 often indicates a normal browser-initiated close
+          if (event.code !== 1000 && event.code !== 1001 && event.code !== 1005) {
+            console.log('🔄 Connection lost unexpectedly, will attempt to reconnect...')
+            // Use a shorter timeout and prevent multiple reconnection attempts
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (!currentConnectionRef.current) { // Only reconnect if no current connection
+                console.log('🔄 Attempting to reconnect...')
+                connectWebSocket(sessionToken, session)
+              }
+            }, 2000)
+          } else {
+            console.log('🔌 WebSocket closed normally, no reconnection needed')
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('WebSocket connection failed:', error)
+      setState(prev => ({ ...prev, connectionStatus: 'error' }))
+    }
+  }, [gameId, router])
+
+  // Handle starting game
+  const handleStartGame = async () => {
+    if (!state.session || !state.webSocket || !hasPermission(state.session, 'start_game')) {
+      return
+    }
+    
+    setIsStartingGame(true)
+    
+    try {
+      state.webSocket.send(JSON.stringify({
+        type: 'startGame',
+        gameId: state.session.gameId
+      }))
     } catch (error) {
       console.error('Failed to start game:', error)
       setIsStartingGame(false)
     }
   }
 
-  const handleLeaveLobby = () => {
-    disconnect()
-    router.push('/')
-  }
-
+  // Handle adding AI bot
   const handleAddAIBot = async (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
+    if (!state.webSocket || !state.session) {
+      toast.error('Not connected to game')
+      return
+    }
+
     try {
-      await addAIBot(gameId, difficulty, personality)
+      state.webSocket.send(JSON.stringify({
+        type: 'addAIBot',
+        difficulty,
+        personality
+      }))
+      toast.success('Adding AI bot...')
     } catch (error) {
       console.error('Failed to add AI bot:', error)
-      // Could add toast notification here
+      toast.error('Failed to add AI bot')
     }
   }
 
+  // Handle removing AI bot
   const handleRemoveAIBot = async (botPlayerId: string) => {
+    if (!state.webSocket || !state.session) {
+      toast.error('Not connected to game')
+      return
+    }
+
     try {
-      await removeAIBot(gameId, botPlayerId)
+      state.webSocket.send(JSON.stringify({
+        type: 'removeAIBot',
+        botPlayerId
+      }))
+      toast.success('Removing AI bot...')
     } catch (error) {
       console.error('Failed to remove AI bot:', error)
-      // Could add toast notification here
+      toast.error('Failed to remove AI bot')
     }
   }
 
-  if (connectionStatus === 'connecting') {
+  // Handle recovery actions
+  const handleRecovery = (action: RecoveryAction) => {
+    switch (action.type) {
+      case 'redirect_home':
+        router.push('/')
+        break
+      case 'rejoin_by_code':
+        router.push('/?action=join')
+        break
+      case 'refresh_session':
+        window.location.reload()
+        break
+      default:
+        router.push('/')
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clean up WebSocket connection
+      if (currentConnectionRef.current) {
+        console.log('🔌 Cleaning up WebSocket on unmount')
+        currentConnectionRef.current.close(1000, 'Component unmounting')
+        currentConnectionRef.current = null
+      }
+      
+      // Clear any pending reconnection
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+    }
+  }, [])
+
+  // Loading state
+  if (state.loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Connecting to lobby...</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Card className={ds(componentStyles.glassCard, 'w-full max-w-md')}>
+            <CardContent className="flex flex-col items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin mb-4 text-white" />
+              <h2 className={ds(designSystem.text.heading, 'text-lg mb-2')}>Loading Lobby</h2>
+              <p className={ds(designSystem.text.muted, 'text-sm text-center')}>
+                Validating your session and connecting to the game...
+              </p>
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      </HoneycombBackground>
     )
   }
 
-  if (connectionStatus === 'error') {
+  // Error state
+  if (state.error) {
+    const recovery = analyzeSessionError(state.error, gameId)
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Failed to connect to lobby</div>
-          <Button 
-            onClick={() => connectToLobby(gameId, localPlayerId!)}
-            className={ds(
-              componentStyles.buttonPrimary,
-              'bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30'
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Card className={ds(componentStyles.glassCard, 'w-full max-w-md')}>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+                <CardTitle className={ds(designSystem.text.heading)}>Session Error</CardTitle>
+              </div>
+              <CardDescription className={ds(designSystem.text.muted)}>
+                {state.error.message}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => handleRecovery(recovery)} 
+                  className={ds(componentStyles.buttonPrimary, 'flex-1')}
+                >
+                  {recovery.type === 'refresh_session' ? (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Home className="h-4 w-4 mr-2" />
+                  )}
+                  {recovery.buttonText}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </HoneycombBackground>
+    )
+  }
+
+  // Main lobby content when successfully connected
+  if (state.session && state.validation && state.lobbyData) {
+    return (
+      <HoneycombBackground>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl">
+            {/* Lobby component */}
+            {state.lobbyData && state.session ? (
+              <GameLobby
+                gameCode={state.lobbyData.gameCode}
+                players={state.lobbyData.players}
+                isHost={state.lobbyData.isHost}
+                canStart={state.lobbyData.canStart && !isStartingGame}
+                maxPlayers={4}
+                onStartGame={handleStartGame}
+                onLeave={() => router.push('/')}
+                onAddAIBot={handleAddAIBot}
+                onRemoveAIBot={handleRemoveAIBot}
+              />
+            ) : (
+              <Card className={ds(componentStyles.glassCard)}>
+                <CardContent className="flex items-center justify-center p-8">
+                  <div className="text-center">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-white" />
+                    <p className={ds(designSystem.text.muted, 'text-sm')}>Loading lobby data...</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
-          >
-            Retry Connection
-          </Button>
-          <Button 
-            onClick={() => router.push('/')}
-            variant="outline"
-            className={componentStyles.buttonSecondary}
-          >
-            Back to Home
-          </Button>
+          </div>
         </div>
-      </div>
+        
+        {/* Connection status in bottom right */}
+        <ConnectionStatus status={state.connectionStatus} />
+      </HoneycombBackground>
     )
   }
 
-  if (!gameCode) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Loading lobby...</div>
-          <div className="animate-pulse text-white/60">Please wait while we set up your game</div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isStartingGame) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-white text-xl">Starting game...</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-          <div className="text-white/60">Get ready to play!</div>
-        </div>
-      </div>
-    )
-  }
-
+  // Fallback loading state
   return (
-    <GameLobby
-      gameCode={gameCode}
-      players={lobbyPlayers}
-      isHost={isHost}
-      canStart={lobbyPlayers.length >= 3}
-      onStartGame={handleStartGame}
-      onLeave={handleLeaveLobby}
-      onAddAIBot={handleAddAIBot}
-      onRemoveAIBot={handleRemoveAIBot}
-    />
+    <HoneycombBackground>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className={ds(componentStyles.glassCard, 'w-full max-w-md')}>
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin mb-4 text-white" />
+            <h2 className={ds(designSystem.text.heading, 'text-lg mb-2')}>Connecting to Lobby</h2>
+            <p className={ds(designSystem.text.muted, 'text-sm text-center')}>
+              Please wait while we connect you to the game...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </HoneycombBackground>
   )
 } 

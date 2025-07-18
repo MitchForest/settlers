@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { generateSessionToken, buildGameURL } from '@/lib/session-utils'
 import { Loader2 } from 'lucide-react'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
@@ -43,9 +44,45 @@ function AuthCallbackContent() {
           setStatus('success')
           setMessage('Welcome back! Redirecting...')
           
-          const redirectTo = searchParams.get('redirect_to') || '/'
-          // Redirect immediately - no need for delay
-          router.push(redirectTo)
+          const redirectTo = searchParams.get('redirect_to')
+          
+          if (redirectTo) {
+            // Parse redirect URL to see if it's a game/lobby URL
+            const gameUrlMatch = redirectTo.match(/\/(lobby|game)\/([^?]+)/)
+            
+            if (gameUrlMatch) {
+              const [, pageType, gameId] = gameUrlMatch
+              
+              // Extract any existing session parameters
+              const redirectUrl = new URL(redirectTo, window.location.origin)
+              const existingPlayerId = redirectUrl.searchParams.get('playerId')
+              const existingGameCode = redirectUrl.searchParams.get('gameCode')
+              
+              if (existingPlayerId) {
+                // Generate session token with auth data
+                const sessionToken = generateSessionToken(
+                  gameId,
+                  existingPlayerId,
+                  sessionData.session.access_token,
+                  'player', // Default role, will be validated server-side
+                  existingGameCode || undefined
+                )
+                
+                // Build new URL with session token
+                const gameUrl = buildGameURL(
+                  pageType as 'lobby' | 'game',
+                  gameId,
+                  sessionToken
+                )
+                
+                router.push(gameUrl.fullUrl)
+                return
+              }
+            }
+          }
+          
+          // Default redirect
+          router.push(redirectTo || '/')
           return
         }
 
@@ -57,10 +94,10 @@ function AuthCallbackContent() {
           let cleanup: (() => void) | null = null
           let timeoutId: NodeJS.Timeout | null = null
 
-          const handleAuthStateChange = (event: string, session: any) => {
+          const handleAuthStateChange = (event: string, session: { user?: { email?: string }; access_token?: string } | null) => {
             console.log('Auth state change:', event)
             
-            if (event === 'SIGNED_IN' && session) {
+            if (event === 'SIGNED_IN' && session?.user) {
               console.log('Authentication successful:', session.user.email)
               setStatus('success')
               setMessage('Welcome! Redirecting...')
@@ -69,8 +106,45 @@ function AuthCallbackContent() {
               if (cleanup) cleanup()
               if (timeoutId) clearTimeout(timeoutId)
               
-              const redirectTo = searchParams.get('redirect_to') || '/'
-              router.push(redirectTo)
+              const redirectTo = searchParams.get('redirect_to')
+              
+              if (redirectTo) {
+                // Parse redirect URL to see if it's a game/lobby URL
+                const gameUrlMatch = redirectTo.match(/\/(lobby|game)\/([^?]+)/)
+                
+                if (gameUrlMatch) {
+                  const [, pageType, gameId] = gameUrlMatch
+                  
+                  // Extract any existing session parameters
+                  const redirectUrl = new URL(redirectTo, window.location.origin)
+                  const existingPlayerId = redirectUrl.searchParams.get('playerId')
+                  const existingGameCode = redirectUrl.searchParams.get('gameCode')
+                  
+                  if (existingPlayerId) {
+                    // Generate session token with auth data
+                    const sessionToken = generateSessionToken(
+                      gameId,
+                      existingPlayerId,
+                      session.access_token || '',
+                      'player', // Default role, will be validated server-side
+                      existingGameCode || undefined
+                    )
+                    
+                    // Build new URL with session token
+                    const gameUrl = buildGameURL(
+                      pageType as 'lobby' | 'game',
+                      gameId,
+                      sessionToken
+                    )
+                    
+                    router.push(gameUrl.fullUrl)
+                    return
+                  }
+                }
+              }
+              
+              // Default redirect
+              router.push(redirectTo || '/')
             }
           }
 

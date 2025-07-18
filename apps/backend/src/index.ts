@@ -1,93 +1,147 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import gameRoutes from './routes/games'
-import { websocketHandler, upgradeWebSocket as wsUpgrade, type WSData } from './websocket/server'
+import { logger } from 'hono/logger'
+import { HTTPException } from 'hono/http-exception'
+import { serve } from '@hono/node-server'
 
-/**
- * Initialize Hono app - ULTRA MINIMAL VERSION
- */
+// Import routes
+import gamesRouter from './routes/games'
+
+// Import the new event-sourced WebSocket server
+import { server as webSocketServer } from './websocket/unified-server'
+
+// Create Hono app
 const app = new Hono()
 
-// Enable CORS
-app.use('/*', cors({
-  origin: 'http://localhost:3000',
-  credentials: true
+// Middleware
+app.use('*', logger())
+app.use('*', cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization']
 }))
 
-/**
- * Test endpoint
- */
-app.get('/api/test', (c) => {
-  return c.json({ 
-    message: 'Ultra minimal backend is working!',
-    timestamp: new Date().toISOString()
+// Body parsing and content-type validation middleware
+app.use('*', async (c, next) => {
+  const method = c.req.method
+  const contentType = c.req.header('content-type')
+  
+  // For POST/PUT requests, validate content-type and JSON parsing
+  if ((method === 'POST' || method === 'PUT') && c.req.url.includes('/api/')) {
+    // Require JSON content-type for API endpoints
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new HTTPException(400, { message: 'Content-Type must be application/json' })
+    }
+    
+    // Pre-parse JSON to catch errors early
+    try {
+      await c.req.json()
+    } catch (error) {
+      throw new HTTPException(400, { message: 'Invalid JSON in request body' })
+    }
+  }
+  
+  await next()
+})
+
+// Health check
+app.get('/health', (c) => {
+  return c.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    architecture: 'event-sourced',
+    websocket: 'active'
   })
 })
 
-/**
- * Health check endpoint with database
- */
-app.get('/health', async (c) => {
-  try {
-    // Import db dynamically to avoid circular dependency
-    const { db } = await import('./db')
-    const { sql } = await import('drizzle-orm')
-    
-    // Test database connection with timeout
-    const dbTest = await Promise.race([
-      db.execute(sql`SELECT 1`),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database timeout')), 5000)
-      )
-    ])
-    
-    return c.json({ 
-      status: 'ok', 
-      timestamp: new Date().toISOString(),
-      database: true,
-      message: 'Backend is healthy'
-    })
-  } catch (error) {
-    console.error('Health check failed:', error)
-    return c.json({ 
-      status: 'error', 
-      timestamp: new Date().toISOString(),
-      database: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, 500)
+// API routes
+app.route('/api/games', gamesRouter)
+
+// Test connection endpoint
+app.get('/api/test-connection', (c) => {
+  return c.json({ 
+    success: true, 
+    message: 'Backend connection successful',
+    architecture: 'event-sourced'
+  })
+})
+
+// Handle specific route method validation (allow OPTIONS for CORS)
+app.all('/api/games/create', async (c, next) => {
+  if (c.req.method !== 'POST' && c.req.method !== 'OPTIONS') {
+    throw new HTTPException(405, { message: 'Method not allowed' })
   }
+  await next()
 })
 
-/**
- * Mount game routes
- */
-app.route('/api/games', gameRoutes)
-console.log('✅ Game routes mounted successfully')
-
-/**
- * Start minimal server
- */
-const PORT = Number(process.env.PORT) || 4000
-
-console.log(`🚀 Starting ULTRA MINIMAL backend on port ${PORT}`)
-
-const server = Bun.serve({
-  port: PORT,
-  idleTimeout: 120,
-  fetch(req: Request): Response | Promise<Response> {
-    // Handle WebSocket upgrade
-    if (req.url.includes('/ws')) {
-      const upgrade = wsUpgrade(req, server)
-      if (upgrade) return upgrade
-    }
-    
-    // Handle regular HTTP requests
-    return app.fetch(req)
-  },
-  websocket: websocketHandler
+app.all('/api/games/join', async (c, next) => {
+  if (c.req.method !== 'POST' && c.req.method !== 'OPTIONS') {
+    throw new HTTPException(405, { message: 'Method not allowed' })
+  }
+  await next()
 })
 
-console.log(`✅ Server started at http://localhost:${PORT}`)
-console.log(`🔌 WebSocket available at ws://localhost:${PORT}/ws`)
+app.all('/api/games/info/*', async (c, next) => {
+  if (c.req.method !== 'GET' && c.req.method !== 'OPTIONS') {
+    throw new HTTPException(405, { message: 'Method not allowed' })
+  }
+  await next()
+})
 
-export { server }
+// 404 handler
+app.notFound((c) => {
+  return c.json({ error: 'Not found' }, 404)
+})
+
+// Error handler
+app.onError((err, c) => {
+  console.error('Server error:', err)
+  
+  // Handle HTTPException (400, 401, etc.)
+  if (err instanceof HTTPException) {
+    return c.json({ 
+      success: false,
+      error: err.message 
+    }, err.status)
+  }
+  
+  return c.json({ 
+    error: 'Internal server error',
+    message: err.message 
+  }, 500)
+})
+
+// Export the server for testing
+export { app as server }; // YES
+
+// Start HTTP server only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  const httpPort = process.env.PORT || 3001
+  console.log(`🚀 Starting Settlers backend server...`)
+  console.log(`📡 HTTP API server will run on port ${httpPort}`)
+  console.log(`🌐 WebSocket server running on port 8080`)
+  console.log(`🎯 Architecture: Event-sourced`)
+
+  serve({
+    fetch: app.fetch,
+    port: parseInt(httpPort.toString())
+  }, (info) => {
+    console.log(`✅ HTTP server running on http://localhost:${info.port}`)
+    console.log(`✅ WebSocket server ready for connections`)
+    console.log(`✅ Backend fully operational with event sourcing`)
+  })
+
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('\n🛑 Shutting down servers...')
+    webSocketServer.close()
+    process.exit(0)
+  })
+
+  process.on('SIGTERM', () => {
+    console.log('\n🛑 Shutting down servers...')
+    webSocketServer.close()
+    process.exit(0)
+  })
+}
