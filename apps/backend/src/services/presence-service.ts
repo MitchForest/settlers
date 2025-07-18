@@ -1,6 +1,7 @@
 import { db } from '../db'
 import { userPresence, friendships, userProfiles } from '../db/schema'
 import { eq, and, or, desc, sql } from 'drizzle-orm'
+import { friendsWebSocketManager } from '../websocket/friends-websocket'
 
 export class PresenceService {
   static async updatePresence(
@@ -31,7 +32,10 @@ export class PresenceService {
       })
       .returning()
     
-    // TODO: Broadcast presence update via WebSocket to friends
+    // Broadcast presence update via WebSocket to friends
+    friendsWebSocketManager.broadcastPresenceUpdate(userId, status, gameId).catch(error => {
+      console.error('Failed to broadcast presence update:', error)
+    })
     
     return presence[0]
   }

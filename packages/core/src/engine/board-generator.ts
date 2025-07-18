@@ -1,5 +1,5 @@
 // Board generation for Settlers (Catan)
-// Generates randomized boards using classic Settlers terrain and number distributions
+// Uses Honeycomb library properly for all geometric calculations
 
 import {
   Board,
@@ -14,6 +14,7 @@ import {
   TERRAIN_DISTRIBUTION,
   NUMBER_TOKENS
 } from '../constants'
+import { honeycombBridge } from '../geometry/honeycomb-bridge'
 
 // Simple shuffle function
 function shuffleArray<T>(array: T[]): T[] {
@@ -100,19 +101,17 @@ export function generateBoard(boardId: string = `board-${Date.now()}`): Board {
   
   // Shuffle terrain and numbers
   const shuffledTerrain = shuffleArray(terrainPool)
-  const shuffledNumbers = shuffleArray(NUMBER_TOKENS)
+  const shuffledNumbers = shuffleArray([...NUMBER_TOKENS])
   
-  // Create hexes
+  // Create hex map using ALL hex positions (land + sea)
+  const allHexPositions = [...STANDARD_HEX_POSITIONS, ...SEA_HEX_POSITIONS]
   const hexes = new Map<string, Hex>()
-  let numberIndex = 0
   
-  // Add land hexes
+  // Generate land hexes with terrain and numbers
   STANDARD_HEX_POSITIONS.forEach((position, index) => {
-    const terrain = shuffledTerrain[index]
     const hexId = `${position.q},${position.r},${position.s}`
-    
-    // Desert gets no number token
-    const numberToken = terrain === 'desert' ? null : shuffledNumbers[numberIndex++]
+    const terrain = shuffledTerrain[index]
+    const numberToken = terrain === 'desert' ? null : shuffledNumbers.shift() || null
     
     hexes.set(hexId, {
       id: hexId,
@@ -136,79 +135,12 @@ export function generateBoard(boardId: string = `board-${Date.now()}`): Board {
     })
   })
   
-  // Generate vertices and edges
-  const vertices = new Map<string, Vertex>()
-  const edges = new Map<string, Edge>()
+  // Generate vertices using proper Honeycomb geometry
+  const vertices = generateVertices(allHexPositions)
   
-  // Generate vertices for each hex (6 vertices per hex)
-  hexes.forEach(hex => {
-    const directions: Array<'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'> = ['N', 'NE', 'SE', 'S', 'SW', 'NW']
-    
-    directions.forEach(direction => {
-      const vertexId = `${hex.position.q},${hex.position.r},${hex.position.s}-${direction}`
-      
-      if (!vertices.has(vertexId)) {
-        vertices.set(vertexId, {
-          id: vertexId,
-          position: {
-            hexes: [hex.position],
-            direction
-          },
-          building: null,
-          port: null
-        })
-      }
-    })
-  })
-  
-  // Generate edges between adjacent hexes
-  hexes.forEach(hex => {
-    const directions: Array<'NE' | 'E' | 'SE' | 'SW' | 'W' | 'NW'> = ['NE', 'E', 'SE', 'SW', 'W', 'NW']
-    
-    directions.forEach(direction => {
-      // Calculate adjacent hex position based on direction
-      let adjacentHex: HexCoordinate
-      switch (direction) {
-        case 'NE':
-          adjacentHex = { q: hex.position.q + 1, r: hex.position.r - 1, s: hex.position.s }
-          break
-        case 'E':
-          adjacentHex = { q: hex.position.q + 1, r: hex.position.r, s: hex.position.s - 1 }
-          break
-        case 'SE':
-          adjacentHex = { q: hex.position.q, r: hex.position.r + 1, s: hex.position.s - 1 }
-          break
-        case 'SW':
-          adjacentHex = { q: hex.position.q - 1, r: hex.position.r + 1, s: hex.position.s }
-          break
-        case 'W':
-          adjacentHex = { q: hex.position.q - 1, r: hex.position.r, s: hex.position.s + 1 }
-          break
-        case 'NW':
-          adjacentHex = { q: hex.position.q, r: hex.position.r - 1, s: hex.position.s + 1 }
-          break
-      }
-      
-      const adjacentHexId = `${adjacentHex.q},${adjacentHex.r},${adjacentHex.s}`
-      
-      // Only create edge if adjacent hex exists
-      if (hexes.has(adjacentHexId)) {
-        const edgeId = `${hex.id}-${adjacentHexId}-${direction}`
-        
-        if (!edges.has(edgeId)) {
-          edges.set(edgeId, {
-            id: edgeId,
-            position: {
-              hexes: [hex.position, adjacentHex],
-              direction
-            },
-            connection: null
-          })
-        }
-      }
-    })
-  })
-  
+  // Generate edges using proper Honeycomb geometry  
+  const edges = generateEdges(allHexPositions)
+
   // Generate ports on sea edges (simplified port placement)
   const ports: Port[] = generatePorts()
 
@@ -225,7 +157,142 @@ export function generateBoard(boardId: string = `board-${Date.now()}`): Board {
   }
 }
 
+/**
+ * Generate vertices using proper hexagon geometry
+ * Each vertex is the intersection of 3 hexagons
+ */
+function generateVertices(hexPositions: HexCoordinate[]): Map<string, Vertex> {
+  const vertices = new Map<string, Vertex>()
+  
+  // For each hex, get its 6 corners and create vertices
+  hexPositions.forEach(hexCoord => {
+    // Use Honeycomb to get the 6 vertex directions for this hex
+    const directions: Array<'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'> = ['N', 'NE', 'SE', 'S', 'SW', 'NW']
+    
+    directions.forEach(direction => {
+      // Create a unique vertex ID based on the hex and direction
+      const vertexId = `${hexCoord.q},${hexCoord.r},${hexCoord.s}-${direction}`
+      
+      if (!vertices.has(vertexId)) {
+        // Calculate which 3 hexes touch this vertex
+        const touchingHexes = getHexesTouchingVertex(hexCoord, direction)
+        
+        vertices.set(vertexId, {
+          id: vertexId,
+          position: {
+            hexes: touchingHexes,
+            direction
+          },
+          building: null,
+          port: null
+        })
+      }
+    })
+  })
+  
+  return vertices
+}
 
+/**
+ * Calculate which 3 hexes touch a vertex at a given direction from a hex
+ * This uses proper cube coordinate math
+ */
+function getHexesTouchingVertex(centerHex: HexCoordinate, direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'): HexCoordinate[] {
+  const hexes = [centerHex] // Always includes the center hex
+  
+  // Get the two neighboring directions for this vertex
+  // Each vertex is where 3 hexes meet - the center and its 2 adjacent neighbors
+  let neighbor1: HexCoordinate, neighbor2: HexCoordinate
+  
+  switch (direction) {
+    case 'N':
+      neighbor1 = { q: centerHex.q, r: centerHex.r - 1, s: centerHex.s + 1 } // NW neighbor
+      neighbor2 = { q: centerHex.q + 1, r: centerHex.r - 1, s: centerHex.s }   // NE neighbor
+      break
+    case 'NE':
+      neighbor1 = { q: centerHex.q + 1, r: centerHex.r - 1, s: centerHex.s }   // NE neighbor
+      neighbor2 = { q: centerHex.q + 1, r: centerHex.r, s: centerHex.s - 1 }   // E neighbor
+      break
+    case 'SE':
+      neighbor1 = { q: centerHex.q + 1, r: centerHex.r, s: centerHex.s - 1 }   // E neighbor
+      neighbor2 = { q: centerHex.q, r: centerHex.r + 1, s: centerHex.s - 1 }   // SE neighbor
+      break
+    case 'S':
+      neighbor1 = { q: centerHex.q, r: centerHex.r + 1, s: centerHex.s - 1 }   // SE neighbor
+      neighbor2 = { q: centerHex.q - 1, r: centerHex.r + 1, s: centerHex.s }   // SW neighbor
+      break
+    case 'SW':
+      neighbor1 = { q: centerHex.q - 1, r: centerHex.r + 1, s: centerHex.s }   // SW neighbor
+      neighbor2 = { q: centerHex.q - 1, r: centerHex.r, s: centerHex.s + 1 }   // W neighbor
+      break
+    case 'NW':
+      neighbor1 = { q: centerHex.q - 1, r: centerHex.r, s: centerHex.s + 1 }   // W neighbor
+      neighbor2 = { q: centerHex.q, r: centerHex.r - 1, s: centerHex.s + 1 }   // NW neighbor
+      break
+  }
+  
+  hexes.push(neighbor1, neighbor2)
+  return hexes
+}
+
+/**
+ * Generate edges using proper hexagon geometry
+ * Each edge is the boundary between 2 adjacent hexagons
+ */
+function generateEdges(hexPositions: HexCoordinate[]): Map<string, Edge> {
+  const edges = new Map<string, Edge>()
+  
+  // For each hex, check all 6 directions for adjacent hexes
+  hexPositions.forEach(hexCoord => {
+    // Get the 6 neighboring hex positions using Honeycomb's neighbor calculation
+    const neighbors = honeycombBridge.getHexNeighbors(hexCoord)
+    
+    neighbors.forEach((neighborCoord, directionIndex) => {
+      // Create a canonical edge ID (always use the "smaller" hex first to avoid duplicates)
+      const edgeId = createCanonicalEdgeId(hexCoord, neighborCoord)
+      
+      if (!edges.has(edgeId)) {
+        // Get the direction name for this edge
+        const direction = ['NE', 'E', 'SE', 'SW', 'W', 'NW'][directionIndex]
+        
+        edges.set(edgeId, {
+          id: edgeId,
+          position: {
+            hexes: [hexCoord, neighborCoord],
+            direction: direction as 'NE' | 'E' | 'SE' | 'SW' | 'W' | 'NW'
+          },
+          connection: null
+        })
+      }
+    })
+  })
+  
+  return edges
+}
+
+/**
+ * Create a canonical edge ID to avoid duplicates
+ * Always puts the "smaller" hex coordinate first
+ */
+function createCanonicalEdgeId(hex1: HexCoordinate, hex2: HexCoordinate): string {
+  // Compare hexes to determine order (canonical form)
+  const compareResult = compareHexCoords(hex1, hex2)
+  
+  if (compareResult <= 0) {
+    return `${hex1.q},${hex1.r},${hex1.s}|${hex2.q},${hex2.r},${hex2.s}`
+  } else {
+    return `${hex2.q},${hex2.r},${hex2.s}|${hex1.q},${hex1.r},${hex1.s}`
+  }
+}
+
+/**
+ * Compare two hex coordinates for canonical ordering
+ */
+function compareHexCoords(a: HexCoordinate, b: HexCoordinate): number {
+  if (a.q !== b.q) return a.q - b.q
+  if (a.r !== b.r) return a.r - b.r
+  return a.s - b.s
+}
 
 // Generate standard Catan ports with alternating pattern
 function generatePorts(): Port[] {
@@ -256,10 +323,10 @@ function generatePorts(): Port[] {
     
     ports.push({
       id: `port-${portIndex + 1}`,
-             position: {
-         hexes: [seaHex], // Port is centered in this sea hex
-         direction: 'NE' // Direction doesn't matter for rendering, just for consistency
-       },
+      position: {
+        hexes: [seaHex], // Port is centered in this sea hex
+        direction: 'NE' // Direction doesn't matter for rendering, just for consistency
+      },
       type: portType.type,
       ratio: portType.ratio
     })

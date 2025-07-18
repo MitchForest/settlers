@@ -4,6 +4,7 @@ import { generateGameCode, isValidGameCodeFormat, normalizeGameCode } from '../u
 import { eventStore } from '../db/event-store-repository'
 import { optionalAuthMiddleware } from '../middleware/auth'
 import { lobbyCommandService } from '../services/lobby-command-service'
+import { AvailableGamesService } from '../services/available-games-service'
 
 const app = new Hono()
 
@@ -251,6 +252,76 @@ app.post('/join', async (c) => {
     return c.json({ 
       success: false, 
       error: 'Failed to join game' 
+    }, 500)
+  }
+})
+
+/**
+ * Get available games for joining
+ * GET /api/games/available
+ */
+app.get('/available', async (c) => {
+  try {
+    const userId = c.get('user')?.id
+    const limit = parseInt(c.req.query('limit') || '20')
+
+    if (isNaN(limit) || limit < 1 || limit > 100) {
+      return c.json({
+        success: false,
+        error: 'Invalid limit. Must be between 1 and 100.'
+      }, 400)
+    }
+
+    const availableGames = await AvailableGamesService.getAvailableGames(userId, limit)
+
+    return c.json({
+      success: true,
+      data: availableGames
+    })
+
+  } catch (error) {
+    console.error('Error fetching available games:', error)
+    return c.json({
+      success: false,
+      error: 'Failed to fetch available games'
+    }, 500)
+  }
+})
+
+/**
+ * Find game by code
+ * GET /api/games/code/:gameCode
+ */
+app.get('/code/:gameCode', async (c) => {
+  try {
+    const gameCode = c.req.param('gameCode')
+
+    if (!gameCode || gameCode.length !== 6) {
+      return c.json({
+        success: false,
+        error: 'Invalid game code. Must be 6 characters.'
+      }, 400)
+    }
+
+    const game = await AvailableGamesService.findGameByCode(gameCode)
+
+    if (!game) {
+      return c.json({
+        success: false,
+        error: 'Game not found or not available for joining'
+      }, 404)
+    }
+
+    return c.json({
+      success: true,
+      data: game
+    })
+
+  } catch (error) {
+    console.error('Error finding game by code:', error)
+    return c.json({
+      success: false,
+      error: 'Failed to find game'
     }, 500)
   }
 })

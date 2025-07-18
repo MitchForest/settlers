@@ -209,57 +209,136 @@ export function isEdgeConnectedToPlayer(state: GameState, playerId: PlayerId, ed
 
 /**
  * Check if a road placement is valid during setup phase
- * During setup, roads must connect to the settlement just placed by the same player
+ * During setup, roads must connect to the settlement that was just placed in the current turn
  */
 export function checkSetupRoadPlacement(state: GameState, playerId: PlayerId, edgeId: string): boolean {
-  // Find the most recently placed settlement by this player
-  let mostRecentSettlement: string | null = null
-  let highestTurn = -1
+  // Get the settlement that was just placed and needs a road connection
+  const targetSettlement = getSetupPhaseTargetSettlement(state, playerId)
+  if (!targetSettlement) return false
   
-  state.board.vertices.forEach((vertex, vertexId) => {
-    if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
-      // In setup, we assume the most recent building is the one to connect to
-      // This would need tracking in a real implementation
-      mostRecentSettlement = vertexId
-    }
-  })
-  
-  if (!mostRecentSettlement) return false
-  
-  // Check if the edge connects to this settlement
+  // Check if the edge connects to this specific settlement
   const edgeVertices = getEdgeVertices(state.board, edgeId)
-  return edgeVertices.includes(mostRecentSettlement)
+  return edgeVertices.includes(targetSettlement)
 }
 
 /**
  * Get valid road positions for setup phase
- * Returns edges that connect to the player's most recent settlement
+ * Returns edges that connect to the settlement that was just placed in the current setup turn
  */
 export function getValidSetupRoadPositions(state: GameState, playerId: PlayerId): string[] {
   const validEdges: string[] = []
   
-  // Find the most recently placed settlement
-  let mostRecentSettlement: string | null = null
-  state.board.vertices.forEach((vertex, vertexId) => {
-    if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
-      mostRecentSettlement = vertexId
-    }
-  })
+  // Get the settlement that was just placed and needs a road connection
+  const targetSettlement = getSetupPhaseTargetSettlement(state, playerId)
+  console.log(`[DEBUG] getValidSetupRoadPositions: targetSettlement = ${targetSettlement}`)
+  if (!targetSettlement) return []
   
-  if (!mostRecentSettlement) return []
-  
-  // Get all edges connected to this settlement
-  const connectedEdges = getVertexEdges(state.board, mostRecentSettlement)
+  // Get all edges connected to this specific settlement
+  const connectedEdges = getVertexEdges(state.board, targetSettlement)
+  console.log(`[DEBUG] getValidSetupRoadPositions: connectedEdges = ${connectedEdges.length}`)
   
   // Filter for unoccupied edges
   for (const edgeId of connectedEdges) {
     const edge = state.board.edges.get(edgeId)
     if (!edge?.connection) {
       validEdges.push(edgeId)
+      console.log(`[DEBUG] getValidSetupRoadPositions: valid edge ${edgeId}`)
+    } else {
+      console.log(`[DEBUG] getValidSetupRoadPositions: edge ${edgeId} occupied by ${edge.connection?.owner}`)
     }
   }
   
+  console.log(`[DEBUG] getValidSetupRoadPositions: returning ${validEdges.length} valid edges`)
   return validEdges
+}
+
+/**
+ * Determine which settlement a road should connect to during setup phase
+ * This uses the setup phase progression logic to identify the correct settlement
+ */
+function getSetupPhaseTargetSettlement(state: GameState, playerId: PlayerId): string | null {
+  const playerIds = Array.from(state.players.keys())
+  const playerCount = playerIds.length
+  const currentIndex = playerIds.indexOf(playerId)
+  
+  if (currentIndex === -1) {
+    console.log(`[DEBUG] getSetupPhaseTargetSettlement: Player ${playerId} not found in player list`)
+    return null
+  }
+  
+  // Get all settlements owned by this player
+  const playerSettlements: Array<{vertexId: string, vertex: Vertex}> = []
+  state.board.vertices.forEach((vertex, vertexId) => {
+    if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
+      playerSettlements.push({ vertexId, vertex })
+    }
+  })
+  
+  if (playerSettlements.length === 0) {
+    return null
+  }
+  
+  // Determine which settlement based on setup phase and turn progression
+  if (state.phase === 'setup1') {
+    // In setup1, players place their first settlement
+    // We should always connect to the first (and only) settlement
+    if (playerSettlements.length === 1) {
+      return playerSettlements[0].vertexId
+    } else {
+      // If somehow there are multiple settlements in setup1, something is wrong
+      // Return the last one placed as a fallback
+      return playerSettlements[playerSettlements.length - 1].vertexId
+    }
+  } else if (state.phase === 'setup2') {
+    // In setup2, players place their second settlement
+    // We need to identify which is the "second" settlement
+    
+    if (playerSettlements.length === 1) {
+      // Only one settlement exists, so connect to it
+      return playerSettlements[0].vertexId
+    } else if (playerSettlements.length === 2) {
+      // Two settlements exist - we need to determine which was placed in setup2
+      // In setup2, the current player has already placed their second settlement
+      // and now needs to place the road for it
+      
+      // The setup2 settlement is the one that needs a road connection
+      // We can identify it by checking which settlement doesn't have adjacent roads yet
+      for (const { vertexId } of playerSettlements) {
+        const connectedEdges = getVertexEdges(state.board, vertexId)
+        const hasAdjacentRoad = connectedEdges.some(edgeId => {
+          const edge = state.board.edges.get(edgeId)
+          return edge?.connection?.owner === playerId
+        })
+        
+        // If this settlement has no adjacent roads from this player, it's the target
+        if (!hasAdjacentRoad) {
+          return vertexId
+        }
+      }
+      
+      // Fallback: if both have roads or neither do, use positional logic
+      // In setup2, players go in reverse order, so later settlements are placed in setup2
+      return playerSettlements[1].vertexId
+    } else {
+      // More than 2 settlements shouldn't happen in setup, but handle gracefully
+      return playerSettlements[playerSettlements.length - 1].vertexId
+    }
+  }
+  
+  // Not in setup phase - this function shouldn't be called
+  console.log(`[DEBUG] getSetupPhaseTargetSettlement: Not in setup phase (${state.phase})`)
+  return null
+}
+
+/**
+ * Enhanced helper: Check if a settlement has any adjacent roads from the specified player
+ */
+function settlementHasAdjacentPlayerRoad(state: GameState, playerId: PlayerId, vertexId: string): boolean {
+  const connectedEdges = getVertexEdges(state.board, vertexId)
+  return connectedEdges.some(edgeId => {
+    const edge = state.board.edges.get(edgeId)
+    return edge?.connection?.owner === playerId
+  })
 }
 
 // ============= Advanced Network Analysis =============

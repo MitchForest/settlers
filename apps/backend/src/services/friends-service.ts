@@ -2,6 +2,7 @@ import { db } from '../db'
 import { friendRequests, friendships, userProfiles, userPresence } from '../db/schema'
 import { eq, and, or, sql, desc, asc, ilike, inArray } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
+import { friendsWebSocketManager } from '../websocket/friends-websocket'
 
 export interface FriendRequest {
   id: string
@@ -224,6 +225,11 @@ export class FriendsService {
         status: 'pending'
       })
 
+      // Send real-time notification
+      friendsWebSocketManager.notifyFriendRequest(toUserId, fromUserId, requestId, message).catch(error => {
+        console.error('Failed to send friend request notification:', error)
+      })
+
       return { success: true, requestId }
 
     } catch (error) {
@@ -295,6 +301,18 @@ export class FriendsService {
             createdAt: new Date().toISOString(),
             lastInteractionAt: new Date().toISOString()
           })
+
+          // Send real-time notification to the original requester
+          friendsWebSocketManager.notifyFriendRequestAccepted(friendRequest.fromUserId, userId).catch(error => {
+            console.error('Failed to send friend request accepted notification:', error)
+          })
+        } else if (response === 'rejected') {
+          // Get user info for notification
+          const userInfo = await tx.select().from(userProfiles).where(eq(userProfiles.id, userId)).limit(1)
+          const userName = userInfo.length > 0 ? userInfo[0].name : 'Someone'
+          
+          // Send real-time notification about rejection
+          friendsWebSocketManager.notifyFriendRequestRejected(friendRequest.fromUserId, userName)
         }
 
         return { success: true }
@@ -459,8 +477,10 @@ export class FriendsService {
    */
   static async removeFriend(friendshipId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const result = await db
-        .delete(friendships)
+      // First get the friendship to know who was removed
+      const friendship = await db
+        .select()
+        .from(friendships)
         .where(
           and(
             eq(friendships.id, friendshipId),
@@ -470,6 +490,38 @@ export class FriendsService {
             )
           )
         )
+        .limit(1)
+
+      if (!friendship.length) {
+        return { success: false, error: 'Friendship not found' }
+      }
+
+      const friendshipData = friendship[0]
+      const otherUserId = friendshipData.user1Id === userId ? friendshipData.user2Id : friendshipData.user1Id
+
+      // Get the other user's info for notification
+      const otherUser = await db
+        .select()
+        .from(userProfiles)
+        .where(eq(userProfiles.id, otherUserId))
+        .limit(1)
+
+      // Delete the friendship
+      await db
+        .delete(friendships)
+        .where(eq(friendships.id, friendshipId))
+
+      // Send real-time notification to the other user
+      if (otherUser.length > 0) {
+        const currentUser = await db
+          .select()
+          .from(userProfiles)
+          .where(eq(userProfiles.id, userId))
+          .limit(1)
+        
+        const currentUserName = currentUser.length > 0 ? currentUser[0].name : 'Someone'
+        friendsWebSocketManager.notifyFriendRemoved(otherUserId, currentUserName)
+      }
 
       return { success: true }
     } catch (error) {

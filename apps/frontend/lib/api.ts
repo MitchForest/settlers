@@ -94,4 +94,206 @@ export async function createGame(gameData: {
     console.error('Create game failed:', error)
     throw error
   }
+}
+
+/**
+ * Get authentication headers for API requests
+ */
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession()
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`
+  }
+  
+  return headers
+}
+
+// Friends API
+export async function getFriends() {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends`, {
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function getFriendRequests() {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/requests`, {
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function searchUsers(query: string, limit = 10) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/search`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, limit })
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function sendFriendRequest(toUserId: string, message?: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/request`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ toUserId, message })
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function acceptFriendRequest(requestId: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/request/${requestId}/accept`, {
+    method: 'POST',
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function rejectFriendRequest(requestId: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/request/${requestId}/reject`, {
+    method: 'POST',
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function removeFriend(friendshipId: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/friends/${friendshipId}`, {
+    method: 'DELETE',
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+// Game Invites API
+export async function getGameInvites() {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/invites`, {
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function sendGameInvites(gameId: string, friendIds: string[], message?: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/invites`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ gameId, friendIds, message })
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function acceptGameInvite(inviteId: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/invites/${inviteId}/accept`, {
+    method: 'POST',
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function declineGameInvite(inviteId: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/invites/${inviteId}/decline`, {
+    method: 'POST',
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+// Presence API
+export async function updatePresence(status: string, gameId?: string) {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/presence/update`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ status, gameId })
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
+}
+
+export async function getFriendsPresence() {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/presence/friends`, {
+    headers
+  })
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  
+  return response.json()
 } 

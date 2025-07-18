@@ -2,6 +2,7 @@ import { db } from '../db'
 import { gameInvites, userProfiles, games } from '../db/schema'
 import { eq, and, inArray, desc } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
+import { friendsWebSocketManager } from '../websocket/friends-websocket'
 
 export class GameInvitesService {
   static async sendGameInvites(
@@ -35,7 +36,18 @@ export class GameInvitesService {
       .values(inviteData)
       .returning()
     
-    // TODO: Send real-time notifications via WebSocket
+    // Send real-time notifications via WebSocket
+    invites.forEach(invite => {
+      friendsWebSocketManager.notifyGameInvite(
+        invite.toUserId, 
+        invite.id, 
+        gameId, 
+        fromUserId, 
+        message
+      ).catch(error => {
+        console.error('Failed to send game invite notification:', error)
+      })
+    })
     
     return invites
   }

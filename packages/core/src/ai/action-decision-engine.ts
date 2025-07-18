@@ -110,18 +110,37 @@ export class ActionDecisionEngine {
     // Check if I need to place a road for my most recent settlement
     const mostRecentSettlement = this.findMostRecentSettlement()
     if (mostRecentSettlement) {
-      const roadAction = placementAI.selectSetupRoad(mostRecentSettlement)
-      
-      actions.push({
-        action: roadAction,
-        score: 100, // Highest priority - must place road after settlement
-        priority: 100,
-        reasoning: [
-          'Strategic setup road placement',
-          'Required after settlement placement',
-          'Optimized for expansion potential'
-        ]
-      })
+      try {
+        const roadAction = placementAI.selectSetupRoad(mostRecentSettlement)
+        
+        actions.push({
+          action: roadAction,
+          score: 100, // Highest priority - must place road after settlement
+          priority: 100,
+          reasoning: [
+            'Strategic setup road placement',
+            'Required after settlement placement',
+            'Optimized for expansion potential'
+          ]
+        })
+      } catch (error) {
+        // If no valid roads available, try to find ANY valid road position
+        console.warn(`Setup road selection failed: ${error}`)
+        const fallbackRoadAction = this.generateFallbackSetupRoad(mostRecentSettlement)
+        if (fallbackRoadAction) {
+          actions.push({
+            action: fallbackRoadAction,
+            score: 90, // Still high priority
+            priority: 90,
+            reasoning: [
+              'Fallback setup road placement',
+              'No optimal roads available - using any valid road'
+            ]
+          })
+        } else {
+          console.error(`No roads available for settlement at ${mostRecentSettlement}`)
+        }
+      }
     } else {
       // Need to place settlement
       let settlementAction: GameAction
@@ -151,6 +170,29 @@ export class ActionDecisionEngine {
     }
     
     return actions
+  }
+
+  /**
+   * Fallback road placement when sophisticated AI fails
+   */
+  private generateFallbackSetupRoad(settlementVertexId: string): GameAction | null {
+    // Get all edges connected to the settlement
+    const connectedEdges = getVertexEdges(this.state.board, settlementVertexId)
+    
+    // Find the first available edge
+    for (const edgeId of connectedEdges) {
+      const edge = this.state.board.edges.get(edgeId)
+      if (edge && !edge.connection) {
+        // This edge is available - use it
+        return {
+          type: 'placeRoad',
+          playerId: this.playerId,
+          data: { position: edgeId }
+        }
+      }
+    }
+    
+    return null // No roads available at all
   }
 
   private getRollActions(): ScoredAction[] {
@@ -473,7 +515,7 @@ export class ActionDecisionEngine {
       const action: GameAction = {
         type: 'moveRobber',
         playerId: this.playerId,
-        data: { hexId }
+        data: { hexPosition: hex.position }
       }
 
       actions.push({

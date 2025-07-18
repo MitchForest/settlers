@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { IncomingMessage } from 'http'
 import { lobbyCommandService } from '../services/lobby-command-service'
 import { eventStore } from '../db/event-store-repository'
+import { friendsWebSocketManager } from './friends-websocket'
 
 interface ClientConnection {
   ws: WebSocket
@@ -192,6 +193,9 @@ export class UnifiedWebSocketServer {
         this.gameConnections.set(gameId, new Set())
       }
       this.gameConnections.get(gameId)!.add(connection)
+
+      // Register with friends manager for real-time notifications
+      friendsWebSocketManager.registerUserConnection(ws, userId, gameId)
 
       // Send success response
       this.sendResponse(ws, {
@@ -406,6 +410,9 @@ export class UnifiedWebSocketServer {
       if (connection.heartbeatInterval) {
         clearInterval(connection.heartbeatInterval)
       }
+
+      // Unregister from friends manager
+      friendsWebSocketManager.unregisterUserConnection(ws)
 
       // Remove from game connections
       const gameConnections = this.gameConnections.get(connection.gameId)

@@ -317,15 +317,20 @@ export function canPlayDevelopmentCard(
 export function canMoveRobber(
   state: GameState,
   playerId: PlayerId,
-  hexId: string
+  hexPosition: { q: number, r: number, s: number }
 ): PlacementValidation {
   if (state.phase !== 'moveRobber') {
     return { isValid: false, reason: 'Not in robber movement phase' }
   }
   
-  const hex = Array.from(state.board.hexes.values()).find(h => h.id === hexId)
+  // Find hex with matching position
+  const hex = Array.from(state.board.hexes.values()).find(h => 
+    h.position.q === hexPosition.q && 
+    h.position.r === hexPosition.r && 
+    h.position.s === hexPosition.s
+  )
   if (!hex) {
-    return { isValid: false, reason: 'Invalid hex' }
+    return { isValid: false, reason: 'Invalid hex position' }
   }
   
   // Can't place on same hex
