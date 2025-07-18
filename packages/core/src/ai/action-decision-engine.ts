@@ -155,9 +155,11 @@ export class AICoordinator {
 // ===== PHASE STRATEGIES =====
 
 class SetupPhaseStrategy implements PhaseStrategy {
-  constructor(private setupRound: 1 | 2) {}
+  phase: GamePhase
   
-  phase = (this.setupRound === 1 ? 'setup1' : 'setup2') as GamePhase
+  constructor(private setupRound: 1 | 2) {
+    this.phase = (this.setupRound === 1 ? 'setup1' : 'setup2') as GamePhase
+  }
 
   generateActions(state: GameState, playerId: PlayerId): GameAction[] {
     // Check what the player needs to do in setup phase
