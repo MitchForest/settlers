@@ -100,6 +100,9 @@ app.post('/create', async (c) => {
     const sessionPayload = {
       gameId,
       playerId: result.hostPlayer.id,
+      userId: finalHostUserId,
+      playerName: finalHostPlayerName,
+      avatarEmoji: finalHostAvatarEmoji,
       authToken,
       role: 'host' as const,
       permissions: ['start_game', 'add_ai_bots', 'remove_ai_bots', 'kick_players', 'game_actions'],

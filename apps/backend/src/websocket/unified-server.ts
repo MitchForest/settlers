@@ -8,6 +8,9 @@ import { eventStore } from '../db/event-store-repository'
 interface GameSessionPayload {
   gameId: string
   playerId: string
+  userId: string
+  playerName: string
+  avatarEmoji: string
   authToken: string
   role: 'host' | 'player' | 'observer'
   permissions: string[]
@@ -171,18 +174,30 @@ export class UnifiedWebSocketServer {
 
   private async handleAuthenticatedConnection(ws: WebSocket, session: GameSessionPayload): Promise<void> {
     try {
-      // Auto-join the game using session data
+      // First, try to join the game - it will handle existing player check
       const result = await lobbyCommandService.joinGame({
         gameId: session.gameId,
-        userId: session.playerId.split('_')[1] || session.playerId, // Extract userId from playerId
-        playerName: session.playerId, // For now, use playerId as name
-        avatarEmoji: '👤'
+        userId: session.userId,
+        playerName: session.playerName,
+        avatarEmoji: session.avatarEmoji
       })
 
+      let playerId: string
+
       if (!result.success) {
-        console.log('❌ Failed to auto-join game:', result.error)
-        ws.close(4003, `Join failed: ${result.error}`)
-        return
+        // If join failed because user already in game, that's OK - they're the creator
+        if (result.error?.includes('already in this game')) {
+          console.log('✅ User already in game (creator), connecting:', session.userId)
+          // Use the playerId from the session since they're already in the game
+          playerId = session.playerId
+        } else {
+          console.log('❌ Failed to join game:', result.error)
+          ws.close(4003, `Join failed: ${result.error}`)
+          return
+        }
+      } else {
+        console.log('✅ Auto-joined user to game:', session.userId)
+        playerId = result.playerId || session.playerId
       }
 
       // Set up connection tracking with session
@@ -190,7 +205,7 @@ export class UnifiedWebSocketServer {
         ws,
         gameId: session.gameId,
         playerId: result.playerId,
-        userId: session.playerId.split('_')[1] || session.playerId,
+        userId: session.userId,
         lastSequence: 0,
         isAlive: true,
         session

@@ -6,7 +6,7 @@ import { findBestInitialRoadToTarget } from '../algorithms/road-pathfinding'
 const PLACEMENT_CONFIGS = {
   firstSettlement: { number: 70, scarcity: 30 },
   firstRoad: { number: 50, diversity: 50 },
-  secondSettlement: { number: 70, scarcity: 30 },
+  secondSettlement: { number: 60, diversity: 40 },
   secondRoad: { number: 50, diversity: 50 }
 } as const
 
@@ -97,11 +97,13 @@ export class InitialPlacementStrategy {
   }
   
   /**
-   * Second settlement: 70% number weight, 30% scarcity
+   * Second settlement: 60% number weight, 40% diversity (considering first settlement resources)
    */
   selectSecondSettlement(gameState: GameState, playerId: PlayerId): string {
-    const { number, scarcity } = PLACEMENT_CONFIGS.secondSettlement
-    const scores = scoreVerticesWithScarcity(gameState, playerId, number, scarcity)
+    const { number, diversity } = PLACEMENT_CONFIGS.secondSettlement
+    // Get resources from first settlement
+    const firstSettlementResources = extractPlayerResources(gameState, playerId)
+    const scores = scoreVerticesWithDiversity(gameState, playerId, firstSettlementResources, number, diversity)
     return scores[0].vertexId // Highest score
   }
   

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { GameFlowManager, processAction, GameState } from '@settlers/game-engine'
 import { InitialPlacementStrategy } from '../strategies/initial-placement'
+import { evaluateInitialPlacement } from '../evaluators/initial-placement-evaluator'
 
 describe('Initial Placement Strategy', () => {
   it('should handle multiplayer initial placement with game state updates', async () => {
@@ -193,6 +194,21 @@ describe('Initial Placement Strategy', () => {
         console.log(`   Road 2: ${p.secondRoad}`)
       }
     }
+
+    // PLACEMENT EVALUATION
+    console.log('\n📊 PLACEMENT EVALUATION (1-100 SCORE):')
+    console.log('======================================')
+    
+    const evaluations = playerIds.map(playerId => evaluateInitialPlacement(gameState, playerId))
+    evaluations.sort((a, b) => b.totalScore - a.totalScore) // Sort by score (highest first)
+    
+    evaluations.forEach((evaluation, rank) => {
+      console.log(`\n🏅 Rank ${rank + 1}: Player (${evaluation.playerId})`)
+      console.log(`   Total Score: ${evaluation.totalScore}/100`)
+      console.log(`   Production: ${evaluation.productionScore}/50 (strength: ${evaluation.productionStrength})`)
+      console.log(`   Diversity: ${evaluation.diversityScore}/50 (${evaluation.uniqueResources}/5 resources)`)
+      console.log(`   Settlements: ${evaluation.settlements.map(s => s.resources.join(', ')).join(' | ')}`)
+    })
     
     // Final assertions
     expect(Object.keys(placements)).toHaveLength(3)

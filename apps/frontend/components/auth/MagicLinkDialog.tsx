@@ -13,6 +13,7 @@ interface MagicLinkDialogProps {
   open: boolean
   onClose: () => void
   onSuccess?: () => void
+  onGuestContinue?: () => void
   title?: string
   description?: string
 }
@@ -20,7 +21,8 @@ interface MagicLinkDialogProps {
 export function MagicLinkDialog({ 
   open, 
   onClose, 
-  onSuccess: _onSuccess, 
+  onSuccess: _onSuccess,
+  onGuestContinue,
   title = "Join the Game!", 
   description = "Enter your email to sign in and continue"
 }: MagicLinkDialogProps) {
@@ -156,6 +158,19 @@ export function MagicLinkDialog({
                 )}
               </Button>
             </div>
+
+            {/* Guest Continue Link */}
+            {onGuestContinue && (
+              <div className="text-center">
+                <button
+                  onClick={onGuestContinue}
+                  disabled={isLoading}
+                  className="text-white/70 hover:text-white underline text-sm transition-colors"
+                >
+                  Continue as guest
+                </button>
+              </div>
+            )}
 
             <div className="text-center">
               <Button 

@@ -8,8 +8,8 @@ import { toast } from 'sonner'
 
 import { CreateGameDialog } from '@/components/lobby/CreateGameDialog'
 import { JoinGameDialog } from '@/components/lobby/JoinGameDialog'
-import { ObserveGameDialog } from '@/components/lobby/ObserveGameDialog'
 import { MagicLinkDialog } from '@/components/auth/MagicLinkDialog'
+import { GuestProfileDialog } from '@/components/auth/GuestProfileDialog'
 // Removed unused import: ProfileSetupDialog
 import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
 import { useRouter } from 'next/navigation'
@@ -22,7 +22,7 @@ import { ConnectionStatus } from '@/components/ui/connection-status'
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<'testing' | 'connected' | 'failed'>('testing')
   const [_dbStatus, setDbStatus] = useState<'unknown' | 'connected' | 'failed'>('unknown')
-  const [pendingAction, setPendingAction] = useState<'create' | 'join' | 'observe' | null>(null)
+  const [pendingAction, setPendingAction] = useState<'create' | 'join' | null>(null)
   
   const router = useRouter()
   const { 
@@ -30,11 +30,10 @@ export default function Home() {
     setShowCreateGame,
     showJoinGame,
     setShowJoinGame,
-    showObserveGame,
-    setShowObserveGame,
     showMagicLink,
     setShowMagicLink
   } = useAppStore()
+  const [showGuestProfile, setShowGuestProfile] = useState(false)
   const { user, profile, loading: authLoading, isGuest } = useAuth()
 
   useEffect(() => {
@@ -83,31 +82,21 @@ export default function Home() {
   const isAuthenticated = user && !isGuest
 
   // Handle authentication interception
-  const handleGameAction = (action: 'create' | 'join' | 'observe') => {
-    // Check if user needs to authenticate
-    if (isGuest) {
+  const handleGameAction = (action: 'create' | 'join') => {
+    // Always show magic link dialog for unauthenticated users
+    if (!user || isGuest) {
       setPendingAction(action)
       setShowMagicLink(true)
       return
     }
     
-    // Check if authenticated user needs profile setup
-    if (isAuthenticated && !profile && !authLoading) {
-      toast.error('Please complete your profile setup first')
-      // Could show profile setup dialog here
-      return
-    }
-    
-    // User is ready, proceed with action
+    // User is signed in, proceed with action
     switch (action) {
       case 'create':
         setShowCreateGame(true)
         break
       case 'join':
         setShowJoinGame(true)
-        break
-      case 'observe':
-        setShowObserveGame(true)
         break
     }
   }
@@ -128,6 +117,24 @@ export default function Home() {
     }
   }
 
+  // Handle guest continue from magic link dialog
+  const handleGuestContinue = () => {
+    setShowMagicLink(false)
+    setShowGuestProfile(true)
+  }
+
+  // Handle guest profile completion
+  const handleGuestProfileComplete = () => {
+    setShowGuestProfile(false)
+    
+    // If there was a pending action, execute it
+    if (pendingAction) {
+      const action = pendingAction
+      setPendingAction(null)
+      handleGameAction(action)
+    }
+  }
+
     return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <HoneycombBackground>
@@ -142,7 +149,7 @@ export default function Home() {
         </div>
         
         <div className="flex items-center gap-4">
-          {!isGuest && user ? (
+          {user && !isGuest ? (
             <UserAvatarMenu />
           ) : (
             <Button
@@ -181,7 +188,7 @@ export default function Home() {
           )}
 
           {/* Game Actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
             <Button
               onClick={() => handleGameAction('create')}
               disabled={!isSystemConnected}
@@ -201,17 +208,6 @@ export default function Home() {
             >
               <span className="text-lg">🤝</span>
               <span>Join Game</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={() => handleGameAction('observe')}
-              disabled={!isSystemConnected}
-              size="lg"
-              className="h-16 flex flex-col gap-1"
-            >
-              <span className="text-lg">👁️</span>
-              <span>Observe Game</span>
             </Button>
           </div>
 
@@ -238,11 +234,6 @@ export default function Home() {
         onOpenChange={setShowJoinGame}
       />
       
-      <ObserveGameDialog
-        open={showObserveGame}
-        onOpenChange={setShowObserveGame}
-      />
-      
       <MagicLinkDialog
         open={showMagicLink}
         onClose={() => {
@@ -250,6 +241,20 @@ export default function Home() {
           setPendingAction(null)
         }}
         onSuccess={handleAuthSuccess}
+        onGuestContinue={handleGuestContinue}
+      />
+
+      <GuestProfileDialog
+        open={showGuestProfile}
+        onOpenChange={(open) => {
+          setShowGuestProfile(open)
+          // If dialog is closed and user had a pending action, execute it
+          if (!open && pendingAction) {
+            setTimeout(() => {
+              handleGuestProfileComplete()
+            }, 100)
+          }
+        }}
       />
       </HoneycombBackground>
     </div>
