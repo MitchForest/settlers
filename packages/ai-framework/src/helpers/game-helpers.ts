@@ -1,4 +1,7 @@
-import { GameState, GameAction, PlayerId } from '@settlers/game-engine'
+import { GameState, GameAction, PlayerId, getPossibleSettlementPositions, getPossibleRoadPositions } from '@settlers/game-engine'
+import { smartDiscard } from '../modules/discard-strategy'
+import { selectRobberTarget, selectStealTarget } from '../modules/robber-strategy'
+import { InitialPlacementStrategy } from '../strategies/setup/simple-vertex'
 
 /**
  * Handle simple actions for non-main game phases
@@ -7,6 +10,10 @@ export function getSimplePhaseAction(gameState: GameState, playerId: PlayerId): 
   const phase = gameState.phase
   
   switch (phase) {
+    case 'setup1':
+    case 'setup2':
+      return handleSetupPhase(gameState, playerId)
+    
     case 'discard':
       return handleDiscardPhase(gameState, playerId)
     
@@ -26,45 +33,64 @@ export function getSimplePhaseAction(gameState: GameState, playerId: PlayerId): 
 }
 
 /**
- * Handle discard phase - discard excess resources randomly
+ * Handle discard phase - smart discard based on goals and phase
  */
 function handleDiscardPhase(gameState: GameState, playerId: PlayerId): GameAction | null {
-  const player = gameState.players.get(playerId)!
-  const totalResources = Object.values(player.resources).reduce((sum, n) => sum + n, 0)
+  const player = gameState.players.get(playerId)
+  if (!player) return null
   
+  const totalResources = Object.values(player.resources).reduce((sum, count) => sum + (count || 0), 0)
+  
+  // Only discard if player has more than 7 resources
   if (totalResources <= 7) {
-    return null // No need to discard
+    return null
   }
   
-  const toDiscard = Math.floor(totalResources / 2)
-  const discard = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
+  const discardRecommendation = smartDiscard(gameState, playerId)
   
-  // Simple strategy: discard randomly from available resources
-  let remaining = toDiscard
-  const resourceTypes = Object.keys(player.resources) as (keyof typeof player.resources)[]
+  // Check if any discard is needed (exclude reasoning string)
+  const totalToDiscard = discardRecommendation.wood + discardRecommendation.brick + 
+                        discardRecommendation.sheep + discardRecommendation.wheat + 
+                        discardRecommendation.ore
   
-  while (remaining > 0) {
-    for (const resourceType of resourceTypes) {
-      if (remaining <= 0) break
-      if (player.resources[resourceType] > discard[resourceType]) {
-        discard[resourceType]++
-        remaining--
-      }
-    }
+  if (totalToDiscard === 0) {
+    console.log(`🗃️ No discard needed despite having ${totalResources} resources`)
+    return null
   }
+  
+  console.log(`🗃️ Smart discard: ${discardRecommendation.reasoning}`)
   
   return {
     type: 'discard',
     playerId,
-    data: { resources: discard }
+    data: { 
+      resources: {
+        wood: discardRecommendation.wood,
+        brick: discardRecommendation.brick,
+        sheep: discardRecommendation.sheep,
+        wheat: discardRecommendation.wheat,
+        ore: discardRecommendation.ore
+      }
+    }
   }
 }
 
 /**
- * Handle robber movement - move to hex that hurts opponents most
+ * Handle robber movement - target high-value hexes of leading players
  */
 function handleMoveRobberPhase(gameState: GameState, playerId: PlayerId): GameAction | null {
-  // Simple strategy: move robber to first available hex that's not current position
+  const robberTarget = selectRobberTarget(gameState, playerId)
+  
+  if (robberTarget) {
+    console.log(`🎯 Smart robber: ${robberTarget.reasoning}`)
+    return {
+      type: 'moveRobber',
+      playerId,
+      data: { hexPosition: robberTarget.hexPosition }
+    }
+  }
+  
+  // Fallback: move to first available hex
   for (const [hexId, hex] of gameState.board.hexes) {
     if (!hex.hasRobber && hex.terrain !== 'desert' && hex.terrain !== 'sea') {
       return {
@@ -79,17 +105,53 @@ function handleMoveRobberPhase(gameState: GameState, playerId: PlayerId): GameAc
 }
 
 /**
- * Handle steal phase - steal from random opponent
+ * Handle setup phases - use initial placement strategy
+ */
+function handleSetupPhase(gameState: GameState, playerId: PlayerId): GameAction | null {
+  const strategy = new InitialPlacementStrategy()
+  
+  // Check if we need to place a settlement or road
+  const possibleSettlements = getPossibleSettlementPositions(gameState, playerId)
+  const possibleRoads = getPossibleRoadPositions(gameState, playerId)
+  
+  if (possibleSettlements.length > 0) {
+    // Place settlement
+    const vertexId = strategy.selectFirstSettlement(gameState, playerId)
+    return {
+      type: 'placeBuilding',
+      playerId,
+      data: { buildingType: 'settlement', vertexId }
+    }
+  } else if (possibleRoads.length > 0) {
+    // Place road - just take first available for now
+    return {
+      type: 'placeRoad',
+      playerId,
+      data: { edgeId: possibleRoads[0] }
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Handle steal phase - target leading players likely to have resources
  */
 function handleStealPhase(gameState: GameState, playerId: PlayerId): GameAction | null {
-  // Simple strategy: steal from first available opponent
-  const opponents = Array.from(gameState.players.keys()).filter(id => id !== playerId)
+  // Get available steal targets (players adjacent to robber)
+  const availableTargets = Array.from(gameState.players.keys()).filter(id => id !== playerId)
+  // TODO: Filter to only players actually adjacent to robber hex
   
-  if (opponents.length > 0) {
-    return {
-      type: 'stealResource',
-      playerId,
-      data: { targetPlayerId: opponents[0] }
+  if (availableTargets.length > 0) {
+    const stealTarget = selectStealTarget(gameState, playerId, availableTargets)
+    
+    if (stealTarget) {
+      console.log(`🎯 Smart steal: ${stealTarget.reasoning}`)
+      return {
+        type: 'stealResource',
+        playerId,
+        data: { targetPlayerId: stealTarget.targetPlayerId }
+      }
     }
   }
   

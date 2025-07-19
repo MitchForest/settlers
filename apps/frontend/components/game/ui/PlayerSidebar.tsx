@@ -2,14 +2,16 @@
 
 import { Player, GameState, GameAction, BUILDING_COSTS, hasResources } from '@settlers/game-engine'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
+import { useTurnStore } from '@/stores/turnStore'
+import { Clock, User, Bot, AlertTriangle, CheckCircle } from 'lucide-react'
 
 interface PlayerSidebarProps {
   gameState: GameState
   localPlayer: Player
   isMyTurn: boolean
   onAction: (action: GameAction) => void
-  timeRemaining?: number
 }
 
 // Resource emojis mapping
@@ -84,7 +86,15 @@ const ACTION_INFO = {
   }
 } as const
 
-export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, timeRemaining = 120 }: PlayerSidebarProps) {
+export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: PlayerSidebarProps) {
+  // Get real-time turn data from turn store
+  const { currentTurn, aiTurn, notifications } = useTurnStore()
+  
+  // Use turn store timing if available, fallback to default
+  const timeRemaining = currentTurn.timing?.remainingMs || 120000
+  const turnNumber = currentTurn.turnNumber || gameState?.turn || 0
+  
+  // Check building capabilities
   const canBuildSettlement = hasResources(localPlayer.resources, BUILDING_COSTS.settlement) && localPlayer.buildings.settlements > 0
   const canBuildCity = hasResources(localPlayer.resources, BUILDING_COSTS.city) && localPlayer.buildings.cities > 0
   const canBuildRoad = hasResources(localPlayer.resources, BUILDING_COSTS.road) && localPlayer.buildings.roads > 0
@@ -110,38 +120,110 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
       componentStyles.glassCard,
       'h-full flex flex-col border-white/20'
     )}>
-      {/* Timer Section */}
+      {/* Enhanced Timer Section with Turn Info */}
       <div className="p-4 border-b border-white/20">
         <div className="flex flex-col space-y-3">
+          {/* Turn Status Header */}
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold text-white">Turn {gameState?.turn || 0}</div>
-            <div className="text-lg font-mono text-white">
-              {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+            <div className="flex items-center gap-2">
+              <div className={ds(designSystem.text.body, 'text-sm font-semibold')}>
+                Turn {turnNumber}
+              </div>
+              {currentTurn.phase && (
+                <Badge variant="outline" className={ds(
+                  'text-xs px-2 py-0.5',
+                  designSystem.accents.blue.subtle
+                )}>
+                  {currentTurn.phase}
+                </Badge>
+              )}
+            </div>
+            
+            {/* Turn Status Indicator */}
+            <div className="flex items-center gap-2">
+              {isMyTurn ? (
+                <div className="flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <span className={ds(designSystem.text.body, 'text-sm')}>Your turn</span>
+                </div>
+              ) : aiTurn.isAITurn ? (
+                <div className="flex items-center gap-1">
+                  <Bot className="w-4 h-4 text-blue-400" />
+                  <span className={ds(designSystem.text.body, 'text-sm')}>AI thinking</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4 text-orange-400" />
+                  <span className={ds(designSystem.text.muted, 'text-sm')}>Waiting</span>
+                </div>
+              )}
             </div>
           </div>
           
-          {/* Timer Progress Bar */}
-          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+          {/* Timer Display */}
+          <div className="flex items-center justify-between">
+            <div className={ds(designSystem.text.muted, 'text-sm')}>
+              Time Remaining
+            </div>
+            <div className="text-lg font-mono text-white">
+              {Math.floor(timeRemaining / 60000)}:{Math.floor((timeRemaining % 60000) / 1000).toString().padStart(2, '0')}
+            </div>
+          </div>
+          
+          {/* Enhanced Timer Progress Bar */}
+          <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden relative">
             <div 
               className={`h-full transition-all duration-1000 ${
-                timeRemaining / 120 > 0.5 ? 'bg-green-500' : 
-                timeRemaining / 120 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
-              }`}
-              style={{ width: `${(timeRemaining / 120) * 100}%` }}
+                timeRemaining / 120000 > 0.5 ? 'bg-green-500' : 
+                timeRemaining / 120000 > 0.25 ? 'bg-yellow-500' : 'bg-red-500'
+              } ${timeRemaining / 120000 < 0.1 ? 'animate-pulse' : ''}`}
+              style={{ width: `${Math.max(0, (timeRemaining / 120000) * 100)}%` }}
             />
+            {timeRemaining / 120000 < 0.25 && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <AlertTriangle className="w-3 h-3 text-white animate-pulse" />
+              </div>
+            )}
           </div>
+
+          {/* Action Count for Current Turn */}
+          {currentTurn.actionsThisTurn.length > 0 && (
+            <div className={ds(designSystem.glass.secondary, 'px-3 py-2 rounded-lg')}>
+              <div className={ds(designSystem.text.body, 'text-xs')}>
+                Actions this turn: {currentTurn.actionsThisTurn.length}
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {currentTurn.actionsThisTurn.slice(-3).map((action, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {action.type}
+                  </Badge>
+                ))}
+                {currentTurn.actionsThisTurn.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{currentTurn.actionsThisTurn.length - 3}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Resources Section - Horizontal layout */}
+      {/* Resources Section - Enhanced with hover effects */}
       <div className="p-4 border-b border-white/20">
-        <h3 className="text-sm font-semibold text-white mb-2 text-left">Resources</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-white">Resources</h3>
+          <div className={ds(designSystem.text.muted, 'text-xs')}>
+            Total: {Object.values(localPlayer.resources).reduce((a, b) => a + b, 0)}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-3 justify-center">
           {Object.entries(localPlayer.resources).map(([resource, count]) => (
             <div key={resource} className={ds(
               designSystem.glass.secondary,
               'flex items-center space-x-1 rounded-full px-3 py-1.5 border-white/10',
-              'hover:bg-white/15 hover:scale-105 transition-all duration-200 cursor-pointer'
+              'hover:bg-white/15 hover:scale-105 transition-all duration-200 cursor-pointer',
+              count === 0 && 'opacity-50'
             )}>
               <span className="text-lg">{RESOURCE_EMOJIS[resource as keyof typeof RESOURCE_EMOJIS]}</span>
               <span className={ds(designSystem.text.body, 'text-sm font-medium')}>{count}</span>
@@ -152,12 +234,44 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
 
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto">
-        {/* Actions Section - Always show */}
+        {/* Turn Actions Section - Enhanced with turn state */}
         <div className="p-4 border-b border-white/20">
-          <h3 className="text-sm font-semibold text-white mb-3">Actions</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-white">Turn Actions</h3>
+            {!isMyTurn && (
+              <Badge variant="outline" className={ds(
+                'text-xs',
+                aiTurn.isAITurn ? designSystem.accents.blue.subtle : designSystem.accents.orange.subtle
+              )}>
+                {aiTurn.isAITurn ? 'AI Turn' : 'Waiting'}
+              </Badge>
+            )}
+          </div>
           
           {!isMyTurn ? (
-            <div className="text-white/60 text-sm">Not your turn</div>
+            <div className={ds(
+              designSystem.glass.secondary,
+              'p-4 rounded-lg text-center'
+            )}>
+              <div className={ds(designSystem.text.muted, 'text-sm')}>
+                {aiTurn.isAITurn ? (
+                  <>
+                    <Bot className="w-6 h-6 mx-auto mb-2 text-blue-400" />
+                    AI Player {aiTurn.aiActionDescription || 'is thinking...'}
+                    {aiTurn.estimatedRemainingMs && (
+                      <div className="text-xs mt-1">
+                        ~{Math.ceil(aiTurn.estimatedRemainingMs / 1000)}s remaining
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <User className="w-6 h-6 mx-auto mb-2 text-orange-400" />
+                    Waiting for other player's turn
+                  </>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="space-y-2">
               {gameState.phase === 'roll' && (
@@ -166,9 +280,9 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                   variant="outline"
                   className={ds(
                     'w-full justify-start text-left text-sm p-3 h-auto',
-                    'bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30',
-                    'hover:scale-[1.02] transition-all duration-200',
-                    designSystem.text.body
+                    designSystem.accents.blue.subtle,
+                    designSystem.accents.blue.hover,
+                    'hover:scale-[1.02] transition-all duration-200'
                   )}
                 >
                   <div className="flex items-start space-x-3 w-full">
@@ -185,13 +299,18 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                 <Button 
                   onClick={() => handleAction('moveRobber')}
                   variant="outline"
-                  className="w-full justify-start text-left text-sm p-2 h-auto bg-red-600/20 border-red-400/20 hover:bg-red-600/30 text-white"
+                  className={ds(
+                    'w-full justify-start text-left text-sm p-3 h-auto',
+                    designSystem.accents.red.subtle,
+                    designSystem.accents.red.hover,
+                    'hover:scale-[1.02] transition-all duration-200'
+                  )}
                 >
-                  <div className="flex items-start space-x-2 w-full">
+                  <div className="flex items-start space-x-3 w-full">
                     <span className="text-lg">🔥</span>
                     <div className="flex-1 text-left">
-                      <div className="font-medium text-white text-left">Move Robber</div>
-                      <div className="text-xs text-white/60 text-left">Click on a hex to move the robber</div>
+                      <div className={ds(designSystem.text.body, 'font-medium text-left')}>Move Robber</div>
+                      <div className={ds(designSystem.text.muted, 'text-xs text-left')}>Click on a hex to move the robber</div>
                     </div>
                   </div>
                 </Button>
@@ -201,13 +320,18 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                 <Button 
                   onClick={() => handleAction('stealResource')}
                   variant="outline"
-                  className="w-full justify-start text-left text-sm p-2 h-auto bg-purple-600/20 border-purple-400/20 hover:bg-purple-600/30 text-white"
+                  className={ds(
+                    'w-full justify-start text-left text-sm p-3 h-auto',
+                    designSystem.accents.purple.subtle,
+                    designSystem.accents.purple.hover,
+                    'hover:scale-[1.02] transition-all duration-200'
+                  )}
                 >
-                  <div className="flex items-start space-x-2 w-full">
+                  <div className="flex items-start space-x-3 w-full">
                     <span className="text-lg">⚔️</span>
                     <div className="flex-1 text-left">
-                      <div className="font-medium text-white text-left">Steal Resource</div>
-                      <div className="text-xs text-white/60 text-left">Steal from adjacent players</div>
+                      <div className={ds(designSystem.text.body, 'font-medium text-left')}>Steal Resource</div>
+                      <div className={ds(designSystem.text.muted, 'text-xs text-left')}>Steal from adjacent players</div>
                     </div>
                   </div>
                 </Button>
@@ -217,13 +341,18 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                 <Button 
                   onClick={() => handleAction('discard')}
                   variant="outline"
-                  className="w-full justify-start text-left text-sm p-2 h-auto bg-orange-600/20 border-orange-400/20 hover:bg-orange-600/30 text-white"
+                  className={ds(
+                    'w-full justify-start text-left text-sm p-3 h-auto',
+                    designSystem.accents.orange.subtle,
+                    designSystem.accents.orange.hover,
+                    'hover:scale-[1.02] transition-all duration-200'
+                  )}
                 >
-                  <div className="flex items-start space-x-2 w-full">
+                  <div className="flex items-start space-x-3 w-full">
                     <span className="text-lg">🗑️</span>
                     <div className="flex-1 text-left">
-                      <div className="font-medium text-white text-left">Discard Cards</div>
-                      <div className="text-xs text-white/60 text-left">Discard half your cards (7+ total)</div>
+                      <div className={ds(designSystem.text.body, 'font-medium text-left')}>Discard Cards</div>
+                      <div className={ds(designSystem.text.muted, 'text-xs text-left')}>Discard half your cards (7+ total)</div>
                     </div>
                   </div>
                 </Button>
@@ -239,10 +368,15 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                       'w-full justify-start text-left text-sm p-3 h-auto',
                       canBuildSettlement 
                         ? ds(
-                            componentStyles.buttonSecondary,
+                            designSystem.accents.green.subtle,
+                            designSystem.accents.green.hover,
                             'hover:scale-[1.02] transition-all duration-200'
                           )
-                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed opacity-60'
+                        : ds(
+                            designSystem.glass.tertiary,
+                            'opacity-60 cursor-not-allowed',
+                            designSystem.text.muted
+                          )
                     )}
                   >
                     <div className="flex items-start space-x-3 w-full">
@@ -263,17 +397,26 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     onClick={() => handleAction('build', { buildingType: 'city' })}
                     disabled={!canBuildCity}
                     variant="outline"
-                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                    className={ds(
+                      'w-full justify-start text-left text-sm p-3 h-auto',
                       canBuildCity 
-                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
-                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
-                    }`}
+                        ? ds(
+                            designSystem.accents.purple.subtle,
+                            designSystem.accents.purple.hover,
+                            'hover:scale-[1.02] transition-all duration-200'
+                          )
+                        : ds(
+                            designSystem.glass.tertiary,
+                            'opacity-60 cursor-not-allowed',
+                            designSystem.text.muted
+                          )
+                    )}
                   >
-                    <div className="flex items-start space-x-2 w-full">
+                    <div className="flex items-start space-x-3 w-full">
                       <span className="text-lg">{ACTION_INFO.buildCity.emoji}</span>
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{ACTION_INFO.buildCity.name}</div>
-                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildCity.description}</div>
+                        <div className={ds(designSystem.text.body, 'font-medium text-left')}>{ACTION_INFO.buildCity.name}</div>
+                        <div className={ds(designSystem.text.muted, 'text-xs text-left')}>{ACTION_INFO.buildCity.description}</div>
                         <div className="flex items-center space-x-1 text-xs mt-1">
                           {ACTION_INFO.buildCity.cost.map((emoji, i) => (
                             <span key={i}>{emoji}</span>
@@ -287,17 +430,26 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     onClick={() => handleAction('build', { buildingType: 'road' })}
                     disabled={!canBuildRoad}
                     variant="outline"
-                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                    className={ds(
+                      'w-full justify-start text-left text-sm p-3 h-auto',
                       canBuildRoad 
-                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
-                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
-                    }`}
+                        ? ds(
+                            designSystem.accents.orange.subtle,
+                            designSystem.accents.orange.hover,
+                            'hover:scale-[1.02] transition-all duration-200'
+                          )
+                        : ds(
+                            designSystem.glass.tertiary,
+                            'opacity-60 cursor-not-allowed',
+                            designSystem.text.muted
+                          )
+                    )}
                   >
-                    <div className="flex items-start space-x-2 w-full">
+                    <div className="flex items-start space-x-3 w-full">
                       <span className="text-lg">{ACTION_INFO.buildRoad.emoji}</span>
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{ACTION_INFO.buildRoad.name}</div>
-                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buildRoad.description}</div>
+                        <div className={ds(designSystem.text.body, 'font-medium text-left')}>{ACTION_INFO.buildRoad.name}</div>
+                        <div className={ds(designSystem.text.muted, 'text-xs text-left')}>{ACTION_INFO.buildRoad.description}</div>
                         <div className="flex items-center space-x-1 text-xs mt-1">
                           {ACTION_INFO.buildRoad.cost.map((emoji, i) => (
                             <span key={i}>{emoji}</span>
@@ -311,17 +463,26 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     onClick={() => handleAction('buyCard')}
                     disabled={!canBuyCard}
                     variant="outline"
-                    className={`w-full justify-start text-left text-sm p-2 h-auto ${
+                    className={ds(
+                      'w-full justify-start text-left text-sm p-3 h-auto',
                       canBuyCard 
-                        ? 'bg-white/5 border-white/20 hover:bg-white/10 text-white' 
-                        : 'bg-white/5 border-white/20 text-white/40 cursor-not-allowed'
-                    }`}
+                        ? ds(
+                            designSystem.accents.blue.subtle,
+                            designSystem.accents.blue.hover,
+                            'hover:scale-[1.02] transition-all duration-200'
+                          )
+                        : ds(
+                            designSystem.glass.tertiary,
+                            'opacity-60 cursor-not-allowed',
+                            designSystem.text.muted
+                          )
+                    )}
                   >
-                    <div className="flex items-start space-x-2 w-full">
+                    <div className="flex items-start space-x-3 w-full">
                       <span className="text-lg">{ACTION_INFO.buyCard.emoji}</span>
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{ACTION_INFO.buyCard.name}</div>
-                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.buyCard.description}</div>
+                        <div className={ds(designSystem.text.body, 'font-medium text-left')}>{ACTION_INFO.buyCard.name}</div>
+                        <div className={ds(designSystem.text.muted, 'text-xs text-left')}>{ACTION_INFO.buyCard.description}</div>
                         <div className="flex items-center space-x-1 text-xs mt-1">
                           {ACTION_INFO.buyCard.cost.map((emoji, i) => (
                             <span key={i}>{emoji}</span>
@@ -331,74 +492,123 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, time
                     </div>
                   </Button>
 
-                  <Button 
-                    onClick={() => handleAction('trade')}
-                    variant="outline"
-                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
-                  >
-                    <div className="flex items-start space-x-2 w-full">
-                      <span className="text-lg">🤝</span>
-                      <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">Trade</div>
-                        <div className="text-xs text-white/60 text-left">Trade resources with players or ports</div>
-                      </div>
+                  {currentTurn.canEndTurn && (
+                    <div className="pt-2 border-t border-white/10">
+                      <Button 
+                        onClick={() => handleAction('endTurn')}
+                        variant="outline"
+                        className={ds(
+                          'w-full justify-center text-sm p-3 h-auto',
+                          designSystem.accents.red.subtle,
+                          designSystem.accents.red.hover,
+                          'hover:scale-[1.02] transition-all duration-200'
+                        )}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <span className="text-lg">{ACTION_INFO.endTurn.emoji}</span>
+                          <span className={ds(designSystem.text.body, 'font-medium')}>
+                            {ACTION_INFO.endTurn.name}
+                          </span>
+                        </div>
+                      </Button>
                     </div>
-                  </Button>
-
-                  <Button 
-                    onClick={() => handleAction('endTurn')}
-                    variant="outline"
-                    className="w-full justify-start text-left text-sm p-2 h-auto bg-red-600/20 border-red-400/20 hover:bg-red-600/30 text-white"
-                  >
-                    <div className="flex items-start space-x-2 w-full">
-                      <span className="text-lg">{ACTION_INFO.endTurn.emoji}</span>
-                      <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{ACTION_INFO.endTurn.name}</div>
-                        <div className="text-xs text-white/60 text-left">{ACTION_INFO.endTurn.description}</div>
-                      </div>
-                    </div>
-                  </Button>
+                  )}
                 </>
-              )}
-              
-              {!['roll', 'moveRobber', 'steal', 'discard', 'actions'].includes(gameState.phase) && (
-                <div className="text-white/60 text-sm">No actions available</div>
               )}
             </div>
           )}
         </div>
 
-        {/* Development Cards Section */}
-        <div className="p-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Development Cards</h3>
-          
-          {/* Playable Cards */}
-          {playableCards.length > 0 ? (
+        {/* Development Cards Section - Enhanced */}
+        {localPlayer.developmentCards.length > 0 && (
+          <div className="p-4 border-b border-white/20">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Development Cards</h3>
+              <Badge variant="outline" className="text-xs">
+                {localPlayer.developmentCards.length}
+              </Badge>
+            </div>
+            
             <div className="space-y-2">
-              {playableCards.map((card, index) => {
-                const cardInfo = DEV_CARD_INFO[card.type]
-                return (
+              {playableCards.length > 0 ? (
+                playableCards.map((card, index) => (
                   <Button
                     key={index}
                     onClick={() => handleAction('playCard', { cardType: card.type })}
+                    disabled={!isMyTurn}
                     variant="outline"
-                    className="w-full justify-start text-left text-sm p-2 h-auto bg-white/5 border-white/20 hover:bg-white/10 text-white"
+                    className={ds(
+                      'w-full justify-start text-left text-sm p-3 h-auto',
+                      isMyTurn 
+                        ? ds(
+                            designSystem.accents.purple.subtle,
+                            designSystem.accents.purple.hover,
+                            'hover:scale-[1.02] transition-all duration-200'
+                          )
+                        : ds(
+                            designSystem.glass.tertiary,
+                            'opacity-60 cursor-not-allowed'
+                          )
+                    )}
                   >
-                    <div className="flex items-start space-x-2 w-full">
-                      <span className="text-lg">{cardInfo.emoji}</span>
+                    <div className="flex items-start space-x-3 w-full">
+                      <span className="text-lg">{DEV_CARD_INFO[card.type].emoji}</span>
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-white text-left">{cardInfo.name}</div>
-                        <div className="text-xs text-white/60 text-left">{cardInfo.description}</div>
+                        <div className={ds(designSystem.text.body, 'font-medium text-left')}>
+                          {DEV_CARD_INFO[card.type].name}
+                        </div>
+                        <div className={ds(designSystem.text.muted, 'text-xs text-left')}>
+                          {DEV_CARD_INFO[card.type].description}
+                        </div>
                       </div>
                     </div>
                   </Button>
-                )
-              })}
+                ))
+              ) : (
+                <div className={ds(
+                  designSystem.glass.secondary,
+                  'p-3 rounded-lg text-center'
+                )}>
+                  <div className={ds(designSystem.text.muted, 'text-sm')}>
+                    {localPlayer.developmentCards.length > 0 
+                      ? 'Cards cannot be played this turn' 
+                      : 'No development cards'
+                    }
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-white/60 text-sm bg-white/10 rounded p-2">No cards available</div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Turn Notifications - Show recent notifications */}
+        {notifications.length > 0 && (
+          <div className="p-4">
+            <h3 className="text-sm font-semibold text-white mb-3">Recent Events</h3>
+            <div className="space-y-2">
+              {notifications.slice(-2).map((notification) => (
+                <div
+                  key={notification.id}
+                  className={ds(
+                    designSystem.glass.secondary,
+                    'p-3 rounded-lg border-l-4',
+                    notification.type === 'actionCompleted' && 'border-l-green-400',
+                    notification.type === 'turnTimeout' && 'border-l-orange-400',
+                    notification.type === 'error' && 'border-l-red-400',
+                    (notification.type === 'turnStarted' || notification.type === 'turnEnded' || notification.type === 'phaseChanged') && 'border-l-blue-400'
+                  )}
+                >
+                  <div className={ds(designSystem.text.body, 'text-sm')}>
+                    {notification.message}
+                  </div>
+                  <div className={ds(designSystem.text.muted, 'text-xs mt-1')}>
+                    {new Date(notification.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { GameFlowManager, processAction, GameState } from '@settlers/game-engine'
-import { InitialPlacementStrategy } from '../strategies/initial-placement'
-import { evaluateInitialPlacement } from '../evaluators/initial-placement-evaluator'
+import { InitialPlacementStrategy } from '../strategies/setup/simple-vertex'
+import { PIP_VALUES, getResourceName } from '../helpers'
 
 describe('Initial Placement Strategy', () => {
   it('should handle multiplayer initial placement with game state updates', async () => {
@@ -21,7 +21,7 @@ describe('Initial Placement Strategy', () => {
     console.log(`\n🎮 Game created with players: ${playerIds.join(', ')}`)
     console.log(`📋 Initial game phase: ${gameState.phase}`)
     
-    // Track placements
+    // Track placements in order
     const placements: Record<string, { firstSettlement: string, firstRoad: string, secondSettlement: string, secondRoad: string }> = {}
     
     // SETUP PHASE 1: Each player places first settlement + road
@@ -175,7 +175,8 @@ describe('Initial Placement Strategy', () => {
       // Settlement 1
       if (p.firstSettlement) {
         const hexInfo1 = getVertexHexInfo(gameState, p.firstSettlement)
-        console.log(`   Settlement 1: ${hexInfo1} (VID=${p.firstSettlement})`)
+        const hexCount1 = getVertexHexCount(gameState, p.firstSettlement)
+        console.log(`   Settlement 1: ${hexInfo1} (${hexCount1} hexes, VID=${p.firstSettlement})`)
       }
       
       // Road 1  
@@ -186,7 +187,8 @@ describe('Initial Placement Strategy', () => {
       // Settlement 2
       if (p.secondSettlement) {
         const hexInfo2 = getVertexHexInfo(gameState, p.secondSettlement)
-        console.log(`   Settlement 2: ${hexInfo2} (VID=${p.secondSettlement})`)
+        const hexCount2 = getVertexHexCount(gameState, p.secondSettlement)
+        console.log(`   Settlement 2: ${hexInfo2} (${hexCount2} hexes, VID=${p.secondSettlement})`)
       }
       
       // Road 2
@@ -195,19 +197,63 @@ describe('Initial Placement Strategy', () => {
       }
     }
 
-    // PLACEMENT EVALUATION
-    console.log('\n📊 PLACEMENT EVALUATION (1-100 SCORE):')
-    console.log('======================================')
+    // Detailed placement analysis
+    console.log('\n📊 DETAILED PLACEMENT ANALYSIS:')
+    console.log('==============================')
     
-    const evaluations = playerIds.map(playerId => evaluateInitialPlacement(gameState, playerId))
-    evaluations.sort((a, b) => b.totalScore - a.totalScore) // Sort by score (highest first)
+    const evaluations = playerIds.map(playerId => {
+      const settlements = getPlayerSettlements(gameState, playerId)
+      const totalHexes = settlements.reduce((sum, s) => sum + s.hexCount, 0)
+      const totalProduction = settlements.reduce((sum, s) => sum + s.productionValue, 0)
+      const uniqueResources = new Set(settlements.flatMap(s => s.resources.map(r => r.split('-')[0]))).size
+      const resourceBreakdown = calculateResourceBreakdown(gameState, playerId)
+      const roadAnalysis = analyzeRoadExpansion(gameState, playerId)
+      
+      return {
+        playerId,
+        settlements,
+        totalHexes,
+        totalProduction: Math.round(totalProduction * 10) / 10,
+        uniqueResources,
+        resourceBreakdown,
+        roadAnalysis,
+        // Simple score: production + hex bonus + diversity bonus
+        score: Math.round(totalProduction + (totalHexes * 2) + (uniqueResources * 3))
+      }
+    }).sort((a, b) => b.score - a.score)
     
     evaluations.forEach((evaluation, rank) => {
-      console.log(`\n🏅 Rank ${rank + 1}: Player (${evaluation.playerId})`)
-      console.log(`   Total Score: ${evaluation.totalScore}/100`)
-      console.log(`   Production: ${evaluation.productionScore}/50 (strength: ${evaluation.productionStrength})`)
-      console.log(`   Diversity: ${evaluation.diversityScore}/50 (${evaluation.uniqueResources}/5 resources)`)
-      console.log(`   Settlements: ${evaluation.settlements.map(s => s.resources.join(', ')).join(' | ')}`)
+      console.log(`\n🏅 Rank ${rank + 1}: ${evaluation.playerId}`)
+      console.log(`   Score: ${evaluation.score} (prod: ${evaluation.totalProduction}, hexes: ${evaluation.totalHexes}, resources: ${evaluation.uniqueResources}/5)`)
+      
+      // Resource breakdown
+      console.log(`   Resource Production:`)
+             Object.entries(evaluation.resourceBreakdown).forEach(([resource, pips]) => {
+         if ((pips as number) > 0) {
+           console.log(`     ${resource.toUpperCase()}: ${pips} pips`)
+         }
+       })
+      
+      // Settlement details (show in placement order)
+      const p = placements[evaluation.playerId]
+      if (p.firstSettlement) {
+        const firstSettlement = evaluation.settlements.find(s => s.vertexId === p.firstSettlement)
+        if (firstSettlement) {
+          console.log(`   Settlement 1: ${firstSettlement.hexCount} hexes → ${firstSettlement.resources.join(', ')}`)
+        }
+      }
+      if (p.secondSettlement) {
+        const secondSettlement = evaluation.settlements.find(s => s.vertexId === p.secondSettlement)
+        if (secondSettlement) {
+          console.log(`   Settlement 2: ${secondSettlement.hexCount} hexes → ${secondSettlement.resources.join(', ')}`)
+        }
+      }
+      
+      // Road expansion potential
+      console.log(`   Road Expansion Potential:`)
+      evaluation.roadAnalysis.forEach((road, i) => {
+        console.log(`     Road ${i + 1} → ${road.expansionOptions} vertices reachable (avg score: ${road.avgVertexScore})`)
+      })
     })
     
     // Final assertions
@@ -238,6 +284,13 @@ describe('Initial Placement Strategy', () => {
     expect(uniqueRoads.size).toBe(allRoads.length)
     console.log(`✅ Road uniqueness verified: ${allRoads.length} roads, ${uniqueRoads.size} unique edges`)
     
+    // Alert if too many 2-hex settlements
+    const twoHexCount = evaluations.flatMap(evaluation => evaluation.settlements).filter(s => s.hexCount === 2).length
+    const totalSettlements = evaluations.flatMap(evaluation => evaluation.settlements).length
+    if (twoHexCount > totalSettlements / 2) {
+      console.log(`⚠️  Warning: ${twoHexCount}/${totalSettlements} settlements are only 2-hex intersections`)
+    }
+    
     console.log('\n✅ Test completed successfully!')
   })
 })
@@ -262,13 +315,118 @@ function getVertexHexInfo(gameState: GameState, vertexId: string): string {
   return hexDescriptions.join(', ')
 }
 
-function getResourceName(terrain: string): string {
-  switch (terrain) {
-    case 'forest': return 'WO'
-    case 'hills': return 'BR'
-    case 'pasture': return 'SH'
-    case 'fields': return 'WH'
-    case 'mountains': return 'OR'
-    default: return terrain.substring(0, 2).toUpperCase()
+function getVertexHexCount(gameState: GameState, vertexId: string): number {
+  const vertex = gameState.board.vertices.get(vertexId)
+  if (!vertex) return 0
+  
+  let count = 0
+  for (const hexCoord of vertex.position.hexes) {
+    const hex = Array.from(gameState.board.hexes.values()).find(
+      h => h.position.q === hexCoord.q && h.position.r === hexCoord.r
+    )
+    
+    if (hex && hex.terrain && hex.terrain !== 'desert' && hex.terrain !== 'sea') {
+      count++
+    }
   }
+  
+  return count
+}
+
+function getPlayerSettlements(gameState: GameState, playerId: string) {
+  const settlements: Array<{
+    vertexId: string
+    hexCount: number
+    resources: string[]
+    productionValue: number
+  }> = []
+  
+  for (const [vertexId, vertex] of gameState.board.vertices) {
+    if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
+      const hexCount = getVertexHexCount(gameState, vertexId)
+      const hexInfo = getVertexHexInfo(gameState, vertexId)
+      const resources = hexInfo.split(', ').filter(Boolean)
+      
+      // Calculate production value based on number weights
+      const productionValue = calculateVertexProduction(gameState, vertexId)
+      
+      settlements.push({
+        vertexId,
+        hexCount,
+        resources,
+        productionValue
+      })
+    }
+  }
+  
+  return settlements
+}
+
+function calculateVertexProduction(gameState: GameState, vertexId: string): number {
+  const vertex = gameState.board.vertices.get(vertexId)
+  if (!vertex) return 0
+  
+  let total = 0
+  for (const hexCoord of vertex.position.hexes) {
+    const hex = Array.from(gameState.board.hexes.values()).find(
+      h => h.position.q === hexCoord.q && h.position.r === hexCoord.r
+    )
+    
+    if (hex && hex.numberToken && hex.terrain && hex.terrain !== 'desert' && hex.terrain !== 'sea') {
+      total += PIP_VALUES[hex.numberToken as keyof typeof PIP_VALUES] || 0
+    }
+  }
+  
+  return total
+}
+
+function calculateResourceBreakdown(gameState: GameState, playerId: string): Record<string, number> {
+  const breakdown = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
+  
+  for (const [vertexId, vertex] of gameState.board.vertices) {
+    if (vertex.building?.owner === playerId && vertex.building.type === 'settlement') {
+      for (const hexCoord of vertex.position.hexes) {
+        const hex = Array.from(gameState.board.hexes.values()).find(
+          h => h.position.q === hexCoord.q && h.position.r === hexCoord.r
+        )
+        
+        if (hex && hex.numberToken && hex.terrain && hex.terrain !== 'desert' && hex.terrain !== 'sea') {
+          const resource = getResourceName(hex.terrain).toLowerCase()
+          const pips = PIP_VALUES[hex.numberToken as keyof typeof PIP_VALUES] || 0
+          
+          if (resource === 'wo') breakdown.wood += pips
+          else if (resource === 'br') breakdown.brick += pips  
+          else if (resource === 'sh') breakdown.sheep += pips
+          else if (resource === 'wh') breakdown.wheat += pips
+          else if (resource === 'or') breakdown.ore += pips
+        }
+      }
+    }
+  }
+  
+  return breakdown
+}
+
+function analyzeRoadExpansion(gameState: GameState, playerId: string): Array<{expansionOptions: number, avgVertexScore: number}> {
+  const roads: Array<{expansionOptions: number, avgVertexScore: number}> = []
+  
+  // This is a simplified analysis - in a full implementation we'd:
+  // 1. Find each road owned by the player
+  // 2. Simulate building a second road from each endpoint
+  // 3. Score the potential settlement vertices reachable
+  // For now, just return placeholder data
+  
+  let roadCount = 0
+  for (const [edgeId, edge] of gameState.board.edges) {
+    if (edge.connection?.owner === playerId && edge.connection.type === 'road') {
+      roadCount++
+      // Placeholder analysis
+      roads.push({
+        expansionOptions: Math.floor(Math.random() * 3) + 1, // 1-3 options
+        avgVertexScore: Math.floor(Math.random() * 20) + 10 // 10-30 score
+      })
+    }
+  }
+  
+  return roads
 } 

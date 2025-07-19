@@ -17,6 +17,7 @@
   "dependencies": {
     "@hono/zod-validator": "^0.7.1",
     "@settlers/game-engine": "workspace:*",
+    "@settlers/ai-framework": "workspace:*",
     "@settlers/ai-system": "workspace:*",
     "@supabase/supabase-js": "^2.51.0",
     "@types/uuid": "^10.0.0",

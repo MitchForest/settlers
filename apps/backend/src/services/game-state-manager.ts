@@ -11,10 +11,18 @@ import { gameConfig } from '../config/game-config'
 export class GameStateManager {
   private activeGames = new Map<string, GameFlowManager>()
   private lastCleanup = Date.now()
+  private turnManager: any // Will be injected to avoid circular dependencies
   
   constructor(private wsServer: UnifiedWebSocketServer) {
     // Start periodic cleanup
     this.startCleanupInterval()
+  }
+
+  /**
+   * Set turn manager (to avoid circular dependencies)
+   */
+  setTurnManager(turnManager: any): void {
+    this.turnManager = turnManager
   }
 
   /**
@@ -79,6 +87,9 @@ export class GameStateManager {
       
       // Broadcast action result
       await this.broadcastActionResult(gameId, action, result)
+      
+      // Check for game end conditions
+      await this.checkGameEndConditions(gameId, result.newState)
       
       console.log(`✅ Action ${action.type} processed successfully`)
     } else {
@@ -369,5 +380,52 @@ export class GameStateManager {
     if (gamesToRemove.length > 0) {
       console.log(`🧹 Cleaned up ${gamesToRemove.length} games from cache`)
     }
+  }
+
+  /**
+   * Check for game end conditions and handle cleanup
+   */
+  private async checkGameEndConditions(gameId: string, gameState: GameState): Promise<void> {
+    try {
+      // Check if any player has won (reached victory points threshold)
+      for (const [playerId, player] of gameState.players) {
+        if (player.score.total >= 10) {
+          console.log(`🏆 Game ${gameId} ended - ${playerId} wins with ${player.score.total} points!`)
+          
+          // Notify turn manager of game end
+          if (this.turnManager) {
+            await this.turnManager.endGame(gameId, playerId)
+          }
+          
+          // Broadcast game end to all players
+          await this.broadcastGameEnd(gameId, playerId, gameState)
+          
+          // Clean up game from active cache
+          this.removeGame(gameId)
+          return
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error checking game end conditions:', error)
+    }
+  }
+
+  /**
+   * Broadcast game end to all players
+   */
+  private async broadcastGameEnd(gameId: string, winnerId: string, finalState: GameState): Promise<void> {
+    const message = {
+      success: true,
+      data: {
+        type: 'gameEnded',
+        gameId,
+        winner: winnerId,
+        finalState: this.serializeGameState(finalState),
+        timestamp: new Date().toISOString()
+      }
+    }
+    
+    await this.wsServer.broadcastToGame(gameId, message)
   }
 } 

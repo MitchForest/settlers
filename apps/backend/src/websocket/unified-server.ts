@@ -134,6 +134,11 @@ export class UnifiedWebSocketServer {
   private connectionToGame = new Map<WebSocket, ClientConnection>()
   private sessionConnections = new Map<string, ClientConnection>() // Track by session token
   private cleanupInterval?: NodeJS.Timeout
+  
+  // Service managers - initialized as singletons
+  private gameStateManager: any
+  private turnManager: any
+  private aiOrchestrator: any
 
   constructor(port: number = 8080) {
     this.wss = new WebSocketServer({ 
@@ -143,12 +148,42 @@ export class UnifiedWebSocketServer {
 
     this.wss.on('connection', this.handleConnection.bind(this))
     
+    // Initialize service managers as singletons
+    this.initializeServices()
+    
     // Set up cleanup interval for stale connections
     this.cleanupInterval = setInterval(() => {
       this.cleanupStaleConnections()
     }, 30000) // Clean up every 30 seconds
 
     console.log(`🌐 WebSocket server listening on port ${port}`)
+  }
+
+  /**
+   * Initialize service managers with proper dependency injection
+   */
+  private async initializeServices(): Promise<void> {
+    try {
+      // Import services dynamically to avoid circular dependencies
+      const { GameStateManager } = await import('../services/game-state-manager')
+      const { TurnManager } = await import('../services/turn-manager')
+      const { AITurnOrchestrator } = await import('../services/ai-turn-orchestrator')
+      
+      // Initialize in dependency order
+      this.gameStateManager = new GameStateManager(this)
+      this.turnManager = new TurnManager(this.gameStateManager, this)
+      this.aiOrchestrator = new AITurnOrchestrator(this.gameStateManager)
+      
+      // Wire circular dependencies
+      this.turnManager.setAIOrchestrator(this.aiOrchestrator)
+      this.aiOrchestrator.setTurnManager(this.turnManager)
+      this.gameStateManager.setTurnManager(this.turnManager)
+      
+      console.log('✅ Game services initialized successfully')
+    } catch (error) {
+      console.error('❌ Failed to initialize game services:', error)
+      throw error
+    }
   }
 
   private handleConnection(ws: WebSocket, request: IncomingMessage): void {
@@ -625,6 +660,9 @@ export class UnifiedWebSocketServer {
         return
       }
 
+      // Initialize turn management for the started game
+      await this.initializeGameTurnManagement(connection.gameId)
+
       // Success response will be sent via live updates
       this.sendResponse(ws, {
         success: true,
@@ -634,6 +672,31 @@ export class UnifiedWebSocketServer {
     } catch (error) {
       console.error('Error in handleStartGame:', error)
       this.sendError(ws, 'Failed to start game', { error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  }
+
+  /**
+   * Initialize turn management when a game starts
+   */
+  private async initializeGameTurnManagement(gameId: string): Promise<void> {
+    try {
+      if (!this.turnManager || !this.gameStateManager) {
+        console.error('Turn services not initialized')
+        return
+      }
+
+      // Load initial game state
+      const gameState = await this.gameStateManager.loadGameState(gameId)
+      
+      // Start turn management with the first player
+      const firstPlayerId = gameState.currentPlayer
+      if (firstPlayerId) {
+        console.log(`🎮 Starting turn management for game ${gameId}, first player: ${firstPlayerId}`)
+        await this.turnManager.startTurn(gameId, firstPlayerId)
+      }
+      
+    } catch (error) {
+      console.error('Error initializing turn management:', error)
     }
   }
 
@@ -1188,17 +1251,20 @@ export class UnifiedWebSocketServer {
     try {
       console.log(`🎮 Processing game action: ${action.type} from ${connection.playerId}`)
       
-      // Import game services dynamically to avoid circular dependencies
-      const { GameStateManager } = await import('../services/game-state-manager')
-      const gameStateManager = new GameStateManager(this)
+      // Use singleton game state manager
+      if (!this.gameStateManager) {
+        this.sendError(ws, 'Game services not initialized')
+        return
+      }
       
-      const result = await gameStateManager.processPlayerAction(
+      const result = await this.gameStateManager.processPlayerAction(
         connection.gameId, 
         connection.playerId, 
         action
       )
 
       if (result.success) {
+        // Send action result to player
         this.sendResponse(ws, {
           success: true,
           data: {
@@ -1209,6 +1275,10 @@ export class UnifiedWebSocketServer {
             message: result.message
           }
         })
+        
+        // Check for turn progression after successful action
+        await this.handleTurnProgression(connection.gameId, connection.playerId, action, result)
+        
       } else {
         this.sendError(ws, result.error || 'Action failed', {
           action: action.type,
@@ -1219,6 +1289,24 @@ export class UnifiedWebSocketServer {
     } catch (error) {
       console.error('Error handling game action:', error)
       this.sendError(ws, 'Failed to process game action')
+    }
+  }
+
+  /**
+   * Handle turn progression after successful actions
+   */
+  private async handleTurnProgression(gameId: string, playerId: string, action: any, result: any): Promise<void> {
+    try {
+      if (!this.turnManager) {
+        console.error('Turn manager not initialized')
+        return
+      }
+      
+      // Let turn manager handle post-action logic
+      await this.turnManager.handlePlayerAction(gameId, playerId, action, result)
+      
+    } catch (error) {
+      console.error('Error in turn progression:', error)
     }
   }
 
@@ -1235,14 +1323,13 @@ export class UnifiedWebSocketServer {
     try {
       console.log(`🎮 Processing end turn from ${connection.playerId}`)
       
-      // Import turn manager dynamically
-      const { TurnManager } = await import('../services/turn-manager')
-      const { GameStateManager } = await import('../services/game-state-manager')
+      // Use singleton turn manager
+      if (!this.turnManager) {
+        this.sendError(ws, 'Turn manager not initialized')
+        return
+      }
       
-      const gameStateManager = new GameStateManager(this)
-      const turnManager = new TurnManager(gameStateManager, this)
-      
-      await turnManager.endTurn(connection.gameId, connection.playerId, data.finalAction)
+      await this.turnManager.endTurn(connection.gameId, connection.playerId, data.finalAction)
 
       this.sendResponse(ws, {
         success: true,

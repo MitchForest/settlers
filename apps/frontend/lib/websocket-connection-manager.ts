@@ -17,12 +17,22 @@
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'failed'
 
+export type ConnectionType = 'lobby' | 'game' | 'social'
+
 interface MessageListener {
   onMessage: (event: MessageEvent) => void
+  routingKey?: string  // For message routing based on type or pattern
 }
 
 interface StatusListener {
   (status: ConnectionStatus, ws?: WebSocket): void
+}
+
+// Enhanced routing for different message types
+interface MessageRoute {
+  pattern: string | RegExp
+  handler: (event: MessageEvent) => void
+  description?: string
 }
 
 interface ConnectionInstance {
@@ -30,8 +40,10 @@ interface ConnectionInstance {
   status: ConnectionStatus
   url: string
   sessionToken: string
+  connectionType: ConnectionType
   statusListeners: Set<StatusListener>
   messageListeners: Set<MessageListener>
+  messageRoutes: Map<string, MessageRoute[]>  // Routing table for message types
   reconnectTimeout?: number // Browser compatible
   retryCount: number
   maxRetries: number
@@ -41,6 +53,8 @@ interface ConnectionInstance {
   healthCheckInterval?: number
   isHealthy: boolean
   createdAt: number
+  gameId?: string  // For game connections
+  spectatorMode?: boolean  // For spectator connections
 }
 
 class WebSocketConnectionManager {
@@ -61,7 +75,9 @@ class WebSocketConnectionManager {
   getOrCreateConnection(
     url: string, 
     sessionToken: string,
-    onStatusChange?: StatusListener
+    onStatusChange?: StatusListener,
+    connectionType: ConnectionType = 'lobby',
+    gameId?: string
   ): ConnectionInstance {
     if (!sessionToken) {
       console.error('🔌 ERROR: No session token provided to getOrCreateConnection')
@@ -79,8 +95,10 @@ class WebSocketConnectionManager {
         status: 'idle',
         url,
         sessionToken,
+        connectionType,
         statusListeners: new Set(),
         messageListeners: new Set(),
+        messageRoutes: new Map(),
         reconnectTimeout: undefined,
         retryCount: 0,
         maxRetries: this.MAX_RETRIES,
@@ -89,7 +107,9 @@ class WebSocketConnectionManager {
         connectionTimeout: undefined,
         healthCheckInterval: undefined,
         isHealthy: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        gameId,
+        spectatorMode: false
       }
       this.connections.set(connectionKey, connection)
     }
@@ -181,14 +201,36 @@ class WebSocketConnectionManager {
         }
         
         ws.onmessage = (event) => {
-          // Notify all message listeners (type-safe)
-          connection.messageListeners.forEach(listener => {
-            try {
-              listener.onMessage(event)
-            } catch (error) {
-              console.error('🔌 Message listener error:', error)
-            }
-          })
+          // Enhanced message routing with pattern matching
+          try {
+            const messageData = JSON.parse(event.data)
+            const messageType = messageData.type || 'unknown'
+            
+            // Route messages based on patterns
+            this.routeMessage(connection, event, messageType)
+            
+            // Still notify all general message listeners for backward compatibility
+            connection.messageListeners.forEach(listener => {
+              try {
+                // Filter by routing key if specified
+                if (!listener.routingKey || listener.routingKey === messageType || messageType.includes(listener.routingKey)) {
+                  listener.onMessage(event)
+                }
+              } catch (error) {
+                console.error('🔌 Message listener error:', error)
+              }
+            })
+          } catch (parseError) {
+            console.warn('🔌 Failed to parse message for routing, using fallback:', parseError)
+            // Fallback to notify all listeners if parsing fails
+            connection.messageListeners.forEach(listener => {
+              try {
+                listener.onMessage(event)
+              } catch (error) {
+                console.error('🔌 Message listener error:', error)
+              }
+            })
+          }
         }
         
         ws.onclose = (event) => {
@@ -445,6 +487,168 @@ class WebSocketConnectionManager {
         console.error('🔌 Status listener error:', error)
       }
     })
+  }
+
+  // ============= ENHANCED MESSAGE ROUTING METHODS =============
+
+  /**
+   * 🎯 ROUTE MESSAGE BASED ON PATTERNS
+   */
+  private routeMessage(connection: ConnectionInstance, event: MessageEvent, messageType: string): void {
+    // Get routes for this message type
+    const routes = connection.messageRoutes.get(messageType) || []
+    
+    // Also check wildcard routes
+    const wildcardRoutes = connection.messageRoutes.get('*') || []
+    
+    // Execute all matching routes
+    const allRoutes = [...routes, ...wildcardRoutes]
+    allRoutes.forEach(route => {
+      try {
+        if (this.matchesPattern(messageType, route.pattern)) {
+          route.handler(event)
+        }
+      } catch (error) {
+        console.error(`🔌 Route handler error for ${messageType}:`, error)
+      }
+    })
+  }
+
+  /**
+   * 📋 ADD MESSAGE ROUTE
+   */
+  addMessageRoute(
+    connection: ConnectionInstance, 
+    pattern: string | RegExp, 
+    handler: (event: MessageEvent) => void,
+    description?: string
+  ): void {
+    const routeKey = typeof pattern === 'string' ? pattern : pattern.source
+    
+    if (!connection.messageRoutes.has(routeKey)) {
+      connection.messageRoutes.set(routeKey, [])
+    }
+    
+    const routes = connection.messageRoutes.get(routeKey)!
+    routes.push({ pattern, handler, description })
+    
+    console.log(`🎯 Added message route: ${routeKey} (${description || 'no description'})`)
+  }
+
+  /**
+   * 🗑️ REMOVE MESSAGE ROUTE
+   */
+  removeMessageRoute(
+    connection: ConnectionInstance,
+    pattern: string | RegExp,
+    handler: (event: MessageEvent) => void
+  ): void {
+    const routeKey = typeof pattern === 'string' ? pattern : pattern.source
+    const routes = connection.messageRoutes.get(routeKey)
+    
+    if (routes) {
+      const index = routes.findIndex(route => route.handler === handler)
+      if (index !== -1) {
+        routes.splice(index, 1)
+        console.log(`🗑️ Removed message route: ${routeKey}`)
+        
+        // Clean up empty route arrays
+        if (routes.length === 0) {
+          connection.messageRoutes.delete(routeKey)
+        }
+      }
+    }
+  }
+
+  /**
+   * 🔍 PATTERN MATCHING
+   */
+  private matchesPattern(messageType: string, pattern: string | RegExp): boolean {
+    if (typeof pattern === 'string') {
+      return messageType === pattern || pattern === '*'
+    } else {
+      return pattern.test(messageType)
+    }
+  }
+
+  /**
+   * 🎮 CREATE GAME CONNECTION
+   */
+  createGameConnection(
+    gameId: string,
+    sessionToken: string,
+    onStatusChange?: StatusListener,
+    spectatorMode: boolean = false
+  ): ConnectionInstance {
+    const gameUrl = this.buildGameWebSocketUrl(gameId, sessionToken)
+    const connection = this.getOrCreateConnection(
+      gameUrl, 
+      sessionToken, 
+      onStatusChange, 
+      'game',
+      gameId
+    )
+    
+    connection.spectatorMode = spectatorMode
+    
+    // Add default game message routes
+    this.setupDefaultGameRoutes(connection)
+    
+    return connection
+  }
+
+  /**
+   * 🔗 BUILD GAME WEBSOCKET URL
+   */
+  private buildGameWebSocketUrl(gameId: string, sessionToken: string): string {
+    const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'
+    return `${baseUrl}?s=${encodeURIComponent(sessionToken)}&gameId=${encodeURIComponent(gameId)}`
+  }
+
+  /**
+   * 🎯 SETUP DEFAULT GAME MESSAGE ROUTES
+   */
+  private setupDefaultGameRoutes(connection: ConnectionInstance): void {
+    // Route for turn management messages
+    this.addMessageRoute(connection, /^turn/, (event) => {
+      console.log('🎮 Turn message received:', JSON.parse(event.data).type)
+    }, 'Turn management routing')
+    
+    // Route for game state messages
+    this.addMessageRoute(connection, /^gameState/, (event) => {
+      console.log('🎮 Game state message received:', JSON.parse(event.data).type)
+    }, 'Game state routing')
+    
+    // Route for action result messages
+    this.addMessageRoute(connection, 'actionResult', (event) => {
+      console.log('🎮 Action result received:', JSON.parse(event.data))
+    }, 'Action result routing')
+  }
+
+  /**
+   * 📊 GET CONNECTION INFO
+   */
+  getConnectionInfo(url: string, sessionToken: string): {
+    exists: boolean
+    type?: ConnectionType
+    gameId?: string
+    spectatorMode?: boolean
+    messageRoutes?: string[]
+  } {
+    const connectionKey = `${url}#${sessionToken}`
+    const connection = this.connections.get(connectionKey)
+    
+    if (!connection) {
+      return { exists: false }
+    }
+    
+    return {
+      exists: true,
+      type: connection.connectionType,
+      gameId: connection.gameId,
+      spectatorMode: connection.spectatorMode,
+      messageRoutes: Array.from(connection.messageRoutes.keys())
+    }
   }
 }
 

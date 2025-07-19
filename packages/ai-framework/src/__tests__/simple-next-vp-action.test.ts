@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { GameFlowManager, GameState, GameAction, processAction } from '@settlers/game-engine'
-import { InitialPlacementStrategy } from '../strategies/initial-placement'
-import { SimpleNextVPStrategy } from '../strategies/simple-next-vp'
+import { InitialPlacementStrategy } from '../strategies/setup/simple-vertex'
+import { SimpleNextVPStrategy } from '../strategies/action/simple-next-vp'
 import { getSimplePhaseAction } from '../helpers/game-helpers'
 
 interface GameResult {

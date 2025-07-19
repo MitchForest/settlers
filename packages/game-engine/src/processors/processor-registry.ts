@@ -19,6 +19,8 @@ import { StealResourceProcessor } from './steal-resource-processor'
 import { DiscardProcessor } from './discard-processor'
 import { BuyCardProcessor } from './buy-card-processor'
 import { BankTradeProcessor } from './bank-trade-processor'
+import { PortTradeProcessor } from './port-trade-processor'
+import { CreateTradeOfferProcessor, AcceptTradeProcessor, RejectTradeProcessor, CancelTradeProcessor } from './player-trade-processor'
 import { PlayCardProcessor } from './play-card-processor'
 
 export class ProcessorRegistry {
@@ -70,6 +72,11 @@ export class ProcessorRegistry {
       new DiscardProcessor(this.stateManager, this.eventFactory, this.postProcessor),
       new BuyCardProcessor(),
       new BankTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new PortTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new CreateTradeOfferProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new AcceptTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new RejectTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new CancelTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
       new PlayCardProcessor(this.stateManager, this.eventFactory, this.postProcessor)
       // Core game processors complete!
     )

@@ -1,5 +1,6 @@
 import { GameState, PlayerId, GameFlowManager } from '@settlers/game-engine'
 import { GameStateManager } from './game-state-manager'
+import { AIIntegrationService } from './ai-integration-service'
 import { gameConfig, getAIThinkingTime } from '../config/game-config'
 
 // AI Player configuration interface
@@ -24,8 +25,11 @@ export class AITurnOrchestrator {
   private aiPlayers = new Map<string, AIPlayerConfig>()
   private scheduledTurns = new Map<string, ScheduledAITurn>()
   private turnManager: any // Will be injected to avoid circular deps
+  private aiIntegrationService: AIIntegrationService
   
-  constructor(private gameStateManager: GameStateManager) {}
+  constructor(private gameStateManager: GameStateManager) {
+    this.aiIntegrationService = new AIIntegrationService(gameStateManager)
+  }
 
   /**
    * Set turn manager (to avoid circular dependencies)
@@ -448,59 +452,8 @@ export class AITurnOrchestrator {
     aiConfig: AIPlayerConfig
   ): Promise<any> {
     try {
-      // This would integrate with the actual AI system
-      // For now, return a simple decision
-      
-      // Simple AI logic: try to build something, otherwise end turn
-      const player = gameState.players.get(aiPlayerId)
-      if (!player) return { type: 'endTurn', playerId: aiPlayerId, data: {} }
-      
-      // Check if can build settlement
-      if (player.resources.wood >= 1 && player.resources.brick >= 1 && 
-          player.resources.wheat >= 1 && player.resources.sheep >= 1) {
-        return {
-          type: 'build',
-          playerId: aiPlayerId,
-          data: {
-            buildingType: 'settlement',
-            position: this.getRandomVertexPosition()
-          }
-        }
-      }
-      
-      // Check if can build road
-      if (player.resources.wood >= 1 && player.resources.brick >= 1) {
-        return {
-          type: 'build',
-          playerId: aiPlayerId,
-          data: {
-            buildingType: 'road',
-            position: this.getRandomEdgePosition()
-          }
-        }
-      }
-      
-      // Try bank trade
-      const resourceTypes = ['wood', 'brick', 'ore', 'wheat', 'sheep'] as const
-      for (const resource of resourceTypes) {
-        if (player.resources[resource] >= 4) {
-          const targetResource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
-          if (targetResource !== resource) {
-            return {
-              type: 'bankTrade',
-              playerId: aiPlayerId,
-              data: {
-                offering: { [resource]: 4 },
-                requesting: { [targetResource]: 1 }
-              }
-            }
-          }
-        }
-      }
-      
-      // Default: end turn
-      return { type: 'endTurn', playerId: aiPlayerId, data: {} }
-      
+      // Use the new AI integration service instead of placeholder logic
+      return await this.aiIntegrationService.getAIAction(gameId, aiPlayerId, gameState)
     } catch (error) {
       console.error(`Error getting AI decision for ${aiPlayerId}:`, error)
       return { type: 'endTurn', playerId: aiPlayerId, data: {} }

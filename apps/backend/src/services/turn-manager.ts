@@ -254,6 +254,87 @@ export class TurnManager {
     return Math.max(0, timer.timeoutMs - elapsed)
   }
 
+  /**
+   * Handle player action for turn progression logic
+   */
+  async handlePlayerAction(gameId: string, playerId: PlayerId, action: GameAction, result: any): Promise<void> {
+    try {
+      const turnState = this.gameTurnStates.get(gameId)
+      if (!turnState || turnState.currentPlayer !== playerId) {
+        // Not the current player's turn, ignore
+        return
+      }
+      
+      // Check if action ends the turn or phase
+      const shouldEndTurn = this.shouldActionEndTurn(action, result)
+      
+      if (shouldEndTurn) {
+        console.log(`🔄 Action ${action.type} ends turn for ${playerId}`)
+        await this.endTurn(gameId, playerId, action)
+      } else {
+        // Action succeeded but doesn't end turn - just update timer
+        this.updateTurnState(gameId, action, result)
+      }
+      
+    } catch (error) {
+      console.error('Error handling player action in turn manager:', error)
+    }
+  }
+
+  /**
+   * Determine if an action should end the current turn
+   */
+  private shouldActionEndTurn(action: GameAction, result: any): boolean {
+    // Actions that explicitly end turns
+    if (action.type === 'endTurn') return true
+    
+    // Certain actions in specific phases end the turn
+    if (action.type === 'roll' && result.phase === 'actions') return false
+    if (action.type === 'placeRoad' || action.type === 'placeBuilding' || action.type === 'build') {
+      // Building actions don't automatically end turn
+      return false
+    }
+    
+    // Add more turn-ending logic based on game rules
+    return false
+  }
+
+  /**
+   * Update turn state after a successful action
+   */
+  private updateTurnState(gameId: string, action: GameAction, result: any): void {
+    const turnState = this.gameTurnStates.get(gameId)
+    if (!turnState) return
+    
+    // Update turn state based on action result
+    if (result.newPhase && result.newPhase !== turnState.phase) {
+      turnState.phase = result.newPhase
+      console.log(`📍 Phase changed to ${result.newPhase} for game ${gameId}`)
+    }
+  }
+
+  /**
+   * End a game and clean up turn management
+   */
+  async endGame(gameId: string, winnerId: PlayerId): Promise<void> {
+    console.log(`🏁 Ending game ${gameId}, winner: ${winnerId}`)
+    
+    // Clear turn timer
+    this.clearTurnTimer(gameId)
+    
+    // Remove turn state
+    this.gameTurnStates.delete(gameId)
+    
+    // Stop AI if any were active
+    if (this.aiOrchestrator) {
+      // AI orchestrator will handle its own cleanup
+    }
+    
+    // Broadcast final game end message
+    const message = createGameEndedMessage(gameId, winnerId)
+    await this.broadcastToGame(gameId, message)
+  }
+
   // ============= Private Methods =============
 
   /**
