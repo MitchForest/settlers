@@ -311,6 +311,77 @@ export class GameInviteCommandService {
     return null
   }
 
+  /**
+   * Get current game invites for a user (projects from events)
+   */
+  async getGameInvites(userId: string): Promise<{ success: boolean; invites?: any[]; error?: string }> {
+    try {
+      // Get all game invite events for this user
+      const events = await eventStore.getGameInviteEvents(userId)
+      
+      // Project current invite state from events
+      const inviteMap = new Map()
+      
+      for (const event of events) {
+        const data = event.data as any
+        
+        switch (event.eventType) {
+          case 'game_invite_sent':
+            if (data.toUserId === userId) {
+              // This user received an invite
+              inviteMap.set(data.inviteId, {
+                id: data.inviteId,
+                fromUserId: data.fromUserId,
+                fromUser: data.fromUser,
+                toUserId: data.toUserId,
+                gameId: data.gameId,
+                message: data.message,
+                status: 'pending',
+                createdAt: data.timestamp,
+                type: 'received'
+              })
+            }
+            break
+            
+          case 'game_invite_accepted':
+            if (inviteMap.has(data.inviteId)) {
+              inviteMap.get(data.inviteId).status = 'accepted'
+            }
+            break
+            
+          case 'game_invite_declined':
+            if (inviteMap.has(data.inviteId)) {
+              inviteMap.get(data.inviteId).status = 'declined'
+            }
+            break
+            
+          case 'game_invite_expired':
+          case 'game_invite_cancelled':
+            if (inviteMap.has(data.inviteId)) {
+              inviteMap.get(data.inviteId).status = event.eventType.replace('game_invite_', '')
+            }
+            break
+        }
+      }
+      
+      // Return only pending invites (filter out processed ones)
+      const pendingInvites = Array.from(inviteMap.values())
+        .filter(invite => invite.status === 'pending')
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      
+      return {
+        success: true,
+        invites: pendingInvites
+      }
+    } catch (error) {
+      console.error('Error getting game invites:', error)
+      return {
+        success: false,
+        error: 'Failed to get game invites'
+      }
+    }
+  }
+
   private async getUserBasicInfo(userId: string): Promise<any> {
     try {
       const [user] = await db

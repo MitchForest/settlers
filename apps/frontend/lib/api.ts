@@ -1,11 +1,15 @@
 import { supabase } from './supabase'
 import { SessionValidation } from './session-types'
+import type { GameInfo, AvailableGamesFilters } from './types/lobby-types'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
+// Re-export types for convenience
+export type { GameInfo, AvailableGamesFilters } from './types/lobby-types'
+
 export async function testConnection() {
   try {
-    const response = await fetch(`${API_URL}/api/test`)
+    const response = await fetch(`${API_URL}/api/test-connection`)
     const data = await response.json()
     return data
   } catch (error) {
@@ -162,10 +166,10 @@ export async function getFriendRequests() {
 
 export async function searchUsers(query: string, limit = 10) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/search`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ query, limit })
+  const params = new URLSearchParams({ query, limit: limit.toString() })
+  const response = await fetch(`${API_URL}/api/friends/search?${params}`, {
+    method: 'GET',
+    headers
   })
   
   if (!response.ok) {
@@ -177,7 +181,7 @@ export async function searchUsers(query: string, limit = 10) {
 
 export async function sendFriendRequest(toUserId: string, message?: string) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/request`, {
+  const response = await fetch(`${API_URL}/api/friends/send-request`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ toUserId, message })
@@ -192,9 +196,10 @@ export async function sendFriendRequest(toUserId: string, message?: string) {
 
 export async function acceptFriendRequest(requestId: string) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/request/${requestId}/accept`, {
+  const response = await fetch(`${API_URL}/api/friends/accept-request`, {
     method: 'POST',
-    headers
+    headers,
+    body: JSON.stringify({ requestId })
   })
   
   if (!response.ok) {
@@ -206,9 +211,10 @@ export async function acceptFriendRequest(requestId: string) {
 
 export async function rejectFriendRequest(requestId: string) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/request/${requestId}/reject`, {
+  const response = await fetch(`${API_URL}/api/friends/reject-request`, {
     method: 'POST',
-    headers
+    headers,
+    body: JSON.stringify({ requestId })
   })
   
   if (!response.ok) {
@@ -220,9 +226,10 @@ export async function rejectFriendRequest(requestId: string) {
 
 export async function removeFriend(friendshipId: string) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/${friendshipId}`, {
-    method: 'DELETE',
-    headers
+  const response = await fetch(`${API_URL}/api/friends/remove`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ friendshipId })
   })
   
   if (!response.ok) {
@@ -246,12 +253,12 @@ export async function getGameInvites() {
   return response.json()
 }
 
-export async function sendGameInvites(gameId: string, friendIds: string[], message?: string) {
+export async function sendGameInvite(gameId: string, toUserId: string, message?: string) {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/invites`, {
+  const response = await fetch(`${API_URL}/api/invites/send`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ gameId, friendIds, message })
+    body: JSON.stringify({ gameId, toUserId, message })
   })
   
   if (!response.ok) {
@@ -259,6 +266,26 @@ export async function sendGameInvites(gameId: string, friendIds: string[], messa
   }
   
   return response.json()
+}
+
+export async function sendGameInvites(gameId: string, friendIds: string[], message?: string) {
+  // Send individual invites to each friend
+  const invitePromises = friendIds.map(friendId => 
+    sendGameInvite(gameId, friendId, message)
+  )
+  
+  const results = await Promise.allSettled(invitePromises)
+  
+  // Return summary of results
+  const successful = results.filter(r => r.status === 'fulfilled').length
+  const failed = results.filter(r => r.status === 'rejected').length
+  
+  return {
+    success: failed === 0,
+    successful,
+    failed,
+    total: friendIds.length
+  }
 }
 
 export async function acceptGameInvite(inviteId: string) {
@@ -319,33 +346,6 @@ export async function getFriendsPresence() {
 }
 
 // Available Games API
-export interface AvailableGamesFilters {
-  phase?: 'lobby' | 'initial_placement' | 'main_game'
-  minPlayers?: number
-  maxPlayers?: number
-  search?: string
-  limit?: number
-  offset?: number
-}
-
-export interface GameInfo {
-  id: string
-  gameCode: string
-  hostUserId?: string
-  hostPlayerName: string
-  hostAvatarEmoji: string
-  playerCount: number
-  maxPlayers: number
-  isPublic: boolean
-  createdAt: string
-  phase: 'lobby' | 'initial_placement' | 'main_game' | 'ended'
-  hostFriend?: {
-    id: string
-    name: string
-    email: string
-    avatarEmoji: string | null
-  }
-}
 
 export interface AvailableGamesResponse {
   friendsGames: GameInfo[]

@@ -1,10 +1,18 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
-import type { GameAction, PlayerId, Player, LobbyPlayer } from '@settlers/game-engine'
+import type { PlayerId, LobbyPlayer, LightGameAction } from '../lib/types/lobby-types'
+import type { ReactFlowInstance } from 'reactflow'
+import { API_URL } from '../lib/api'
+import { supabase } from '../lib/supabase'
+import { ReliableWebSocketManager, ConnectionStatus } from '../lib/websocket-manager'
 
 // TODO: GameState will be dynamically imported when game engine loads
 type GameState = any
+// TODO: Player will be dynamically imported when game engine loads  
+type Player = any
+// TODO: GameAction will be dynamically imported when game engine loads
+type GameAction = LightGameAction
 
 // Loading states for dynamic packages
 interface GameEngineState {
@@ -13,10 +21,6 @@ interface GameEngineState {
   isLoading: boolean
   error: string | null
 }
-import type { ReactFlowInstance } from 'reactflow'
-import { API_URL } from '../lib/api'
-import { supabase } from '../lib/supabase'
-import { ReliableWebSocketManager, ConnectionStatus } from '../lib/websocket-manager'
 
 export interface GameStore extends GameEngineState {
   // Core State

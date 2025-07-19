@@ -2,22 +2,117 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { friendsCommandService } from '../services/friends-command-service'
+import { optionalAuthMiddleware } from '../middleware/auth'
 
 const app = new Hono()
 
-// Send friend request
+// Apply optional auth middleware to all friend routes
+app.use('*', optionalAuthMiddleware)
+
+// **QUERY ENDPOINTS - Project current state from events**
+
+// GET /api/friends - Get current user's friends list
+app.get('/', async (c) => {
+  const user = c.get('user')
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401)
+  }
+  
+  try {
+    const result = await friendsCommandService.getFriendsState(user.id)
+
+    if (result.success && result.state) {
+      // Return just the friends array for frontend compatibility
+      const friends = Array.from(result.state.friends.values())
+      return c.json({ success: true, friends })
+    } else {
+      return c.json({ success: false, error: result.error || 'Failed to get friends' }, 400)
+    }
+  } catch (error) {
+    console.error('Error getting friends:', error)
+    return c.json({ error: 'Failed to get friends' }, 500)
+  }
+})
+
+// GET /api/friends/requests - Get current user's friend requests
+app.get('/requests', async (c) => {
+  const user = c.get('user')
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401)
+  }
+  
+  try {
+    const result = await friendsCommandService.getFriendsState(user.id)
+
+    if (result.success && result.state) {
+      // Return both incoming and outgoing requests
+      const incomingRequests = Array.from(result.state.incomingRequests.values())
+      const outgoingRequests = Array.from(result.state.outgoingRequests.values())
+      
+      return c.json({ 
+        success: true, 
+        incomingRequests,
+        outgoingRequests,
+        // For backwards compatibility, also include a combined array
+        requests: [...incomingRequests, ...outgoingRequests]
+      })
+    } else {
+      return c.json({ success: false, error: result.error || 'Failed to get requests' }, 400)
+    }
+  } catch (error) {
+    console.error('Error getting friend requests:', error)
+    return c.json({ error: 'Failed to get friend requests' }, 500)
+  }
+})
+
+// GET /api/friends/search - Search users (updated to GET method)
+app.get('/search', 
+  zValidator('query', z.object({
+    query: z.string(),
+    limit: z.string().optional()
+  })),
+  async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
+    try {
+      const { query, limit } = c.req.valid('query')
+      
+      const results = await friendsCommandService.searchUsers(
+        user.id, 
+        query, 
+        limit ? parseInt(limit) : 20
+      )
+
+      return c.json({ success: true, users: results })
+    } catch (error) {
+      console.error('Error searching users:', error)
+      return c.json({ success: false, error: 'Internal server error' }, 500)
+    }
+  }
+)
+
+// **COMMAND ENDPOINTS**
+
+// POST /api/friends/send-request - Send friend request
 app.post('/send-request', 
   zValidator('json', z.object({
-    fromUserId: z.string(),
     toUserId: z.string(),
     message: z.string().optional()
   })),
   async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
     try {
-      const { fromUserId, toUserId, message } = c.req.valid('json')
+      const { toUserId, message } = c.req.valid('json')
       
       const result = await friendsCommandService.sendFriendRequest({
-        fromUserId,
+        fromUserId: user.id,
         toUserId,
         message
       })
@@ -34,19 +129,23 @@ app.post('/send-request',
   }
 )
 
-// Accept friend request
+// POST /api/friends/accept-request - Accept friend request
 app.post('/accept-request',
   zValidator('json', z.object({
-    requestId: z.string(),
-    acceptingUserId: z.string()
+    requestId: z.string()
   })),
   async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
     try {
-      const { requestId, acceptingUserId } = c.req.valid('json')
+      const { requestId } = c.req.valid('json')
       
       const result = await friendsCommandService.acceptFriendRequest({
         requestId,
-        acceptingUserId
+        acceptingUserId: user.id
       })
 
       if (result.success) {
@@ -61,19 +160,23 @@ app.post('/accept-request',
   }
 )
 
-// Reject friend request
+// POST /api/friends/reject-request - Reject friend request
 app.post('/reject-request',
   zValidator('json', z.object({
-    requestId: z.string(),
-    rejectingUserId: z.string()
+    requestId: z.string()
   })),
   async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
     try {
-      const { requestId, rejectingUserId } = c.req.valid('json')
+      const { requestId } = c.req.valid('json')
       
       const result = await friendsCommandService.rejectFriendRequest({
         requestId,
-        rejectingUserId
+        rejectingUserId: user.id
       })
 
       if (result.success) {
@@ -88,19 +191,23 @@ app.post('/reject-request',
   }
 )
 
-// Remove friend
+// POST /api/friends/remove - Remove friend
 app.post('/remove',
   zValidator('json', z.object({
-    friendshipId: z.string(),
-    removingUserId: z.string()
+    friendshipId: z.string()
   })),
   async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
     try {
-      const { friendshipId, removingUserId } = c.req.valid('json')
+      const { friendshipId } = c.req.valid('json')
       
       const result = await friendsCommandService.removeFriend({
         friendshipId,
-        removingUserId
+        removingUserId: user.id
       })
 
       if (result.success) {
@@ -115,59 +222,6 @@ app.post('/remove',
   }
 )
 
-// Get friends state
-app.get('/state/:userId', async (c) => {
-  try {
-    const userId = c.req.param('userId')
-    
-    const result = await friendsCommandService.getFriendsState(userId)
 
-    if (result.success) {
-      // Convert Maps to objects for JSON serialization
-      const serializedState = {
-        ...result.state!,
-        friends: Array.from(result.state!.friends.values()),
-        incomingRequests: Array.from(result.state!.incomingRequests.values()),
-        outgoingRequests: Array.from(result.state!.outgoingRequests.values()),
-        presence: Array.from(result.state!.presence.entries()).map(([userId, presence]) => ({
-          userId,
-          ...presence
-        }))
-      }
-
-      return c.json({ success: true, data: serializedState })
-    } else {
-      return c.json({ success: false, error: result.error }, 400)
-    }
-  } catch (error) {
-    console.error('Error getting friends state:', error)
-    return c.json({ success: false, error: 'Internal server error' }, 500)
-  }
-})
-
-// Search users
-app.get('/search', 
-  zValidator('query', z.object({
-    currentUserId: z.string(),
-    query: z.string(),
-    limit: z.string().optional()
-  })),
-  async (c) => {
-    try {
-      const { currentUserId, query, limit } = c.req.valid('query')
-      
-      const results = await friendsCommandService.searchUsers(
-        currentUserId, 
-        query, 
-        limit ? parseInt(limit) : 20
-      )
-
-      return c.json({ success: true, data: results })
-    } catch (error) {
-      console.error('Error searching users:', error)
-      return c.json({ success: false, error: 'Internal server error' }, 500)
-    }
-  }
-)
 
 export { app as friendsRouter } 

@@ -1,6 +1,6 @@
 'use client'
 
-import { LobbyPlayer } from '@settlers/game-engine'
+import type { LobbyPlayer } from '@/lib/types/lobby-types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'

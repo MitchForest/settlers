@@ -43,6 +43,13 @@
       "when": 1752848810189,
       "tag": "0005_striped_maddog",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1752885217289,
+      "tag": "0006_sudden_robin_chapel",
+      "breakpoints": true
     }
   ]
 }

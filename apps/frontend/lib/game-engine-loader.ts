@@ -1,5 +1,7 @@
 // Dynamic Game Engine Loader - Only loads heavy game logic when needed
 
+import { logPackageLoad } from './package-loading-monitor'
+
 let gameEnginePromise: Promise<unknown> | null = null
 let aiSystemPromise: Promise<unknown> | null = null
 
@@ -9,6 +11,7 @@ let aiSystemPromise: Promise<unknown> | null = null
  */
 export async function loadGameEngine() {
   if (!gameEnginePromise) {
+    logPackageLoad('game-engine', 'Game logic required')
     console.log('🎮 Loading game engine...')
     // Dynamic import will be resolved at runtime when packages are built
     gameEnginePromise = import('@settlers/game-engine' as string).catch(() => {
@@ -25,6 +28,7 @@ export async function loadGameEngine() {
  */
 export async function loadAISystem() {
   if (!aiSystemPromise) {
+    logPackageLoad('ai-system', 'AI players detected')
     console.log('🤖 Loading AI system...')
     aiSystemPromise = import('@settlers/ai-system' as string).catch(() => {
       console.warn('AI system not available yet')
@@ -49,7 +53,40 @@ export async function loadCoreLite() {
 /**
  * Checks if AI players are present in the game
  */
-export function hasAIPlayers(players: unknown[]): boolean {
+export function hasAIPlayers(players: Array<{ isAI?: boolean }>): boolean {
+  return players.some(player => player.isAI === true)
+}
+
+/**
+ * Loads game engine types and runtime together
+ */
+export async function loadGameEngineWithTypes() {
+  if (!gameEnginePromise) {
+    console.log('🎮 Loading game engine with types...')
+    gameEnginePromise = import('@settlers/game-engine' as string).catch(() => {
+      console.warn('Game engine not available yet')
+      return {}
+    })
+  }
+  return gameEnginePromise
+}
+
+/**
+ * Loads AI system with proper conditional logic
+ */
+export async function loadAISystemConditionally(players: Array<{ isAI?: boolean }>) {
+  if (!hasAIPlayers(players)) {
+    console.log('🚫 No AI players detected, skipping AI system load')
+    return null
+  }
+  
+  return loadAISystem()
+}
+
+/**
+ * Load packages based on route and game state
+ */
+export function hasAIPlayersLegacy(players: unknown[]): boolean {
   return players.some((player: unknown) => {
     if (typeof player !== 'object' || player === null) return false
     
@@ -66,7 +103,7 @@ export async function loadGamePackages(players: unknown[]) {
   console.log('🎮 Loading game engine...')
   const gameEnginePromise = loadGameEngine()
   
-  const aiSystemPromise = hasAIPlayers(players) 
+  const aiSystemPromise = hasAIPlayersLegacy(players) 
     ? loadAISystem()
     : Promise.resolve(null)
   

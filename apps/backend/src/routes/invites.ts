@@ -17,9 +17,13 @@ app.get('/', async (c) => {
   }
   
   try {
-    // For now, return empty invites since we need to implement projector
-    // TODO: Implement game invite projector to get current invite state
-    return c.json({ invites: [] })
+    const result = await gameInviteCommandService.getGameInvites(user.id)
+    
+    if (result.success) {
+      return c.json({ success: true, invites: result.invites })
+    } else {
+      return c.json({ success: false, error: result.error }, 400)
+    }
   } catch (error) {
     console.error('Error getting game invites:', error)
     return c.json({ error: 'Failed to get game invites' }, 500)
@@ -29,17 +33,21 @@ app.get('/', async (c) => {
 // POST /api/invites/send - Send game invite
 app.post('/send',
   zValidator('json', z.object({
-    fromUserId: z.string(),
     toUserId: z.string(),
     gameId: z.string(),
     message: z.string().optional()
   })),
   async (c) => {
+    const user = c.get('user')
+    if (!user) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+    
     try {
-      const { fromUserId, toUserId, gameId, message } = c.req.valid('json')
+      const { toUserId, gameId, message } = c.req.valid('json')
       
       const result = await gameInviteCommandService.sendGameInvite({
-        fromUserId,
+        fromUserId: user.id,
         toUserId,
         gameId,
         message

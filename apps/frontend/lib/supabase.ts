@@ -24,6 +24,8 @@ export interface UserProfile {
   id: string
   email: string
   name: string
+  username: string
+  displayName: string
   avatarEmoji: string | null
   createdAt: string
   updatedAt: string

@@ -1,7 +1,7 @@
 import { GameState, GameAction, PlayerId } from '../types'
-import { BaseActionProcessor, ValidationResult, ProcessResult } from './index'
 import { rollDice, getTotalResourceCount } from '../core/calculations'
 import { GAME_RULES } from '../constants'
+import { BaseActionProcessor, ValidationResult, ProcessResult, StateManager, EventFactory, PostProcessorChain } from './processor-base'
 
 interface RollAction extends GameAction {
   type: 'roll'

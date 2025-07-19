@@ -120,11 +120,15 @@ export const userProfiles = pgTable("user_profiles", {
   email: text("email").notNull(),
   name: text("name").notNull(),
   avatarEmoji: text("avatar_emoji"),
+  username: text("username").notNull(), // Add missing username column
+  displayName: text("display_name").notNull(), // Add missing display_name column  
   createdAt: timestamp("created_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
 }, (table) => ({
   emailUnique: unique().on(table.email),
+  usernameUnique: unique().on(table.username),
   emailIdx: index("user_profiles_email_idx").on(table.email),
+  usernameIdx: index("user_profiles_username_idx").on(table.username),
   
   // RLS Policies
   // Allow authenticated users to view all profiles
