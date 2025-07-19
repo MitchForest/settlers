@@ -3,3 +3,5 @@
 -catan MCTS: https://spronck.net/pubs/ACG12Szita.pdf
 
 -resource inherent value: https://www.alexcates.com/post/board-game-breakdown-catan-resource-value
+
+-bot types: https://docs.catanatron.com/advanced/making-catanatron-stronger

@@ -169,90 +169,141 @@ export class UnifiedWebSocketServer {
       return
     }
 
-    // 🚫 CONNECTION DEDUPLICATION: Check for existing connection with this session
+    // 🚫 IMPROVED CONNECTION DEDUPLICATION: Atomic check and replace
     const existingConnection = this.sessionConnections.get(decodedToken)
-    if (existingConnection && existingConnection.ws.readyState === WebSocket.OPEN) {
-      console.log('🔍 Duplicate connection detected for session, closing existing connection')
+    if (existingConnection) {
+      console.log('🔍 Duplicate connection detected for session')
       
-      // Close the existing connection gracefully
-      existingConnection.ws.close(4005, 'New session connection established')
-      this.handleDisconnection(existingConnection.ws)
+      // Check if existing connection is still alive
+      if (existingConnection.ws.readyState === WebSocket.OPEN) {
+        console.log('🔍 Closing existing live connection gracefully')
+        
+        // 🔒 ATOMIC REPLACEMENT: Remove old connection immediately to prevent race condition
+        this.sessionConnections.delete(decodedToken)
+        this.handleDisconnection(existingConnection.ws)
+        
+        // Close the old connection
+        existingConnection.ws.close(4005, 'New session connection established')
+      } else {
+        // Old connection is already dead, just clean up tracking
+        console.log('🔍 Removing stale connection reference')
+        this.sessionConnections.delete(decodedToken)
+        this.handleDisconnection(existingConnection.ws)
+      }
     }
 
     console.log('✅ Session validated for user:', payload.playerId, 'game:', payload.gameId)
 
-    // Auto-join game based on session
+    // Auto-join game based on session with timeout
     this.handleAuthenticatedConnection(ws, payload, decodedToken)
   }
 
   private async handleAuthenticatedConnection(ws: WebSocket, session: GameSessionPayload, sessionToken: string): Promise<void> {
+    const connectionTimeoutMs = 15000 // 15 second timeout
+    let timeoutId: NodeJS.Timeout | undefined
+    
     try {
-      // First, try to join the game - it will handle existing player check
-      const result = await lobbyCommandService.joinGame({
-        gameId: session.gameId,
-        userId: session.userId,
-        playerName: session.playerName,
-        avatarEmoji: session.avatarEmoji
+      // Set up connection timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Connection timeout during auto-join'))
+        }, connectionTimeoutMs)
       })
-
-      let playerId: string
-
-      if (!result.success) {
-        // If join failed because user already in game, that's OK - they're the creator/reconnecting
-        if (result.error?.includes('already in this game')) {
-          console.log('✅ User already in game (reconnecting), connecting:', session.userId)
-          // Use the playerId from the session since they're already in the game
-          playerId = session.playerId
-        } else {
-          console.log('❌ Failed to auto-join game:', result.error)
-          this.sendError(ws, `Auto-join failed: ${result.error}`, { 
-            gameId: session.gameId,
-            userId: session.userId,
-            recoverable: true 
-          })
-          ws.close(4003, `Join failed: ${result.error}`)
-          return
-        }
-      } else {
-        console.log('✅ Auto-joined user to game:', session.userId)
-        playerId = result.playerId || session.playerId
-      }
-
-      // Set up connection tracking with session
-      const connection: ClientConnection = {
-        ws,
-        gameId: session.gameId,
-        playerId: result.playerId,
-        userId: session.userId,
-        lastSequence: 0,
-        isAlive: true,
-        session
-      }
-
-      this.setupHeartbeat(connection)
-      this.connectionToGame.set(ws, connection)
       
-      // 🔗 SESSION TRACKING: Track connection by session token for deduplication
-      this.sessionConnections.set(sessionToken, connection)
-
-      if (!this.gameConnections.has(session.gameId)) {
-        this.gameConnections.set(session.gameId, new Set())
+      // Race between auto-join and timeout
+      await Promise.race([
+        this.performAutoJoin(ws, session, sessionToken),
+        timeoutPromise
+      ])
+      
+      // Clear timeout on success
+      if (timeoutId) {
+        clearTimeout(timeoutId)
       }
-      this.gameConnections.get(session.gameId)!.add(connection)
-
-      // Send success response
-      this.sendResponse(ws, {
-        success: true,
-        data: { message: 'Auto-joined game successfully' }
-      })
-
-      console.log('✅ User auto-joined game:', session.gameId)
-
+      
     } catch (error) {
-      console.error('❌ Error in auto-join:', error)
-      ws.close(4004, 'Server error during join')
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      
+      console.error('❌ Error in authenticated connection:', error)
+      
+      if (error instanceof Error && error.message.includes('timeout')) {
+        this.sendError(ws, 'Connection timeout during game join', { 
+          gameId: session.gameId,
+          userId: session.userId,
+          timeout: connectionTimeoutMs
+        })
+        ws.close(4008, 'Connection timeout')
+      } else {
+        ws.close(4004, 'Server error during join')
+      }
+    }
+  }
+
+  private async performAutoJoin(ws: WebSocket, session: GameSessionPayload, sessionToken: string): Promise<void> {
+    // First, try to join the game - it will handle existing player check
+    const result = await lobbyCommandService.joinGame({
+      gameId: session.gameId,
+      userId: session.userId,
+      playerName: session.playerName,
+      avatarEmoji: session.avatarEmoji
+    })
+
+    let playerId: string
+
+    if (!result.success) {
+      // If join failed because user already in game, that's OK - they're the creator/reconnecting
+      if (result.error?.includes('already in this game')) {
+        console.log('✅ User already in game (reconnecting), connecting:', session.userId)
+        // Use the playerId from the session since they're already in the game
+        playerId = session.playerId
+      } else {
+        console.log('❌ Failed to auto-join game:', result.error)
+        this.sendError(ws, `Auto-join failed: ${result.error}`, { 
+          gameId: session.gameId,
+          userId: session.userId,
+          recoverable: true 
+        })
+        throw new Error(`Join failed: ${result.error}`)
+      }
+    } else {
+      console.log('✅ Auto-joined user to game:', session.userId)
+      playerId = result.playerId || session.playerId
     }
 
+    // Set up connection tracking with session
+    const connection: ClientConnection = {
+      ws,
+      gameId: session.gameId,
+      playerId: result.playerId,
+      userId: session.userId,
+      lastSequence: 0,
+      isAlive: true,
+      session
+    }
+
+    this.setupHeartbeat(connection)
+    this.connectionToGame.set(ws, connection)
+    
+    // 🔗 SESSION TRACKING: Track connection by session token for deduplication
+    this.sessionConnections.set(sessionToken, connection)
+
+    if (!this.gameConnections.has(session.gameId)) {
+      this.gameConnections.set(session.gameId, new Set())
+    }
+    this.gameConnections.get(session.gameId)!.add(connection)
+
+    // Send success response
+    this.sendResponse(ws, {
+      success: true,
+      data: { message: 'Auto-joined game successfully' }
+    })
+
+    console.log('✅ User auto-joined game:', session.gameId)
+
+    // Set up message handlers after successful connection
     ws.on('message', async (data: Buffer) => {
       try {
         const message: WebSocketMessage = JSON.parse(data.toString())
@@ -279,6 +330,10 @@ export class UnifiedWebSocketServer {
         conn.isAlive = true
       }
     })
+
+    // Send initial lobby state and start live updates
+    await this.sendLobbyState(connection)
+    await this.startLiveUpdates(connection)
   }
 
   private setupHeartbeat(connection: ClientConnection): void {

@@ -80,7 +80,7 @@ describe('Simple Next VP Strategy', () => {
   async function runSingleGame(): Promise<GameResult> {
     const startTime = Date.now()
     let turnCount = 0
-    const maxTurns = 100
+    const maxTurns = 80
     let lastPhase = ''
     
     // Use the same pattern as the working test: maintain gameState directly
@@ -127,9 +127,18 @@ describe('Simple Next VP Strategy', () => {
         // DEBUG: Log every action attempt with current resources
         const player = gameState.players.get(currentPlayer)!
         const totalResources = Object.values(player.resources).reduce((sum, count) => sum + count, 0)
-        console.log(`🎯 Turn ${turnCount}: Player ${currentPlayer} (${totalResources} resources: ${JSON.stringify(player.resources)}) attempting ${action.type} in phase ${gameState.phase}`)
+        console.log(`\n🎯 Turn ${turnCount}: Player ${currentPlayer} attempting ${action.type} in phase ${gameState.phase}`)
+        console.log(`   💰 Resources: ${totalResources} total ${JSON.stringify(player.resources)}`)
         if (action.data) {
-          console.log(`   Data:`, JSON.stringify(action.data, null, 2))
+          console.log(`   📋 Data:`, JSON.stringify(action.data, null, 2))
+        }
+        
+        // Special logging for road building attempts
+        if (action.type === 'build' && action.data?.buildingType === 'road') {
+          const wood = player.resources.wood || 0
+          const brick = player.resources.brick || 0
+          console.log(`   🛣️ ROAD BUILD: Has ${wood} wood, ${brick} brick (needs 1 each)`)
+          console.log(`   🎯 Target edge: ${action.data.edgeId}`)
         }
         
         // Execute action through game engine - SAME AS WORKING TEST
@@ -152,11 +161,46 @@ describe('Simple Next VP Strategy', () => {
           console.log(`✅ Action succeeded: ${action.type}`)
           
           // Log dice rolls and resource distribution
-          if (action.type === 'roll' && 'diceResult' in result) {
-            console.log(`🎲 Rolled: ${(result as any).diceResult?.total || 'unknown'}`)
-            if ((result as any).diceResult?.total === 7) {
-              console.log(`💥 7 ROLLED - Players will discard!`)
+          if (action.type === 'roll') {
+            const rollResult = (result as any).diceResult
+            if (rollResult) {
+              console.log(`🎲 Rolled: ${rollResult.total}`)
+              if (rollResult.total === 7) {
+                console.log(`💥 7 ROLLED - Players will discard!`)
+              } else {
+                // Log who got resources
+                const beforeResources: Record<string, any> = {}
+                for (const [playerId, player] of gameState.players) {
+                  beforeResources[playerId] = { ...player.resources }
+                }
+                
+                // Check after state for resource changes
+                for (const [playerId, playerAfter] of result.newState.players) {
+                  const before = beforeResources[playerId]
+                  const after = playerAfter.resources
+                  const gained: string[] = []
+                  
+                  for (const [resource, afterCount] of Object.entries(after)) {
+                    const beforeCount = before[resource] || 0
+                    if (afterCount > beforeCount) {
+                      gained.push(`+${afterCount - beforeCount} ${resource}`)
+                    }
+                  }
+                  
+                  if (gained.length > 0) {
+                    const totalAfter = Object.values(after).reduce((sum: number, count: number) => sum + count, 0)
+                    console.log(`📈 ${playerId}: ${gained.join(', ')} (total: ${totalAfter})`)
+                  }
+                }
+              }
             }
+          }
+          
+          // Log building actions in detail
+          if (action.type === 'build' || action.type === 'placeBuilding' || action.type === 'placeRoad') {
+            const playerAfter = result.newState.players.get(currentPlayer)!
+            const totalResources = Object.values(playerAfter.resources).reduce((sum, count) => sum + count, 0)
+            console.log(`🔧 ${currentPlayer} after building: ${totalResources} resources ${JSON.stringify(playerAfter.resources)}`)
           }
         }
         
@@ -164,8 +208,8 @@ describe('Simple Next VP Strategy', () => {
         gameState = result.newState
         turnCount++
         
-        // Progress logging every 25 turns  
-        if (turnCount % 25 === 0) {
+        // Progress logging every 20 turns with detailed building info
+        if (turnCount % 20 === 0) {
           const currentVPs = getFinalVictoryPoints(gameState)
           const maxVP = Math.max(...Object.values(currentVPs))
           console.log(`⏰ Turn ${turnCount}: Max VP = ${maxVP}`)

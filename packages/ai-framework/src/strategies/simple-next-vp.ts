@@ -22,22 +22,9 @@ export class SimpleNextVPStrategy {
   selectBestAction(gameState: GameState, playerId: PlayerId): GameAction | null {
     const player = gameState.players.get(playerId)!
     
-    console.log(`🤔 SimpleNextVP deciding for ${playerId} with resources:`, player.resources)
+    console.log(`🤔 SimpleNextVP deciding for ${playerId}`)
     
-    // 1. Can I build a settlement? (1 VP)
-    if (this.canAfford(player.resources, 'settlement')) {
-      const spots = getPossibleSettlementPositions(gameState, playerId)
-      if (spots.length > 0) {
-        console.log(`🏠 Building settlement at ${spots[0]}`)
-        return { 
-          type: 'build', 
-          playerId, 
-          data: { buildingType: 'settlement', vertexId: spots[0] }
-        }
-      }
-    }
-    
-    // 2. Can I upgrade to city? (1 VP + production boost)
+    // 1. Can I upgrade to city? (1 VP + production boost) - Always prioritize if possible
     if (this.canAfford(player.resources, 'city')) {
       const settlements = this.getPlayerSettlements(gameState, playerId)
       if (settlements.length > 0) {
@@ -45,39 +32,44 @@ export class SimpleNextVPStrategy {
         return { 
           type: 'build', 
           playerId, 
-          data: { buildingType: 'city', vertexId: settlements[0] }
+          data: { buildingType: 'city', position: settlements[0] }
         }
       }
     }
     
-    // 3. Try 4:1 trade if close to affording settlement
-    const tradeAction = this.tryBasicTrade(gameState, playerId)
-    if (tradeAction) {
-      console.log(`💱 Making 4:1 trade`)
-      return tradeAction
-    }
+    // 2. Strategic settlement planning
+    const settlementPlan = this.planNextSettlement(gameState, playerId)
     
-    // 4. Can I build strategic road toward settlement?
-    if (this.canAfford(player.resources, 'road')) {
-      const strategicRoad = this.selectStrategicRoad(gameState, playerId)
-      if (strategicRoad) {
-        console.log(`🛣️ Building strategic road: ${strategicRoad}`)
-        return { 
-          type: 'build', 
-          playerId, 
-          data: { buildingType: 'road', edgeId: strategicRoad }
-        }
+    if (settlementPlan.canBuildNow) {
+      console.log(`🏠 Building settlement at ${settlementPlan.targetVertex}`)
+      return { 
+        type: 'build', 
+        playerId, 
+                  data: { buildingType: 'settlement', position: settlementPlan.targetVertex }
+      }
+    } else if (settlementPlan.needsRoadFirst && this.canAfford(player.resources, 'road')) {
+      console.log(`🛣️ Building road toward future settlement: ${settlementPlan.nextRoadNeeded}`)
+      return { 
+        type: 'build', 
+        playerId, 
+                  data: { buildingType: 'road', position: settlementPlan.nextRoadNeeded }
+      }
+    } else if (settlementPlan.canTradeForSettlement) {
+      const tradeAction = this.tryBasicTrade(gameState, playerId)
+      if (tradeAction) {
+        console.log(`💱 Trading to afford settlement`)
+        return tradeAction
       }
     }
     
-    // 5. Buy dev card (maybe VP card)
+    // 3. Buy dev card (maybe VP card)
     if (this.canAfford(player.resources, 'devCard')) {
       console.log(`🃏 Buying development card`)
       return { type: 'buyCard', playerId, data: {} }
     }
     
-    // 6. End turn
-    console.log(`😴 Nothing to do, ending turn`)
+    // 4. End turn and save resources
+    console.log(`😴 Saving resources for settlement`)
     return { type: 'endTurn', playerId, data: {} }
   }
 
@@ -124,15 +116,63 @@ export class SimpleNextVPStrategy {
   }
 
   /**
-   * Select strategic road that gets us closer to good settlement spots
+   * Plan the next settlement: check if we can build now, need roads first, or should trade
    */
-  private selectStrategicRoad(gameState: GameState, playerId: PlayerId): string | null {
-    const possibleRoads = getPossibleRoadPositions(gameState, playerId)
-    if (possibleRoads.length === 0) return null
+  private planNextSettlement(gameState: GameState, playerId: PlayerId): {
+    canBuildNow: boolean
+    needsRoadFirst: boolean
+    canTradeForSettlement: boolean
+    targetVertex?: string
+    nextRoadNeeded?: string
+  } {
+    const player = gameState.players.get(playerId)!
     
-    // For now, just take first available (can be improved with pathfinding later)
-    // TODO: Score roads by distance to good settlement vertices
-    return possibleRoads[0]
+    // Check if we can afford settlement right now
+    const canAffordSettlement = this.canAfford(player.resources, 'settlement')
+    const availableSpots = getPossibleSettlementPositions(gameState, playerId)
+    
+    if (canAffordSettlement && availableSpots.length > 0) {
+      return {
+        canBuildNow: true,
+        needsRoadFirst: false,
+        canTradeForSettlement: false,
+        targetVertex: availableSpots[0]
+      }
+    }
+    
+    // Check if we can trade for settlement (1 resource short)
+    const settlementShortfall = this.calculateShortfall(player.resources, BUILDING_COSTS.settlement)
+    const totalShortfall = Object.values(settlementShortfall).reduce((sum, n) => sum + n, 0)
+    const hasExcessFor4to1 = this.findResourceWithAmount(player.resources, 4) !== null
+    
+    if (totalShortfall === 1 && hasExcessFor4to1 && availableSpots.length > 0) {
+      return {
+        canBuildNow: false,
+        needsRoadFirst: false,
+        canTradeForSettlement: true,
+        targetVertex: availableSpots[0]
+      }
+    }
+    
+    // Need to build roads first to reach settlement spots
+    if (availableSpots.length === 0) {
+      const possibleRoads = getPossibleRoadPositions(gameState, playerId)
+      if (possibleRoads.length > 0) {
+        return {
+          canBuildNow: false,
+          needsRoadFirst: true,
+          canTradeForSettlement: false,
+          nextRoadNeeded: possibleRoads[0] // TODO: Pick road toward best future settlement spot
+        }
+      }
+    }
+    
+    // Can't do anything useful right now
+    return {
+      canBuildNow: false,
+      needsRoadFirst: false,
+      canTradeForSettlement: false
+    }
   }
 
   /**
