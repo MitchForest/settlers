@@ -126,6 +126,7 @@ export class UnifiedWebSocketServer {
   private wss: WebSocketServer
   private gameConnections = new Map<string, Set<ClientConnection>>()
   private connectionToGame = new Map<WebSocket, ClientConnection>()
+  private sessionConnections = new Map<string, ClientConnection>() // Track by session token
   private cleanupInterval?: NodeJS.Timeout
 
   constructor(port: number = 8080) {
@@ -156,9 +157,11 @@ export class UnifiedWebSocketServer {
       ws.close(4001, 'Authentication required')
       return
     }
+    
+    const decodedToken = decodeURIComponent(sessionToken)
 
     // Validate session token
-    const { valid, payload, error } = SimpleJWT.verify(decodeURIComponent(sessionToken))
+    const { valid, payload, error } = SimpleJWT.verify(decodedToken)
     
     if (!valid || !payload) {
       console.log('❌ Invalid session token:', error)
@@ -166,13 +169,23 @@ export class UnifiedWebSocketServer {
       return
     }
 
+    // 🚫 CONNECTION DEDUPLICATION: Check for existing connection with this session
+    const existingConnection = this.sessionConnections.get(decodedToken)
+    if (existingConnection && existingConnection.ws.readyState === WebSocket.OPEN) {
+      console.log('🔍 Duplicate connection detected for session, closing existing connection')
+      
+      // Close the existing connection gracefully
+      existingConnection.ws.close(4005, 'New session connection established')
+      this.handleDisconnection(existingConnection.ws)
+    }
+
     console.log('✅ Session validated for user:', payload.playerId, 'game:', payload.gameId)
 
     // Auto-join game based on session
-    this.handleAuthenticatedConnection(ws, payload)
+    this.handleAuthenticatedConnection(ws, payload, decodedToken)
   }
 
-  private async handleAuthenticatedConnection(ws: WebSocket, session: GameSessionPayload): Promise<void> {
+  private async handleAuthenticatedConnection(ws: WebSocket, session: GameSessionPayload, sessionToken: string): Promise<void> {
     try {
       // First, try to join the game - it will handle existing player check
       const result = await lobbyCommandService.joinGame({
@@ -185,13 +198,18 @@ export class UnifiedWebSocketServer {
       let playerId: string
 
       if (!result.success) {
-        // If join failed because user already in game, that's OK - they're the creator
+        // If join failed because user already in game, that's OK - they're the creator/reconnecting
         if (result.error?.includes('already in this game')) {
-          console.log('✅ User already in game (creator), connecting:', session.userId)
+          console.log('✅ User already in game (reconnecting), connecting:', session.userId)
           // Use the playerId from the session since they're already in the game
           playerId = session.playerId
         } else {
-          console.log('❌ Failed to join game:', result.error)
+          console.log('❌ Failed to auto-join game:', result.error)
+          this.sendError(ws, `Auto-join failed: ${result.error}`, { 
+            gameId: session.gameId,
+            userId: session.userId,
+            recoverable: true 
+          })
           ws.close(4003, `Join failed: ${result.error}`)
           return
         }
@@ -213,6 +231,9 @@ export class UnifiedWebSocketServer {
 
       this.setupHeartbeat(connection)
       this.connectionToGame.set(ws, connection)
+      
+      // 🔗 SESSION TRACKING: Track connection by session token for deduplication
+      this.sessionConnections.set(sessionToken, connection)
 
       if (!this.gameConnections.has(session.gameId)) {
         this.gameConnections.set(session.gameId, new Set())
@@ -619,12 +640,24 @@ export class UnifiedWebSocketServer {
   private handleDisconnection(ws: WebSocket): void {
     const connection = this.connectionToGame.get(ws)
     if (connection) {
+      console.log('🔍 Cleanup: Disconnecting user:', connection.userId, 'from game:', connection.gameId)
+      
       // Clear heartbeat
       if (connection.heartbeatInterval) {
         clearInterval(connection.heartbeatInterval)
       }
 
-      // Friends connections now handled by unified server cleanup
+      // 🧹 SESSION CLEANUP: Remove session tracking
+      if (connection.session) {
+        // Find session token by connection match
+        for (const [token, conn] of this.sessionConnections.entries()) {
+          if (conn === connection) {
+            console.log('🔍 Cleanup: removing session token mapping')
+            this.sessionConnections.delete(token)
+            break
+          }
+        }
+      }
 
       // Remove from game connections
       const gameConnections = this.gameConnections.get(connection.gameId)

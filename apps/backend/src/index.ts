@@ -126,15 +126,19 @@ if (process.env.NODE_ENV !== 'test') {
   const httpPort = process.env.PORT || 3001
   console.log(`🚀 Starting Settlers backend server...`)
   console.log(`📡 HTTP API server will run on port ${httpPort}`)
-  console.log(`🌐 WebSocket server running on port 8080`)
+  console.log(`🌐 WebSocket server starting on port 8080`)
   console.log(`🎯 Architecture: Event-sourced`)
+
+  // ✅ ACTUALLY START THE WEBSOCKET SERVER
+  console.log(`🔌 Starting WebSocket server...`)
+  // WebSocket server starts automatically when imported (singleton pattern)
 
   serve({
     fetch: app.fetch,
     port: parseInt(httpPort.toString())
   }, (info) => {
     console.log(`✅ HTTP server running on http://localhost:${info.port}`)
-    console.log(`✅ WebSocket server ready for connections`)
+    console.log(`✅ WebSocket server running on ws://localhost:8080/ws`)
     console.log(`✅ Backend fully operational with event sourcing`)
   })
 

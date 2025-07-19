@@ -36,142 +36,92 @@ function AuthCallbackContent() {
           return
         }
 
-        // Modern PKCE flow - check for existing session first (most common case)
+        // 🔧 PKCE CODE EXCHANGE - Handle the code parameter
+        const authCode = urlParams.get('code')
+        if (authCode) {
+          console.log('🔐 PKCE code found, exchanging for session...')
+          setMessage('Completing sign in...')
+          
+          // Exchange the code for a session using PKCE
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode)
+          
+          if (exchangeError) {
+            console.error('❌ PKCE exchange error:', exchangeError)
+            setStatus('error')
+            setMessage('Authentication failed. Redirecting...')
+            setTimeout(() => router.push('/'), 2000)
+            return
+          }
+          
+          if (data.session?.user) {
+            console.log('✅ PKCE exchange successful:', data.session.user.email)
+            setStatus('success')
+            setMessage('Welcome! Redirecting...')
+            
+            const redirectTo = searchParams.get('redirect_to')
+            
+            if (redirectTo) {
+              // Parse redirect URL to see if it's a game/lobby URL
+              const gameUrlMatch = redirectTo.match(/\/(lobby|game)\/([^?]+)/)
+              
+              if (gameUrlMatch) {
+                const [, pageType, gameId] = gameUrlMatch
+                
+                // Extract any existing session parameters
+                const redirectUrl = new URL(redirectTo, window.location.origin)
+                const existingPlayerId = redirectUrl.searchParams.get('playerId')
+                const existingGameCode = redirectUrl.searchParams.get('gameCode')
+                
+                if (existingPlayerId) {
+                  // Generate session token with auth data
+                  const sessionToken = generateSessionToken(
+                    gameId,
+                    existingPlayerId,
+                    data.session.access_token || '',
+                    'player', // Default role, will be validated server-side
+                    existingGameCode || undefined
+                  )
+                  
+                  // Build new URL with session token
+                  const gameUrl = buildGameURL(
+                    pageType as 'lobby' | 'game',
+                    gameId,
+                    sessionToken
+                  )
+                  
+                  router.push(gameUrl.fullUrl)
+                  return
+                }
+              }
+            }
+            
+            // Default redirect
+            router.push(redirectTo || '/')
+            return
+          }
+        }
+
+        // Check for existing session (for cases where auth already completed)
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
         
-        if (!sessionError && sessionData.session) {
-          console.log('Existing session found:', sessionData.session.user.email)
+        if (!sessionError && sessionData.session?.user) {
+          console.log('✅ Existing session found:', sessionData.session.user.email)
           setStatus('success')
           setMessage('Welcome back! Redirecting...')
           
           const redirectTo = searchParams.get('redirect_to')
-          
-          if (redirectTo) {
-            // Parse redirect URL to see if it's a game/lobby URL
-            const gameUrlMatch = redirectTo.match(/\/(lobby|game)\/([^?]+)/)
-            
-            if (gameUrlMatch) {
-              const [, pageType, gameId] = gameUrlMatch
-              
-              // Extract any existing session parameters
-              const redirectUrl = new URL(redirectTo, window.location.origin)
-              const existingPlayerId = redirectUrl.searchParams.get('playerId')
-              const existingGameCode = redirectUrl.searchParams.get('gameCode')
-              
-              if (existingPlayerId) {
-                // Generate session token with auth data
-                const sessionToken = generateSessionToken(
-                  gameId,
-                  existingPlayerId,
-                  sessionData.session.access_token,
-                  'player', // Default role, will be validated server-side
-                  existingGameCode || undefined
-                )
-                
-                // Build new URL with session token
-                const gameUrl = buildGameURL(
-                  pageType as 'lobby' | 'game',
-                  gameId,
-                  sessionToken
-                )
-                
-                router.push(gameUrl.fullUrl)
-                return
-              }
-            }
-          }
-          
-          // Default redirect
           router.push(redirectTo || '/')
           return
         }
 
-        // If no session yet, wait for auth state change (PKCE code exchange happening)
-        const authCode = urlParams.get('code')
-        if (authCode) {
-          console.log('PKCE code found, waiting for auth state change...')
-          
-          let cleanup: (() => void) | null = null
-          let timeoutId: NodeJS.Timeout | null = null
-
-          const handleAuthStateChange = (event: string, session: { user?: { email?: string }; access_token?: string } | null) => {
-            console.log('Auth state change:', event)
-            
-            if (event === 'SIGNED_IN' && session?.user) {
-              console.log('Authentication successful:', session.user.email)
-              setStatus('success')
-              setMessage('Welcome! Redirecting...')
-              
-              // Cleanup and redirect immediately
-              if (cleanup) cleanup()
-              if (timeoutId) clearTimeout(timeoutId)
-              
-              const redirectTo = searchParams.get('redirect_to')
-              
-              if (redirectTo) {
-                // Parse redirect URL to see if it's a game/lobby URL
-                const gameUrlMatch = redirectTo.match(/\/(lobby|game)\/([^?]+)/)
-                
-                if (gameUrlMatch) {
-                  const [, pageType, gameId] = gameUrlMatch
-                  
-                  // Extract any existing session parameters
-                  const redirectUrl = new URL(redirectTo, window.location.origin)
-                  const existingPlayerId = redirectUrl.searchParams.get('playerId')
-                  const existingGameCode = redirectUrl.searchParams.get('gameCode')
-                  
-                  if (existingPlayerId) {
-                    // Generate session token with auth data
-                    const sessionToken = generateSessionToken(
-                      gameId,
-                      existingPlayerId,
-                      session.access_token || '',
-                      'player', // Default role, will be validated server-side
-                      existingGameCode || undefined
-                    )
-                    
-                    // Build new URL with session token
-                    const gameUrl = buildGameURL(
-                      pageType as 'lobby' | 'game',
-                      gameId,
-                      sessionToken
-                    )
-                    
-                    router.push(gameUrl.fullUrl)
-                    return
-                  }
-                }
-              }
-              
-              // Default redirect
-              router.push(redirectTo || '/')
-            }
-          }
-
-          // Set up auth state listener
-          const { data: authListener } = supabase.auth.onAuthStateChange(handleAuthStateChange)
-          cleanup = () => authListener.subscription.unsubscribe()
-
-          // Set reasonable timeout (5 seconds)
-          timeoutId = setTimeout(() => {
-            console.warn('Auth callback timed out')
-            setStatus('error')
-            setMessage('Authentication timed out. Redirecting...')
-            if (cleanup) cleanup()
-            setTimeout(() => router.push('/'), 2000)
-          }, 5000)
-
-          return
-        }
-
         // Fallback for edge cases
-        console.log('No auth code found, redirecting to home')
+        console.log('⚠️ No auth code or session found, redirecting to home')
         setStatus('error')
         setMessage('No authentication data found. Redirecting...')
         setTimeout(() => router.push('/'), 2000)
 
       } catch (error) {
-        console.error('Auth callback error:', error)
+        console.error('❌ Auth callback error:', error)
         setStatus('error')
         setMessage('Authentication error. Redirecting...')
         setTimeout(() => router.push('/'), 2000)
@@ -201,14 +151,13 @@ function AuthCallbackContent() {
         
         {status === 'success' && (
           <>
-            <div className={ds(
-              'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
-              'bg-green-500/20 border border-green-400/30'
-            )}>
-              <span className="text-2xl">✅</span>
+            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
             <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
-              Welcome to Settlers!
+              Success!
             </h1>
             <p className={ds(designSystem.text.muted)}>
               {message}
@@ -218,14 +167,13 @@ function AuthCallbackContent() {
         
         {status === 'error' && (
           <>
-            <div className={ds(
-              'w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center',
-              'bg-red-500/20 border border-red-400/30'
-            )}>
-              <span className="text-2xl">❌</span>
+            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </div>
             <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
-              Authentication Issue
+              Authentication Error
             </h1>
             <p className={ds(designSystem.text.muted)}>
               {message}
@@ -249,9 +197,6 @@ export default function AuthCallback() {
           <h1 className={ds(designSystem.text.heading, 'text-xl font-semibold mb-2')}>
             Loading...
           </h1>
-          <p className={ds(designSystem.text.muted)}>
-            Please wait...
-          </p>
         </div>
       </div>
     }>

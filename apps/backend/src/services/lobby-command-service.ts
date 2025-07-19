@@ -383,7 +383,14 @@ export class LobbyCommandService {
           .find(p => p.userId === command.userId)
         
         if (existingPlayer) {
-          throw new Error('You are already in this game')
+          // 🔄 RECONNECTION: User is already in game, just return their existing data
+          console.log('🔄 User reconnecting to game:', command.userId, 'existing player:', existingPlayer.id)
+          return {
+            success: true,
+            playerId: existingPlayer.id,
+            isHost: existingPlayer.isHost,
+            message: 'Reconnected to existing game session'
+          }
         }
 
         // Generate player data

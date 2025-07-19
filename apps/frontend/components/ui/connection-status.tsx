@@ -2,7 +2,7 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 
 interface ConnectionStatusProps {
-  status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'offline'
+  status: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'offline'
   className?: string
 }
 
@@ -13,6 +13,7 @@ export function ConnectionStatus({ status, className }: ConnectionStatusProps) {
       case 'connecting': return 'bg-yellow-500'
       case 'error': return 'bg-red-500'
       case 'offline': return 'bg-orange-500'
+      case 'idle': return 'bg-gray-400'
       default: return 'bg-gray-500'
     }
   }
@@ -23,6 +24,7 @@ export function ConnectionStatus({ status, className }: ConnectionStatusProps) {
       case 'connecting': return 'Connecting'
       case 'error': return 'Error'
       case 'offline': return 'Offline'
+      case 'idle': return 'Ready'
       default: return 'Disconnected'
     }
   }

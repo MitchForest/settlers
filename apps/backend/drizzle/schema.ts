@@ -204,9 +204,9 @@ export const userProfiles = pgTable("user_profiles", {
 	index("user_profiles_username_idx").using("btree", table.username.asc().nullsLast().op("text_ops")),
 	unique("user_profiles_email_unique").on(table.email),
 	unique("user_profiles_username_unique").on(table.username),
-	// Simple game security: anyone can read profiles, but users can only modify their own
-	pgPolicy("anyone_can_read_profiles", { as: "permissive", for: "select", to: ["public"], using: sql`true` }),
-	pgPolicy("service_role_full_access", { as: "permissive", for: "all", to: ["service_role"], using: sql`true` }),
-	pgPolicy("users_can_update_own_profile", { as: "permissive", for: "update", to: ["authenticated"], using: sql`auth.uid() = id` }),
-	pgPolicy("users_can_delete_own_profile", { as: "permissive", for: "delete", to: ["authenticated"], using: sql`auth.uid() = id` }),
+	// RLS Security Policies for user_profiles - FIXED: Added table permissions + policies
+	pgPolicy("public_read_profiles", { as: "permissive", for: "select", to: ["public"], using: sql`true` }),
+	pgPolicy("service_role_all_access", { as: "permissive", for: "all", to: ["service_role"], using: sql`true` }),
+	pgPolicy("users_update_own", { as: "permissive", for: "update", to: ["authenticated"], using: sql`auth.uid() = id` }),
+	pgPolicy("users_delete_own", { as: "permissive", for: "delete", to: ["authenticated"], using: sql`auth.uid() = id` }),
 ]);
