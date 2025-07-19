@@ -80,19 +80,12 @@ export async function createGame(gameData: {
   isPublic: boolean
 }) {
   try {
-    // Get current session for auth token
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session?.access_token) {
-      throw new Error('No authentication token available')
-    }
+    // Use optional auth headers to support both authenticated and guest users
+    const headers = await getOptionalAuthHeaders()
     
     const response = await fetch(`${API_URL}/api/games/create`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
+      headers,
       body: JSON.stringify(gameData)
     })
     

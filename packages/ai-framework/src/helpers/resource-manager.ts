@@ -127,33 +127,33 @@ export function getOptimalBuild(
   switch (phase) {
     case 'EXPANSION':
       // Prioritize roads and settlements for expansion
-      return buildableOptions.find(opt => opt.type === 'road') ||
-             buildableOptions.find(opt => opt.type === 'settlement') ||
-             buildableOptions[0]
+      return buildableOptions.find(opt => opt.type === 'road') ??
+             buildableOptions.find(opt => opt.type === 'settlement') ??
+             buildableOptions[0] ?? null
              
     case 'GROWTH':
       // Balanced approach: settlements, then cities, then roads
-      return buildableOptions.find(opt => opt.type === 'settlement') ||
-             buildableOptions.find(opt => opt.type === 'city') ||
-             buildableOptions.find(opt => opt.type === 'road') ||
-             buildableOptions[0]
+      return buildableOptions.find(opt => opt.type === 'settlement') ??
+             buildableOptions.find(opt => opt.type === 'city') ??
+             buildableOptions.find(opt => opt.type === 'road') ??
+             buildableOptions[0] ?? null
              
     case 'ACCELERATION':
       // Cities and dev cards for points
-      return buildableOptions.find(opt => opt.type === 'city') ||
-             buildableOptions.find(opt => opt.type === 'developmentCard') ||
-             buildableOptions.find(opt => opt.type === 'settlement') ||
-             buildableOptions[0]
+      return buildableOptions.find(opt => opt.type === 'city') ??
+             buildableOptions.find(opt => opt.type === 'developmentCard') ??
+             buildableOptions.find(opt => opt.type === 'settlement') ??
+             buildableOptions[0] ?? null
              
     case 'VICTORY':
       // Whatever gets points fastest
-      return buildableOptions.find(opt => opt.type === 'city') ||
-             buildableOptions.find(opt => opt.type === 'developmentCard') ||
-             buildableOptions.find(opt => opt.type === 'settlement') ||
-             buildableOptions[0]
+      return buildableOptions.find(opt => opt.type === 'city') ??
+             buildableOptions.find(opt => opt.type === 'developmentCard') ??
+             buildableOptions.find(opt => opt.type === 'settlement') ??
+             buildableOptions[0] ?? null
              
     default:
-      return buildableOptions[0]
+      return buildableOptions[0] ?? null
   }
 }
 

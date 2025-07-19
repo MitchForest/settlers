@@ -223,6 +223,7 @@ export interface GameState {
   dice: DiceRoll | null
   developmentDeck: DevelopmentCard[]
   discardPile: DevelopmentCard[]
+  bankResources: ResourceCards  // Bank resource inventory
   winner: PlayerId | null
   activeTrades: Trade[]  // All active trades (pending, accepted but not executed)
   pendingRoadBuilding?: {

@@ -8,6 +8,7 @@ import {
   GamePhase,
   DevelopmentCard,
   GameAction,
+  ResourceCards,
   GameEvent,
   PlayerColor,
   Trade,
@@ -20,7 +21,8 @@ import {
 } from '../types'
 import {
   GAME_RULES,
-  DEVELOPMENT_CARD_COUNTS
+  DEVELOPMENT_CARD_COUNTS,
+  BANK_STARTING_RESOURCES
 } from '../constants'
 import {
   createEmptyResources,
@@ -99,6 +101,7 @@ export class GameFlowManager {
       board,
       developmentDeck,
       discardPile: [],
+      bankResources: { ...BANK_STARTING_RESOURCES },
       dice: null,
       winner: null,
       activeTrades: [],
@@ -417,6 +420,13 @@ export class GameFlowManager {
       dice: null,
       winner: null,
       activeTrades: [],
+      bankResources: {
+        wood: 19,
+        brick: 19,
+        ore: 19,
+        wheat: 19,
+        sheep: 19
+      },
       startedAt: new Date(),
       updatedAt: new Date()
     }
@@ -475,6 +485,7 @@ export class GameFlowManager {
     dice: DiceRoll | null
     winner: string | null
     activeTrades: Trade[]
+    bankResources: ResourceCards
     startedAt: string
     updatedAt: string
   }): GameState {

@@ -12,6 +12,7 @@ interface DevelopmentCardsProps {
   onPlayCard: (cardId: string) => void
   onBuyCard: () => void
   canBuyCard: boolean
+  onOpenDialog?: (cardType: 'knight' | 'yearOfPlenty' | 'monopoly' | 'roadBuilding') => void
 }
 
 export function DevelopmentCards({ 
@@ -19,7 +20,8 @@ export function DevelopmentCards({
   currentTurn, 
   onPlayCard, 
   onBuyCard, 
-  canBuyCard 
+  canBuyCard,
+  onOpenDialog
 }: DevelopmentCardsProps) {
   const playableCards = cards.filter(card => 
     !card.playedTurn && 
@@ -64,7 +66,19 @@ export function DevelopmentCards({
                 <DevCard
                   key={card.id}
                   card={card}
-                  onPlay={() => onPlayCard(card.id)}
+                  onPlay={() => {
+                    // For interactive cards, open dialog instead of direct play
+                    if (card.type === 'knight' || card.type === 'yearOfPlenty' || 
+                        card.type === 'monopoly' || card.type === 'roadBuilding') {
+                      if (onOpenDialog) {
+                        onOpenDialog(card.type)
+                      } else {
+                        onPlayCard(card.id)
+                      }
+                    } else {
+                      onPlayCard(card.id)
+                    }
+                  }}
                   canPlay={true}
                 />
               ))}

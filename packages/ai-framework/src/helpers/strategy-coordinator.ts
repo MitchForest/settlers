@@ -199,7 +199,7 @@ function handleRoadRecovery(gameState: GameState, playerId: PlayerId, phase: Gam
       return {
         type: 'buildRoad',
         data: {
-          edgeId: buildingPath.currentEndpoints[0].edgeId
+          edgeId: buildingPath.currentEndpoints[0]?.edgeId
         },
         reasoning: `Stuck in expansion - building new road from ${settlementVertex} to open new opportunities`
       }
@@ -256,6 +256,17 @@ function canBuildExpansionItems(gameState: GameState, playerId: PlayerId): boole
  * Get vertices where player has settlements
  */
 function getPlayerSettlements(gameState: GameState, playerId: PlayerId): string[] {
+  // Validate input parameters
+  if (!gameState?.board?.vertices) {
+    console.error('[getPlayerSettlements] Invalid game state: missing board or vertices')
+    return []
+  }
+  
+  if (!playerId) {
+    console.error('[getPlayerSettlements] Invalid playerId')
+    return []
+  }
+
   const settlements: string[] = []
   
   for (const [vertexId, vertex] of gameState.board.vertices) {

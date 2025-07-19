@@ -348,6 +348,56 @@ export class LobbyCommandService {
   }
 
   /**
+   * Remove an AI player from the lobby
+   */
+  async removeAIPlayer(gameId: string, aiPlayerId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const result = await db.transaction(async (tx) => {
+        // Load current state from events
+        const events = await eventStore.getGameEvents(gameId)
+        const game = await eventStore.getGameById(gameId)
+        
+        if (!game) {
+          throw new Error('Game not found')
+        }
+
+        // Rebuild lobby state
+        const lobbyState = LocalLobbyProjector.projectLobbyState(
+          game.id, 
+          game.gameCode, 
+          events,
+          game.createdAt ? new Date(game.createdAt) : new Date()
+        )
+        
+        // Validate player exists and is AI
+        const player = lobbyState.players.get(aiPlayerId)
+        if (!player) {
+          throw new Error('AI player not found in lobby')
+        }
+        
+        if (player.playerType !== 'ai') {
+          throw new Error('Player is not an AI bot')
+        }
+
+        // Emit AI player removed event
+        await eventStore.appendEvent({
+          gameId,
+          playerId: aiPlayerId,
+          eventType: 'ai_player_removed',
+          data: { playerId: aiPlayerId }
+        })
+
+        return { success: true }
+      })
+
+      return result
+    } catch (error) {
+      console.error('Error removing AI player:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to remove AI player' }
+    }
+  }
+
+  /**
    * Join a human player to the lobby
    */
   async joinGame(command: JoinGameCommand): Promise<{ success: boolean; playerId?: string; error?: string }> {
@@ -394,7 +444,7 @@ export class LobbyCommandService {
         }
 
         // Generate player data
-        const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
         
         // Fix: Get available colors and join order atomically within transaction
         const existingPlayers = await tx.select({ joinOrder: players.joinOrder, color: players.color })

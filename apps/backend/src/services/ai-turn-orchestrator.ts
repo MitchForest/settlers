@@ -52,7 +52,7 @@ export class AITurnOrchestrator {
       personality: config.personality,
       difficulty: config.difficulty,
       thinkingTimeMs: getAIThinkingTime(config.difficulty),
-      maxActionsPerTurn: 20,
+      maxActionsPerTurn: 10,
       enableLogging: true
     }
 

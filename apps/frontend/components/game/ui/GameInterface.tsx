@@ -13,6 +13,14 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog'
 import { TurnTimer } from './TurnTimer'
+import { RobberVictimDialog } from './RobberVictimDialog'
+import { DiscardCardsDialog } from './DiscardCardsDialog'
+import { 
+  KnightCardDialog, 
+  YearOfPlentyDialog, 
+  MonopolyDialog, 
+  RoadBuildingDialog 
+} from './DevelopmentCardDialogs'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 import { InfoIcon, Clock, Users, Activity } from 'lucide-react'
@@ -22,15 +30,107 @@ interface GameInterfaceProps {
   onGameAction?: (action: GameAction) => void
   isConnected?: boolean
   gameId?: string
+  onOpenDialog?: {
+    robberVictim?: (hexId: string) => void
+    discardCards?: (playerId: string, requiredDiscards: number) => void
+    developmentCard?: (cardType: 'knight' | 'yearOfPlenty' | 'monopoly' | 'roadBuilding') => void
+  }
 }
 
-export function GameInterface({ onGameAction: _onGameAction, isConnected = true, gameId }: GameInterfaceProps) {
+// Dialog state types
+interface DialogState {
+  robberVictim: { isOpen: boolean; hexId: string | null }
+  discardCards: { isOpen: boolean; playerId: string | null; requiredDiscards: number }
+  knight: boolean
+  yearOfPlenty: boolean
+  monopoly: boolean
+  roadBuilding: boolean
+}
+
+export function GameInterface({ onGameAction, isConnected = true, gameId, onOpenDialog }: GameInterfaceProps) {
   const gameState = useGameStore(state => state.gameState)
   const localPlayerId = useGameStore(state => state.localPlayerId)
   const { currentTurn, aiTurn, notifications } = useTurnStore()
   const isMyTurn = currentTurn.isMyTurn
   const timeRemaining = currentTurn.timing?.remainingMs || 0
   const [showInfoDialog, setShowInfoDialog] = useState(false)
+  
+  // Dialog state management
+  const [dialogs, setDialogs] = useState<DialogState>({
+    robberVictim: { isOpen: false, hexId: null },
+    discardCards: { isOpen: false, playerId: null, requiredDiscards: 0 },
+    knight: false,
+    yearOfPlenty: false,
+    monopoly: false,
+    roadBuilding: false
+  })
+
+  // Dialog helper functions
+  const openRobberVictimDialog = (hexId: string) => {
+    setDialogs(prev => ({
+      ...prev,
+      robberVictim: { isOpen: true, hexId }
+    }))
+  }
+
+  const openDiscardCardsDialog = (playerId: string, requiredDiscards: number) => {
+    setDialogs(prev => ({
+      ...prev,
+      discardCards: { isOpen: true, playerId, requiredDiscards }
+    }))
+  }
+
+  const openDevelopmentCardDialog = (cardType: 'knight' | 'yearOfPlenty' | 'monopoly' | 'roadBuilding') => {
+    setDialogs(prev => ({
+      ...prev,
+      [cardType]: true
+    }))
+  }
+
+  // Expose dialog functions to parent components via callback
+  if (onOpenDialog) {
+    onOpenDialog.robberVictim = openRobberVictimDialog
+    onOpenDialog.discardCards = openDiscardCardsDialog
+    onOpenDialog.developmentCard = openDevelopmentCardDialog
+  }
+
+  const closeDialog = (dialogType: keyof DialogState) => {
+    setDialogs(prev => ({
+      ...prev,
+      [dialogType]: dialogType === 'robberVictim' 
+        ? { isOpen: false, hexId: null }
+        : dialogType === 'discardCards'
+        ? { isOpen: false, playerId: null, requiredDiscards: 0 }
+        : false
+    }))
+  }
+
+  // Enhanced game action handler
+  const handleGameAction = (action: GameAction) => {
+    if (onGameAction) {
+      onGameAction(action)
+    }
+
+    // Handle action side effects for UI
+    if (action.type === 'moveRobber' && action.data?.hexPosition) {
+      // Open robber victim selection after robber is moved
+      const hexId = `${action.data.hexPosition.q},${action.data.hexPosition.r},${action.data.hexPosition.s}`
+      openRobberVictimDialog(hexId)
+    } else if (action.type === 'roll' && action.data?.dice?.sum === 7) {
+      // Check if players need to discard due to robber
+      if (gameState) {
+        gameState.players.forEach((player, playerId) => {
+          const totalResources = Object.values(player.resources).reduce((sum, count) => sum + count, 0)
+          if (totalResources > 7) {
+            const requiredDiscards = Math.floor(totalResources / 2)
+            if (playerId === localPlayerId) {
+              openDiscardCardsDialog(playerId, requiredDiscards)
+            }
+          }
+        })
+      }
+    }
+  }
 
   if (!gameState || !localPlayerId) {
     return (
@@ -215,6 +315,66 @@ export function GameInterface({ onGameAction: _onGameAction, isConnected = true,
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Game Action Dialogs */}
+      {gameState && (
+        <>
+          {/* Robber Victim Selection Dialog */}
+          <RobberVictimDialog
+            isOpen={dialogs.robberVictim.isOpen}
+            onClose={() => closeDialog('robberVictim')}
+            gameState={gameState}
+            robberHexId={dialogs.robberVictim.hexId || ''}
+            onSelectVictim={handleGameAction}
+            localPlayerId={localPlayerId}
+          />
+
+          {/* Discard Cards Dialog */}
+          {dialogs.discardCards.playerId && (
+            <DiscardCardsDialog
+              isOpen={dialogs.discardCards.isOpen}
+              onClose={() => closeDialog('discardCards')}
+              player={gameState.players.get(dialogs.discardCards.playerId)!}
+              requiredDiscards={dialogs.discardCards.requiredDiscards}
+              onDiscard={handleGameAction}
+              localPlayerId={localPlayerId}
+            />
+          )}
+
+          {/* Development Card Dialogs */}
+          <KnightCardDialog
+            isOpen={dialogs.knight}
+            onClose={() => closeDialog('knight')}
+            gameState={gameState}
+            localPlayerId={localPlayerId}
+            onAction={handleGameAction}
+          />
+
+          <YearOfPlentyDialog
+            isOpen={dialogs.yearOfPlenty}
+            onClose={() => closeDialog('yearOfPlenty')}
+            gameState={gameState}
+            localPlayerId={localPlayerId}
+            onAction={handleGameAction}
+          />
+
+          <MonopolyDialog
+            isOpen={dialogs.monopoly}
+            onClose={() => closeDialog('monopoly')}
+            gameState={gameState}
+            localPlayerId={localPlayerId}
+            onAction={handleGameAction}
+          />
+
+          <RoadBuildingDialog
+            isOpen={dialogs.roadBuilding}
+            onClose={() => closeDialog('roadBuilding')}
+            gameState={gameState}
+            localPlayerId={localPlayerId}
+            onAction={handleGameAction}
+          />
+        </>
+      )}
     </div>
   )
 }

@@ -115,7 +115,7 @@ export function generateTargetedTradeOffer(gameState: GameState, playerId: Playe
   
   // Check if we have enough to offer at this ratio
   const excessResource = excess[0]
-  if (resources[excessResource] < offerRatio) return null
+  if (!excessResource || resources[excessResource] < offerRatio) return null
   
   // Check if target player actually has what we need
   const targetResources = getCurrentResources(gameState, targetPlayerId)
@@ -124,12 +124,16 @@ export function generateTargetedTradeOffer(gameState: GameState, playerId: Playe
   const offering = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
   const requesting = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
   
-  offering[excessResource] = offerRatio
+  if (excessResource) {
+    offering[excessResource] = offerRatio
+  }
   requesting[neededResource] = 1
   
   // Check if we'd still be able to build our goal after this trade
   const wouldHaveAfterTrade = { ...resources }
-  wouldHaveAfterTrade[excessResource] -= offerRatio
+  if (excessResource) {
+    wouldHaveAfterTrade[excessResource] -= offerRatio
+  }
   wouldHaveAfterTrade[neededResource] += 1
   
   if (!canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
@@ -191,15 +195,16 @@ export function generateTradeOffer(gameState: GameState, playerId: PlayerId): Tr
   if (excess.length === 0) return null
   
   // Try 4:1 bank trade if we have enough resources
-  if (resources[excess[0]] >= 4) {
+  const firstExcess = excess[0]
+  if (firstExcess && resources[firstExcess] >= 4) {
     const offering = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
     const requesting = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
     
-    offering[excess[0]] = 4
+    offering[firstExcess] = 4
     requesting[neededResource] = 1
     
     const wouldHaveAfterTrade = { ...resources }
-    wouldHaveAfterTrade[excess[0]] -= 4
+    wouldHaveAfterTrade[firstExcess] -= 4
     wouldHaveAfterTrade[neededResource] += 1
     
     if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
@@ -242,50 +247,59 @@ export function generateEscalatingTradeOffer(
   switch (attemptNumber) {
     case 1: // 1:1 player trade
       if (excess.length > 0) {
-        offering[excess[0]] = 1
-        wouldHaveAfterTrade[excess[0]] -= 1
-        wouldHaveAfterTrade[neededResource] += 1
-        
-        if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
-          return {
-            type: 'player',
-            offering,
-            requesting,
-            reasoning: `Need ${neededResource} for ${need}, offering ${excess[0]} 1:1`
+        const firstExcess = excess[0]
+        if (firstExcess) {
+          offering[firstExcess] = 1
+          wouldHaveAfterTrade[firstExcess] -= 1
+          wouldHaveAfterTrade[neededResource] += 1
+          
+          if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
+            return {
+              type: 'player',
+              offering,
+              requesting,
+              reasoning: `Need ${neededResource} for ${need}, offering ${firstExcess} 1:1`
+            }
           }
         }
       }
       break
       
     case 2: // 2:1 player trade
-      if (excess.length > 0 && resources[excess[0]] >= 2) {
-        offering[excess[0]] = 2
-        wouldHaveAfterTrade[excess[0]] -= 2
-        wouldHaveAfterTrade[neededResource] += 1
-        
-        if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
-          return {
-            type: 'player',
-            offering,
-            requesting,
-            reasoning: `Need ${neededResource} for ${need}, offering 2 ${excess[0]} for 1`
+      if (excess.length > 0) {
+        const firstExcess = excess[0]
+        if (firstExcess && resources[firstExcess] >= 2) {
+          offering[firstExcess] = 2
+          wouldHaveAfterTrade[firstExcess] -= 2
+          wouldHaveAfterTrade[neededResource] += 1
+          
+          if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
+            return {
+              type: 'player',
+              offering,
+              requesting,
+              reasoning: `Need ${neededResource} for ${need}, offering 2 ${firstExcess} for 1`
+            }
           }
         }
       }
       break
       
     case 3: // 3:1 player trade  
-      if (excess.length > 0 && resources[excess[0]] >= 3) {
-        offering[excess[0]] = 3
-        wouldHaveAfterTrade[excess[0]] -= 3
-        wouldHaveAfterTrade[neededResource] += 1
-        
-        if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
-          return {
-            type: 'player',
-            offering,
-            requesting,
-            reasoning: `Need ${neededResource} for ${need}, offering 3 ${excess[0]} for 1`
+      if (excess.length > 0) {
+        const firstExcess = excess[0]
+        if (firstExcess && resources[firstExcess] >= 3) {
+          offering[firstExcess] = 3
+          wouldHaveAfterTrade[firstExcess] -= 3
+          wouldHaveAfterTrade[neededResource] += 1
+          
+          if (canStillBuildAfterTrade(wouldHaveAfterTrade, need)) {
+            return {
+              type: 'player',
+              offering,
+              requesting,
+              reasoning: `Need ${neededResource} for ${need}, offering 3 ${firstExcess} for 1`
+            }
           }
         }
       }

@@ -42,15 +42,6 @@
         "vitest": "^1.2.0",
       },
     },
-    "apps/e2e": {
-      "name": "@settlers/e2e",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@playwright/test": "^1.50.0",
-        "@types/node": "^20.11.0",
-        "typescript": "^5.3.3",
-      },
-    },
     "apps/frontend": {
       "name": "@settlers/frontend",
       "version": "0.1.0",
@@ -119,7 +110,12 @@
         "@settlers/game-engine": "workspace:*",
       },
       "devDependencies": {
+        "@eslint/js": "^9.31.0",
         "@types/bun": "latest",
+        "@typescript-eslint/eslint-plugin": "^8.37.0",
+        "@typescript-eslint/parser": "^8.37.0",
+        "eslint": "^9.31.0",
+        "typescript": "^5.8.3",
         "vitest": "^2.0.0",
       },
     },
@@ -533,8 +529,6 @@
     "@settlers/ai-system": ["@settlers/ai-system@workspace:packages/ai-system"],
 
     "@settlers/backend": ["@settlers/backend@workspace:apps/backend"],
-
-    "@settlers/e2e": ["@settlers/e2e@workspace:apps/e2e"],
 
     "@settlers/frontend": ["@settlers/frontend@workspace:apps/frontend"],
 

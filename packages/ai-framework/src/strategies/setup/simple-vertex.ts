@@ -70,7 +70,7 @@ export class InitialPlacementStrategy {
    */
   selectFirstSettlement(gameState: GameState, playerId: PlayerId): string {
     const scores = scoreVertices(gameState, playerId, [], FIRST_SETTLEMENT_WEIGHTS)
-    return scores[0].vertexId // Highest score
+    return scores[0]?.vertexId ?? 'fallback' // Highest score
   }
   
   /**
@@ -79,7 +79,7 @@ export class InitialPlacementStrategy {
   selectSecondSettlement(gameState: GameState, playerId: PlayerId): string {
     const currentResources = getPlayerResources(gameState, playerId)
     const scores = scoreVertices(gameState, playerId, currentResources, SECOND_SETTLEMENT_WEIGHTS)
-    return scores[0].vertexId // Highest score
+    return scores[0]?.vertexId ?? 'fallback' // Highest score
   }
   
   /**

@@ -129,6 +129,46 @@ export function getResourceName(terrain: string): string {
   }
 }
 
+/**
+ * Calculate scarcity multipliers for robber targeting
+ * Higher values = more scarce resources = better robber targets
+ */
+export function calculateScarcityMultipliers(gameState: any): Record<ResourceType, number> {
+  // Simple scarcity calculation based on resource availability on board
+  const resourceCounts: Record<ResourceType, number> = {
+    wood: 0,
+    brick: 0,
+    sheep: 0,
+    wheat: 0,
+    ore: 0
+  }
+
+  // Count hexes for each resource type
+  for (const [hexId, hex] of gameState.board.hexes) {
+    if (hex.terrain && hex.terrain !== 'desert' && hex.terrain !== 'sea' && hex.numberToken) {
+      const resource = terrainToResource(hex.terrain)
+      resourceCounts[resource]++
+    }
+  }
+
+  // Calculate scarcity multipliers (inverse of availability)
+  const scarcityMultipliers: Record<ResourceType, number> = {} as Record<ResourceType, number>
+  const totalTiles = Object.values(resourceCounts).reduce((sum, count) => sum + count, 0)
+
+  for (const resource of Object.keys(resourceCounts) as ResourceType[]) {
+    const count = resourceCounts[resource]
+    if (count > 0 && totalTiles > 0) {
+      // More scarce = higher multiplier (inverse relationship)
+      const scarcity = 1 - (count / totalTiles)
+      scarcityMultipliers[resource] = 1.0 + (scarcity * 0.5) // 1.0 to 1.5 range
+    } else {
+      scarcityMultipliers[resource] = 1.0 // Default
+    }
+  }
+
+  return scarcityMultipliers
+}
+
 // Re-export other helper modules
 export * from './game-helpers'
 export * from './vertex-scoring'

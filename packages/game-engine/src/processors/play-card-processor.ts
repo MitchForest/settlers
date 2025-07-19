@@ -1,5 +1,6 @@
-import { GameState, GameAction, PlayerId } from '../types'
+import { GameState, GameAction, PlayerId, GameEvent } from '../types'
 import { rollDice } from '../core/calculations'
+import { getPossibleRoadPositions } from '../core/placement-rules'
 import { BaseActionProcessor, ValidationResult, ProcessResult, StateManager, EventFactory, PostProcessorChain } from './processor-base'
 
 interface PlayCardAction extends GameAction {
@@ -103,26 +104,71 @@ export class PlayCardProcessor extends BaseActionProcessor<PlayCardAction> {
         break
 
       case 'roadBuilding':
-        // Set up road building state
+        // Validate that player can place at least one road
+        const possibleRoadPositions = getPossibleRoadPositions(state, action.playerId)
+        if (possibleRoadPositions.length === 0) {
+          return {
+            success: false,
+            newState: state,
+            events: [],
+            error: 'No valid road positions available for Road Building card'
+          }
+        }
+
+        // Validate that player has enough road pieces
+        const playerRoadsBuilt = player.buildings.roads
+        const maxRoads = 15 // Standard Catan limit
+        const availableRoads = maxRoads - playerRoadsBuilt
+        
+        if (availableRoads === 0) {
+          return {
+            success: false,
+            newState: state,
+            events: [],
+            error: 'No road pieces remaining to build'
+          }
+        }
+
+        // Set up road building state (can build up to 2 roads, but limited by available pieces)
+        const roadsToPlace = Math.min(2, availableRoads, possibleRoadPositions.length)
+        
         newState.pendingRoadBuilding = {
           playerId: action.playerId,
-          roadsRemaining: 2
+          roadsRemaining: roadsToPlace
         }
         newState.discardPile = [...state.discardPile, card]
         
         events.push(this.createEvent('roadBuildingPlayed', action.playerId, {
           cardId: card.id,
-          roadsRemaining: 2
+          roadsRemaining: roadsToPlace,
+          availablePositions: possibleRoadPositions.slice(0, 10) // Limit for performance
         }))
         break
 
       case 'yearOfPlenty':
-        // Player gets 2 free resources
+        // Player gets 2 free resources from the bank
         if (action.data.resources) {
           const resourceCount = Object.values(action.data.resources).reduce((sum, count) => sum + count, 0)
           if (resourceCount === 2) {
+            // Check if bank has enough resources
+            const bankHasResources = Object.entries(action.data.resources).every(([resource, amount]) => {
+              const bankAmount = state.bankResources[resource as keyof typeof state.bankResources]
+              return bankAmount >= amount
+            })
+
+            if (!bankHasResources) {
+              return {
+                success: false,
+                newState: state,
+                events: [],
+                error: 'Bank does not have enough resources for Year of Plenty'
+              }
+            }
+
+            // Execute the card
             for (const [resource, amount] of Object.entries(action.data.resources)) {
               updatedPlayer.resources[resource as keyof typeof updatedPlayer.resources] += amount
+              newState.bankResources[resource as keyof typeof newState.bankResources] -= amount
             }
             newState.discardPile = [...state.discardPile, card]
             
@@ -191,8 +237,30 @@ export class PlayCardProcessor extends BaseActionProcessor<PlayCardAction> {
         break
 
       case 'victory':
-        // Victory point cards should never reach this point as they cannot be played
-        throw new Error('Victory point cards cannot be played - they remain hidden and count automatically')
+        // Victory point cards are not "played" - they are revealed automatically when calculating score
+        // However, a player may choose to reveal them manually for strategic reasons
+        // or they are revealed at game end
+        
+        const victoryCardEvent: GameEvent = {
+          id: `card_revealed_${Date.now()}`,
+          type: 'cardRevealed',
+          timestamp: new Date(),
+          gameId: state.id,
+          data: {
+            playerId: action.playerId,
+            cardId: action.data.cardId,
+            cardType: 'victory'
+          }
+        }
+
+        // Mark card as revealed but not removed (it stays for scoring)
+        card.playedTurn = state.turn
+        
+        return {
+          success: true,
+          newState: state,
+          events: [victoryCardEvent]
+        }
 
       default:
         return {

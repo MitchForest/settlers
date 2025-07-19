@@ -217,75 +217,379 @@ export class GameStateManager {
   // ============= Private Methods =============
 
   /**
-   * Temporary method to broadcast to game connections - will be replaced with wsServer.broadcastToGame
+   * Broadcast message to all game connections via WebSocket server
    */
   private async broadcastToGameConnections(gameId: string, message: any): Promise<void> {
-    // This is a temporary implementation
-    // In the next step, we'll add the proper broadcastToGame method to UnifiedWebSocketServer
-    console.log(`🎮 Would broadcast to game ${gameId}:`, message.data?.type || 'unknown')
-    // For now, just log the message - we'll implement proper broadcasting next
+    try {
+      console.log(`📢 Broadcasting to game ${gameId}:`, message.data?.type || 'unknown')
+      await this.wsServer.broadcastToGame(gameId, message)
+    } catch (error) {
+      console.error(`❌ Failed to broadcast to game ${gameId}:`, error)
+    }
   }
 
   /**
    * Reconstruct game flow from stored events
    */
   private async reconstructGameFromEvents(gameId: string): Promise<GameFlowManager> {
+    console.log(`🔄 Reconstructing game ${gameId} from events`)
+    
     // Get game metadata
     const game = await eventStore.getGameById(gameId)
     if (!game) {
       throw new Error(`Game ${gameId} not found`)
     }
 
-    // Get all events for the game
+    // Get all events for the game in chronological order
     const events = await eventStore.getGameEvents(gameId)
     
     if (events.length === 0) {
       throw new Error(`No events found for game ${gameId}`)
     }
 
-    // Find game_started event to get initial state
-    const gameStartedEvent = events.find(e => e.eventType === 'game_started')
-    if (!gameStartedEvent) {
-      throw new Error(`Game ${gameId} has not been started yet`)
-    }
+    console.log(`📚 Found ${events.length} events to replay`)
 
-    // Create initial game state from lobby data
-    // This is a simplified version - in a full implementation, 
-    // we'd need to convert lobby state to game state
-    const playerNames = events
-      .filter(e => e.eventType === 'player_joined')
-      .map(e => e.data.name as string)
-    
-    if (playerNames.length === 0) {
+    // Sort events by sequence number to ensure proper order
+    const sortedEvents = events.sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+
+    // Find all player_joined events to build player list
+    const playerJoinedEvents = sortedEvents.filter(e => e.eventType === 'player_joined')
+    if (playerJoinedEvents.length === 0) {
       throw new Error(`No players found for game ${gameId}`)
     }
 
-    // Create game flow manager with reconstructed state
+    // Extract player names in join order
+    const playerNames = playerJoinedEvents
+      .sort((a, b) => (a.data.joinOrder as number) - (b.data.joinOrder as number))
+      .map(e => e.data.name as string)
+
+    console.log(`👥 Players: ${playerNames.join(', ')}`)
+
+    // Check if game has been started
+    const gameStartedEvent = sortedEvents.find(e => e.eventType === 'game_started')
+    if (!gameStartedEvent) {
+      // Game is still in lobby phase - create minimal game flow for lobby
+      console.log(`🏠 Game still in lobby phase`)
+      return GameFlowManager.createGame({
+        playerNames,
+        gameId,
+        randomizePlayerOrder: false // Preserve join order during reconstruction
+      })
+    }
+
+    console.log(`🎮 Game started at sequence ${gameStartedEvent.sequenceNumber}`)
+
+    // Create initial game state
     const gameFlow = GameFlowManager.createGame({
       playerNames,
       gameId,
-      randomizePlayerOrder: true
+      randomizePlayerOrder: false // Use deterministic order for replay consistency
     })
 
     // Apply all events after game_started to reconstruct current state
-    const gameEvents = events.filter(e => 
+    const gameEvents = sortedEvents.filter(e => 
+      e.sequenceNumber > gameStartedEvent.sequenceNumber &&
       e.eventType !== 'player_joined' && 
-      e.eventType !== 'ai_player_added' &&
-      e.sequenceNumber > gameStartedEvent.sequenceNumber
+      e.eventType !== 'ai_player_added'
     )
 
+    console.log(`⚙️ Applying ${gameEvents.length} game events`)
+
+    let appliedEvents = 0
+    let failedEvents = 0
+
     for (const event of gameEvents) {
-      // Convert event to game action and apply
-      // This is simplified - we'd need proper event -> action conversion
-      if (event.eventType === 'turn_ended') {
-        // Handle turn transitions
-        continue
+      try {
+        const gameAction = this.convertEventToGameAction(event)
+        if (gameAction) {
+          console.log(`  📝 Applying event ${event.sequenceNumber}: ${event.eventType}`)
+          const result = gameFlow.processAction(gameAction)
+          
+          if (!result.success) {
+            console.warn(`  ⚠️ Event ${event.sequenceNumber} failed to apply: ${result.error}`)
+            failedEvents++
+          } else {
+            appliedEvents++
+          }
+        } else {
+          // Some events (like turn_ended) might not map directly to game actions
+          console.log(`  ⏭️ Skipping non-action event ${event.sequenceNumber}: ${event.eventType}`)
+        }
+      } catch (error) {
+        console.error(`  ❌ Error applying event ${event.sequenceNumber}:`, error)
+        failedEvents++
       }
-      
-      // Apply other game events...
+    }
+
+    console.log(`✅ Event replay complete: ${appliedEvents} applied, ${failedEvents} failed`)
+
+    // Validate final state
+    const finalState = gameFlow.getState()
+    if (finalState.turn < 0) {
+      console.warn(`⚠️ Reconstructed game has invalid turn number: ${finalState.turn}`)
     }
 
     return gameFlow
+  }
+
+  /**
+   * Convert a stored event back to a game action for replay
+   */
+  private convertEventToGameAction(event: any): any | null {
+    switch (event.eventType) {
+      case 'building_placed':
+        return {
+          type: 'placeBuilding',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            buildingType: event.data.buildingType,
+            vertexId: event.data.vertexId
+          }
+        }
+
+      case 'road_placed':
+        return {
+          type: 'placeRoad',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            edgeId: event.data.edgeId
+          }
+        }
+
+      case 'dice_rolled':
+        return {
+          type: 'rollDice',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {}
+        }
+
+      case 'card_drawn':
+        return {
+          type: 'buyCard',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {}
+        }
+
+      case 'card_played':
+        return {
+          type: 'playCard',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            cardType: event.data.cardType,
+            cardData: event.data.cardData
+          }
+        }
+
+      case 'trade_proposed':
+        return {
+          type: 'createTradeOffer',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            offering: event.data.offering,
+            requesting: event.data.requesting,
+            targetPlayerId: event.data.targetPlayerId
+          }
+        }
+
+      case 'trade_accepted':
+        return {
+          type: 'acceptTrade',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            tradeOfferId: event.data.tradeOfferId
+          }
+        }
+
+      case 'robber_moved':
+        return {
+          type: 'moveRobber',
+          playerId: event.contextPlayerId || event.playerId,
+          data: {
+            hexId: event.data.hexId,
+            targetPlayerId: event.data.targetPlayerId
+          }
+        }
+
+      case 'turn_ended':
+        return {
+          type: 'endTurn',
+          playerId: event.contextPlayerId || event.playerId,
+          data: event.data.finalAction || {}
+        }
+
+      // Events that don't directly map to actions
+      case 'resource_produced':
+      case 'resources_stolen':
+      case 'game_ended':
+        return null
+
+      default:
+        console.warn(`⚠️ Unknown event type for replay: ${event.eventType}`)
+        return null
+    }
+  }
+
+  /**
+   * Replay events from a specific sequence number (for incremental updates)
+   */
+  async replayEventsFromSequence(gameId: string, fromSequence: number): Promise<GameFlowManager> {
+    console.log(`🔄 Performing incremental replay for game ${gameId} from sequence ${fromSequence}`)
+
+    // Load current game state
+    const currentGameFlow = this.activeGames.get(gameId)
+    if (!currentGameFlow) {
+      // No current state, do full replay
+      console.log(`📚 No cached state found, performing full replay`)
+      return this.reconstructGameFromEvents(gameId)
+    }
+
+    // Get events since the specified sequence
+    const events = await eventStore.getGameEvents(gameId, {
+      fromSequence: fromSequence + 1 // Get events after the specified sequence
+    })
+
+    if (events.length === 0) {
+      console.log(`📭 No new events since sequence ${fromSequence}`)
+      return currentGameFlow
+    }
+
+    console.log(`📜 Found ${events.length} new events to apply`)
+
+    // Sort events by sequence number
+    const sortedEvents = events.sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+
+    let appliedEvents = 0
+    let failedEvents = 0
+
+    for (const event of sortedEvents) {
+      try {
+        const gameAction = this.convertEventToGameAction(event)
+        if (gameAction) {
+          console.log(`  📝 Applying incremental event ${event.sequenceNumber}: ${event.eventType}`)
+          const result = currentGameFlow.processAction(gameAction)
+          
+          if (!result.success) {
+            console.warn(`  ⚠️ Incremental event ${event.sequenceNumber} failed: ${result.error}`)
+            failedEvents++
+          } else {
+            appliedEvents++
+          }
+        }
+      } catch (error) {
+        console.error(`  ❌ Error applying incremental event ${event.sequenceNumber}:`, error)
+        failedEvents++
+      }
+    }
+
+    console.log(`✅ Incremental replay complete: ${appliedEvents} applied, ${failedEvents} failed`)
+
+    return currentGameFlow
+  }
+
+  /**
+   * Validate event replay integrity by comparing reconstructed state
+   */
+  async validateEventReplayIntegrity(gameId: string): Promise<{ valid: boolean; errors: string[] }> {
+    console.log(`🔍 Validating event replay integrity for game ${gameId}`)
+
+    try {
+      // Get current cached state
+      const cachedGameFlow = this.activeGames.get(gameId)
+      const cachedState = cachedGameFlow?.getState()
+
+      // Reconstruct state from scratch
+      const reconstructedGameFlow = await this.reconstructGameFromEvents(gameId)
+      const reconstructedState = reconstructedGameFlow.getState()
+
+      const errors: string[] = []
+
+      if (!cachedState) {
+        // No cached state to compare
+        console.log(`ℹ️ No cached state to validate against`)
+        return { valid: true, errors: [] }
+      }
+
+      // Compare key game state properties
+      if (cachedState.turn !== reconstructedState.turn) {
+        errors.push(`Turn mismatch: cached=${cachedState.turn}, reconstructed=${reconstructedState.turn}`)
+      }
+
+      if (cachedState.currentPlayer !== reconstructedState.currentPlayer) {
+        errors.push(`Current player mismatch: cached=${cachedState.currentPlayer}, reconstructed=${reconstructedState.currentPlayer}`)
+      }
+
+      if (cachedState.phase !== reconstructedState.phase) {
+        errors.push(`Phase mismatch: cached=${cachedState.phase}, reconstructed=${reconstructedState.phase}`)
+      }
+
+      // Compare player scores
+      for (const [playerId, cachedPlayer] of cachedState.players) {
+        const reconstructedPlayer = reconstructedState.players.get(playerId)
+        if (!reconstructedPlayer) {
+          errors.push(`Player ${playerId} missing from reconstructed state`)
+          continue
+        }
+
+        if (cachedPlayer.score.total !== reconstructedPlayer.score.total) {
+          errors.push(`Player ${playerId} score mismatch: cached=${cachedPlayer.score.total}, reconstructed=${reconstructedPlayer.score.total}`)
+        }
+      }
+
+      // Compare board state (simplified check - count buildings and roads)
+      const cachedBuildings = Array.from(cachedState.board.vertices.values()).filter(v => v.building).length
+      const reconstructedBuildings = Array.from(reconstructedState.board.vertices.values()).filter(v => v.building).length
+      
+      if (cachedBuildings !== reconstructedBuildings) {
+        errors.push(`Building count mismatch: cached=${cachedBuildings}, reconstructed=${reconstructedBuildings}`)
+      }
+
+      const cachedRoads = Array.from(cachedState.board.edges.values()).filter(e => e.connection).length
+      const reconstructedRoads = Array.from(reconstructedState.board.edges.values()).filter(e => e.connection).length
+      
+      if (cachedRoads !== reconstructedRoads) {
+        errors.push(`Road count mismatch: cached=${cachedRoads}, reconstructed=${reconstructedRoads}`)
+      }
+
+      const isValid = errors.length === 0
+      
+      if (isValid) {
+        console.log(`✅ Event replay integrity validation passed`)
+      } else {
+        console.warn(`⚠️ Event replay integrity validation failed with ${errors.length} errors`)
+        errors.forEach(error => console.warn(`  - ${error}`))
+      }
+
+      return { valid: isValid, errors }
+
+    } catch (error) {
+      const errorMessage = `Event replay validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      console.error(`❌ ${errorMessage}`)
+      return { valid: false, errors: [errorMessage] }
+    }
+  }
+
+  /**
+   * Force refresh game state from events (useful for debugging or corruption recovery)
+   */
+  async forceRefreshFromEvents(gameId: string): Promise<void> {
+    console.log(`🔄 Force refreshing game ${gameId} from events`)
+
+    try {
+      // Remove from cache
+      this.activeGames.delete(gameId)
+
+      // Reconstruct from events
+      const gameFlow = await this.reconstructGameFromEvents(gameId)
+      this.activeGames.set(gameId, gameFlow)
+
+      // Broadcast updated state to all connected clients
+      await this.broadcastGameState(gameId, gameFlow.getState())
+
+      console.log(`✅ Successfully refreshed game ${gameId} from events`)
+    } catch (error) {
+      console.error(`❌ Failed to refresh game ${gameId} from events:`, error)
+      throw error
+    }
   }
 
   /**
@@ -426,6 +730,11 @@ export class GameStateManager {
       }
     }
     
-    await this.wsServer.broadcastToGame(gameId, message)
+    try {
+      console.log(`🏆 Broadcasting game end for ${gameId} - winner: ${winnerId}`)
+      await this.wsServer.broadcastToGame(gameId, message)
+    } catch (error) {
+      console.error(`❌ Failed to broadcast game end for ${gameId}:`, error)
+    }
   }
 } 

@@ -17,7 +17,7 @@ interface LobbyPageProps {
 export default function LobbyPage({ params }: LobbyPageProps) {
   const { gameId } = use(params)
   const router = useRouter()
-  const { user, profile } = useAuth()
+  const { user: _user, profile: _profile } = useAuth()
   
   // Lobby state
   const [gameCode, setGameCode] = useState<string>('')
@@ -35,7 +35,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       const urlSessionToken = urlParams.get('s')
       
       if (urlSessionToken) {
-        console.log('🔑 Using session token from URL')
+        console.log('🔑 Using session token from URL:', urlSessionToken.substring(0, 50) + '...')
         setSessionToken(urlSessionToken)
         return
       }
@@ -55,7 +55,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     sessionToken,
     gameId,
     onLobbyJoined: (data) => {
-      console.log('🎮 Lobby joined:', data)
+      console.log('🎮 Lobby joined successfully:', data)
       setGameCode(data.gameCode)
       setPlayers(data.players)
       setIsHost(data.isHost)
@@ -79,23 +79,23 @@ export default function LobbyPage({ params }: LobbyPageProps) {
 
   // Auto-join is now handled by the WebSocket hook automatically
 
-  // Redirect if no user
-  useEffect(() => {
-    if (!user) {
-      router.push('/')
-    }
-  }, [user, router])
+  // Allow guest users to access lobby
+  // useEffect(() => {
+  //   if (!user) {
+  //     router.push('/')
+  //   }
+  // }, [user, router])
 
-  if (!user || !profile) {
-    return <div>Loading...</div>
-  }
+  // if (!user || !profile) {
+  //   return <div>Loading...</div>
+  // }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
         {/* Connection Status */}
         <div className="mb-4 text-sm text-muted-foreground">
-          Connection: {status} {isConnected && '🟢'}
+          Connection: {status} {isConnected && '🟢'} | Session: {sessionToken ? 'Yes' : 'No'} | Game ID: {gameId}
         </div>
 
         {/* Error Display */}

@@ -1,7 +1,5 @@
 import { GameState, GameAction, PlayerId } from '@settlers/game-engine'
-import { SimpleNextVPStrategy } from '../../../../packages/ai-framework/src/strategies/action/simple-next-vp'
-import { InitialPlacementStrategy } from '../../../../packages/ai-framework/src/strategies/setup/simple-vertex'
-import { getSimplePhaseAction } from '../../../../packages/ai-framework/src/helpers/game-helpers'
+import { SimpleNextVPStrategy, InitialPlacementStrategy, getSimplePhaseAction } from '@settlers/ai-framework'
 import { GameStateManager } from './game-state-manager'
 
 /**
@@ -52,6 +50,12 @@ export class AIIntegrationService {
     
     if (!bot) {
       console.error(`No AI bot found for ${playerId} in game ${gameId}`)
+      return null
+    }
+
+    // Validate game state before processing
+    if (!this.isValidGameState(gameState)) {
+      console.error(`[AI Integration] Invalid game state for ${playerId} in game ${gameId}`)
       return null
     }
 
@@ -212,6 +216,38 @@ export class AIIntegrationService {
     }
     
     return result
+  }
+
+  /**
+   * Validate game state for AI processing
+   */
+  private isValidGameState(gameState: GameState): boolean {
+    if (!gameState) {
+      console.error('[AI Integration] GameState is null or undefined')
+      return false
+    }
+
+    if (!gameState.board) {
+      console.error('[AI Integration] GameState missing board')
+      return false
+    }
+
+    if (!gameState.board.vertices || !gameState.board.edges) {
+      console.error('[AI Integration] GameState missing board vertices or edges')
+      return false
+    }
+
+    if (!gameState.players || gameState.players.size === 0) {
+      console.error('[AI Integration] GameState missing players')
+      return false
+    }
+
+    if (!gameState.phase) {
+      console.error('[AI Integration] GameState missing phase')
+      return false
+    }
+
+    return true
   }
 
   private getThinkingTimeForDifficulty(difficulty: 'easy' | 'medium' | 'hard'): number {

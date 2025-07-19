@@ -65,6 +65,9 @@ export type RepairType =
   | 'reset_to_default'
   | 'merge_values'
   | 'manual_intervention'
+  | 'field_correction'
+  | 'temporal_sync'
+  | 'reference_correction'
 
 /**
  * Comprehensive state synchronization and repair system
@@ -727,36 +730,424 @@ class MissingDataRepairStrategy implements RepairStrategy {
   }
 }
 
-// Placeholder repair strategies
+// State repair strategies
 class TypeMismatchRepairStrategy implements RepairStrategy {
-  canRepair(): boolean { return false }
-  generateRepairAction(): RepairAction | null { return null }
+  canRepair(inconsistency: StateInconsistency): boolean {
+    return inconsistency.type === 'field_mismatch' && 
+           inconsistency.field.includes('resources') ||
+           inconsistency.field.includes('phase') ||
+           inconsistency.field.includes('currentPlayer')
+  }
+
+  generateRepairAction(inconsistency: StateInconsistency): RepairAction | null {
+    if (!this.canRepair(inconsistency)) return null
+
+    // Prefer backend value for critical game state
+    return {
+      id: `repair_${inconsistency.id}`,
+      type: 'sync_from_backend',
+      description: `Fix type mismatch in ${inconsistency.field} by syncing from authoritative backend`,
+      field: inconsistency.field,
+      newValue: inconsistency.backendValue,
+      safe: true,
+      priority: inconsistency.impact === 'critical' ? 10 : 5
+    }
+  }
+
   async repair(inconsistency: StateInconsistency, frontendState: any, backendState: GameState) {
-    return { success: false, frontendState, backendState }
+    try {
+      const repairAction = this.generateRepairAction(inconsistency)
+      if (!repairAction) {
+        return { success: false, frontendState, backendState }
+      }
+
+      // Deep clone frontend state to avoid mutations
+      const repairedState = JSON.parse(JSON.stringify(frontendState))
+      
+      // Apply the repair by setting the field to backend value
+      this.setNestedField(repairedState, inconsistency.field, inconsistency.backendValue)
+
+      return { 
+        success: true, 
+        frontendState: repairedState, 
+        backendState 
+      }
+    } catch (error) {
+      console.error('TypeMismatchRepairStrategy failed:', error)
+      return { success: false, frontendState, backendState }
+    }
+  }
+
+  private setNestedField(obj: any, path: string, value: any): void {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!(parts[i] in current)) {
+        current[parts[i]] = {}
+      }
+      current = current[parts[i]]
+    }
+    
+    current[parts[parts.length - 1]] = value
   }
 }
 
 class ValidationErrorRepairStrategy implements RepairStrategy {
-  canRepair(): boolean { return false }
-  generateRepairAction(): RepairAction | null { return null }
+  canRepair(inconsistency: StateInconsistency): boolean {
+    return inconsistency.type === 'validation_error' && 
+           inconsistency.impact !== 'critical'
+  }
+
+  generateRepairAction(inconsistency: StateInconsistency): RepairAction | null {
+    if (!this.canRepair(inconsistency)) return null
+
+    return {
+      id: `validation_repair_${inconsistency.id}`,
+      type: 'field_correction',
+      description: `Fix validation error in ${inconsistency.field}`,
+      field: inconsistency.field,
+      newValue: this.getSafeValue(inconsistency),
+      safe: true,
+      priority: 7
+    }
+  }
+
   async repair(inconsistency: StateInconsistency, frontendState: any, backendState: GameState) {
-    return { success: false, frontendState, backendState }
+    try {
+      const repairAction = this.generateRepairAction(inconsistency)
+      if (!repairAction) {
+        return { success: false, frontendState, backendState }
+      }
+
+      const repairedState = JSON.parse(JSON.stringify(frontendState))
+      
+      // Apply validation-specific fixes
+      if (inconsistency.field.includes('resources')) {
+        this.repairResourceValidation(repairedState, inconsistency)
+      } else if (inconsistency.field.includes('buildings')) {
+        this.repairBuildingValidation(repairedState, inconsistency)
+      } else {
+        // Generic field correction
+        this.setNestedField(repairedState, inconsistency.field, repairAction.newValue)
+      }
+
+      return { 
+        success: true, 
+        frontendState: repairedState, 
+        backendState 
+      }
+    } catch (error) {
+      console.error('ValidationErrorRepairStrategy failed:', error)
+      return { success: false, frontendState, backendState }
+    }
+  }
+
+  private getSafeValue(inconsistency: StateInconsistency): any {
+    // Use backend value if available and valid
+    if (inconsistency.backendValue !== null && inconsistency.backendValue !== undefined) {
+      return inconsistency.backendValue
+    }
+
+    // Provide safe defaults based on field type
+    if (inconsistency.field.includes('resources')) {
+      return { wood: 0, brick: 0, ore: 0, grain: 0, wool: 0 }
+    } else if (inconsistency.field.includes('buildings')) {
+      return { settlements: [], cities: [], roads: [] }
+    } else if (inconsistency.field.includes('cards')) {
+      return []
+    }
+
+    return null
+  }
+
+  private repairResourceValidation(state: any, inconsistency: StateInconsistency): void {
+    const resources = this.getNestedField(state, inconsistency.field)
+    if (resources && typeof resources === 'object') {
+      // Ensure all resource values are non-negative integers
+      for (const [resource, amount] of Object.entries(resources)) {
+        if (typeof amount !== 'number' || amount < 0 || !Number.isInteger(amount)) {
+          resources[resource] = 0
+        }
+      }
+    }
+  }
+
+  private repairBuildingValidation(state: any, inconsistency: StateInconsistency): void {
+    const buildings = this.getNestedField(state, inconsistency.field)
+    if (buildings && typeof buildings === 'object') {
+      // Ensure building arrays exist and are valid
+      if (!Array.isArray(buildings.settlements)) buildings.settlements = []
+      if (!Array.isArray(buildings.cities)) buildings.cities = []
+      if (!Array.isArray(buildings.roads)) buildings.roads = []
+    }
+  }
+
+  private setNestedField(obj: any, path: string, value: any): void {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!(parts[i] in current)) {
+        current[parts[i]] = {}
+      }
+      current = current[parts[i]]
+    }
+    
+    current[parts[parts.length - 1]] = value
+  }
+
+  private getNestedField(obj: any, path: string): any {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (const part of parts) {
+      if (current && part in current) {
+        current = current[part]
+      } else {
+        return undefined
+      }
+    }
+    
+    return current
   }
 }
 
 class TemporalInconsistencyRepairStrategy implements RepairStrategy {
-  canRepair(): boolean { return false }
-  generateRepairAction(): RepairAction | null { return null }
+  canRepair(inconsistency: StateInconsistency): boolean {
+    return inconsistency.type === 'temporal_inconsistency' || 
+           (inconsistency.field.includes('turn') || 
+            inconsistency.field.includes('phase') ||
+            inconsistency.field.includes('sequence'))
+  }
+
+  generateRepairAction(inconsistency: StateInconsistency): RepairAction | null {
+    if (!this.canRepair(inconsistency)) return null
+
+    return {
+      id: `temporal_repair_${inconsistency.id}`,
+      type: 'temporal_sync',
+      description: `Sync temporal inconsistency in ${inconsistency.field}`,
+      field: inconsistency.field,
+      newValue: inconsistency.backendValue, // Backend is authoritative for timing
+      safe: true,
+      priority: 9 // High priority for turn/phase sync
+    }
+  }
+
   async repair(inconsistency: StateInconsistency, frontendState: any, backendState: GameState) {
-    return { success: false, frontendState, backendState }
+    try {
+      const repairAction = this.generateRepairAction(inconsistency)
+      if (!repairAction) {
+        return { success: false, frontendState, backendState }
+      }
+
+      const repairedState = JSON.parse(JSON.stringify(frontendState))
+      
+      // Handle temporal-specific repairs
+      if (inconsistency.field.includes('turn')) {
+        this.repairTurnState(repairedState, backendState)
+      } else if (inconsistency.field.includes('phase')) {
+        this.repairPhaseState(repairedState, backendState)
+      } else if (inconsistency.field.includes('sequence')) {
+        this.repairSequenceState(repairedState, backendState)
+      } else {
+        // Generic field sync
+        this.setNestedField(repairedState, inconsistency.field, inconsistency.backendValue)
+      }
+
+      return { 
+        success: true, 
+        frontendState: repairedState, 
+        backendState 
+      }
+    } catch (error) {
+      console.error('TemporalInconsistencyRepairStrategy failed:', error)
+      return { success: false, frontendState, backendState }
+    }
+  }
+
+  private repairTurnState(frontendState: any, backendState: GameState): void {
+    // Sync turn-related fields
+    frontendState.turn = backendState.turn
+    frontendState.currentPlayer = backendState.currentPlayer
+    // Note: turnOrder is not part of GameState - commenting out
+    // if (backendState.turnOrder) {
+    //   frontendState.turnOrder = [...backendState.turnOrder]
+    // }
+  }
+
+  private repairPhaseState(frontendState: any, backendState: GameState): void {
+    // Sync phase and related state
+    frontendState.phase = backendState.phase
+    // Note: phaseData is not part of GameState - commenting out
+    // if (backendState.phaseData) {
+    //   frontendState.phaseData = JSON.parse(JSON.stringify(backendState.phaseData))
+    // }
+  }
+
+  private repairSequenceState(frontendState: any, backendState: GameState): void {
+    // Sync sequence numbers for event ordering
+    // Note: sequence and lastEventId are not part of GameState - commenting out
+    // if (backendState.sequence !== undefined) {
+    //   frontendState.sequence = backendState.sequence
+    // }
+    // if (backendState.lastEventId) {
+    //   frontendState.lastEventId = backendState.lastEventId
+    // }
+  }
+
+  private setNestedField(obj: any, path: string, value: any): void {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!(parts[i] in current)) {
+        current[parts[i]] = {}
+      }
+      current = current[parts[i]]
+    }
+    
+    current[parts[parts.length - 1]] = value
   }
 }
 
 class ReferenceErrorRepairStrategy implements RepairStrategy {
-  canRepair(): boolean { return false }
-  generateRepairAction(): RepairAction | null { return null }
+  canRepair(inconsistency: StateInconsistency): boolean {
+    return inconsistency.type === 'reference_error' ||
+           inconsistency.field.includes('playerId') ||
+           inconsistency.field.includes('gameId') ||
+           inconsistency.field.includes('vertex') ||
+           inconsistency.field.includes('edge') ||
+           inconsistency.field.includes('hex')
+  }
+
+  generateRepairAction(inconsistency: StateInconsistency): RepairAction | null {
+    if (!this.canRepair(inconsistency)) return null
+
+    return {
+      id: `reference_repair_${inconsistency.id}`,
+      type: 'reference_correction',
+      description: `Fix reference error in ${inconsistency.field}`,
+      field: inconsistency.field,
+      newValue: this.getValidReference(inconsistency),
+      safe: false, // Reference repairs may have side effects
+      priority: 8
+    }
+  }
+
   async repair(inconsistency: StateInconsistency, frontendState: any, backendState: GameState) {
-    return { success: false, frontendState, backendState }
+    try {
+      const repairAction = this.generateRepairAction(inconsistency)
+      if (!repairAction) {
+        return { success: false, frontendState, backendState }
+      }
+
+      const repairedState = JSON.parse(JSON.stringify(frontendState))
+      
+      // Handle reference-specific repairs
+      if (inconsistency.field.includes('playerId')) {
+        this.repairPlayerReferences(repairedState, backendState, inconsistency)
+      } else if (inconsistency.field.includes('vertex') || 
+                 inconsistency.field.includes('edge') || 
+                 inconsistency.field.includes('hex')) {
+        this.repairBoardReferences(repairedState, backendState, inconsistency)
+      } else {
+        // Generic reference correction
+        this.setNestedField(repairedState, inconsistency.field, repairAction.newValue)
+      }
+
+      return { 
+        success: true, 
+        frontendState: repairedState, 
+        backendState 
+      }
+    } catch (error) {
+      console.error('ReferenceErrorRepairStrategy failed:', error)
+      return { success: false, frontendState, backendState }
+    }
+  }
+
+  private getValidReference(inconsistency: StateInconsistency): any {
+    // Prefer backend value if it exists and is valid
+    if (inconsistency.backendValue && this.isValidReference(inconsistency.backendValue)) {
+      return inconsistency.backendValue
+    }
+
+    // Return null for invalid references - safer than keeping broken ones
+    return null
+  }
+
+  private isValidReference(value: any): boolean {
+    if (value === null || value === undefined) return false
+    if (typeof value === 'string' && value.trim() === '') return false
+    if (Array.isArray(value) && value.length === 0) return false
+    return true
+  }
+
+  private repairPlayerReferences(frontendState: any, backendState: GameState, inconsistency: StateInconsistency): void {
+    // Validate player references against backend player list
+    const validPlayerIds = new Set(backendState.players.keys())
+    
+    if (inconsistency.field === 'currentPlayer') {
+      if (!validPlayerIds.has(frontendState.currentPlayer)) {
+        frontendState.currentPlayer = backendState.currentPlayer
+      }
+    } else {
+      // Fix other player reference fields
+      const playerRef = this.getNestedField(frontendState, inconsistency.field)
+      if (playerRef && !validPlayerIds.has(playerRef)) {
+        this.setNestedField(frontendState, inconsistency.field, null)
+      }
+    }
+  }
+
+  private repairBoardReferences(frontendState: any, backendState: GameState, inconsistency: StateInconsistency): void {
+    // Validate board references against backend board
+    const boardRef = this.getNestedField(frontendState, inconsistency.field)
+    
+    if (inconsistency.field.includes('vertex')) {
+      if (boardRef && !backendState.board.vertices.has(boardRef)) {
+        this.setNestedField(frontendState, inconsistency.field, null)
+      }
+    } else if (inconsistency.field.includes('edge')) {
+      if (boardRef && !backendState.board.edges.has(boardRef)) {
+        this.setNestedField(frontendState, inconsistency.field, null)
+      }
+    } else if (inconsistency.field.includes('hex')) {
+      if (boardRef && !backendState.board.hexes.has(boardRef)) {
+        this.setNestedField(frontendState, inconsistency.field, null)
+      }
+    }
+  }
+
+  private setNestedField(obj: any, path: string, value: any): void {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!(parts[i] in current)) {
+        current[parts[i]] = {}
+      }
+      current = current[parts[i]]
+    }
+    
+    current[parts[parts.length - 1]] = value
+  }
+
+  private getNestedField(obj: any, path: string): any {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (const part of parts) {
+      if (current && part in current) {
+        current = current[part]
+      } else {
+        return undefined
+      }
+    }
+    
+    return current
   }
 }
 

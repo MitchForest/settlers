@@ -21,7 +21,7 @@ interface GameEngineState {
   error: string | null
 }
 
-interface GameStore extends GameEngineState {
+export interface GameStore extends GameEngineState {
   // Game State
   gameState: GameState | null
   localPlayerId: PlayerId | null
@@ -33,10 +33,17 @@ interface GameStore extends GameEngineState {
   // Lobby State  
   lobbyState: 'idle' | 'joining' | 'joined' | 'left'
   
+  // Board interaction state
+  hoveredHex: string | null
+  selectedHex: string | null
+  
   // Actions
   setGameState: (gameState: GameState | null) => void
   setLocalPlayerId: (playerId: PlayerId | null) => void
   setFlowInstance: (instance: ReactFlowInstance) => void
+  setHoveredHex: (hexId: string | null) => void
+  setSelectedHex: (hexId: string | null) => void
+  loadGamePackages: () => Promise<void>
   
   // WebSocket actions - DEPRECATED, use new singleton manager instead
   connectToLobby: (gameId: string, playerId: string) => void
@@ -59,6 +66,8 @@ export const useGameStore = create<GameStore>()(
       flowInstance: null,
       connectionStatus: 'disconnected',
       lobbyState: 'idle',
+      hoveredHex: null,
+      selectedHex: null,
       
       // Game Engine State
       gameEngine: null,
@@ -70,6 +79,11 @@ export const useGameStore = create<GameStore>()(
       setGameState: (gameState) => set({ gameState }),
       setLocalPlayerId: (playerId) => set({ localPlayerId: playerId }),
       setFlowInstance: (instance) => set({ flowInstance: instance }),
+      setHoveredHex: (hexId) => set({ hoveredHex: hexId }),
+      setSelectedHex: (hexId) => set({ selectedHex: hexId }),
+      loadGamePackages: async () => {
+        return get().loadEngines()
+      },
       
       // DEPRECATED WebSocket actions - use new singleton manager instead
       connectToLobby: (gameId, playerId) => {

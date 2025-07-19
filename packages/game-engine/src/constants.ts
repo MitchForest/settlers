@@ -113,6 +113,17 @@ export const DEVELOPMENT_CARD_COUNTS: Record<DevelopmentCardType, number> = {
   monopoly: 2
 }
 
+// ============= Bank Resources =============
+
+// Standard Catan bank starting inventory
+export const BANK_STARTING_RESOURCES = {
+  wood: 19,
+  brick: 19,
+  ore: 19,
+  wheat: 19,
+  sheep: 19
+} as const
+
 // ============= Resource Creation Helpers =============
 
 export function createResourceCards(

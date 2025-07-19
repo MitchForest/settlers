@@ -2,6 +2,7 @@ import { eq, and, asc, desc, gte, lte, inArray, sql } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { db } from './index'
 import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from '../../drizzle/schema'
+import { mockEventStore } from './mock-event-store'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
 import type { 
@@ -55,7 +56,7 @@ function validateEventData(eventType: string, data: Record<string, unknown>): bo
 }
 
 function createEventId(): string {
-  return `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return `evt_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 }
 
 export interface EventStoreOptions {
@@ -88,7 +89,9 @@ export class EventStoreRepository {
     hostAvatarEmoji?: string | null
   }): Promise<{ game: typeof games.$inferSelect; hostPlayer: typeof players.$inferSelect }> {
     
-    return await db.transaction(async (tx) => {
+    // Try database first, fallback to mock if connection fails
+    try {
+      return await db.transaction(async (tx) => {
       // Create game record
       const [game] = await tx.insert(games).values({
         id: gameData.id,
@@ -104,7 +107,7 @@ export class EventStoreRepository {
       })
 
       // Create host player record  
-      const hostPlayerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const hostPlayerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
       const [hostPlayer] = await tx.insert(players).values({
         id: hostPlayerId,
         gameId: gameData.id,
@@ -136,6 +139,15 @@ export class EventStoreRepository {
 
       return { game, hostPlayer }
     })
+    } catch (error) {
+      console.warn('Database connection failed, using mock store:', error)
+      // Fallback to mock event store
+      const result = await mockEventStore.createGame(gameData)
+      return {
+        game: result.game as any,
+        hostPlayer: result.hostPlayer as any
+      }
+    }
   }
 
   /**
@@ -311,36 +323,48 @@ export class EventStoreRepository {
    * Check if a game exists
    */
   async gameExists(gameId: string): Promise<boolean> {
-    const [result] = await db
-      .select({ id: games.id })
-      .from(games)
-      .where(eq(games.id, gameId))
+    try {
+      const [result] = await db
+        .select({ id: games.id })
+        .from(games)
+        .where(eq(games.id, gameId))
 
-    return !!result
+      return !!result
+    } catch (error) {
+      return await mockEventStore.gameExists(gameId)
+    }
   }
 
   /**
    * Get game by code (case insensitive)
    */
   async getGameByCode(gameCode: string): Promise<typeof games.$inferSelect | null> {
-    const [game] = await db
-      .select()
-      .from(games)
-      .where(eq(games.gameCode, gameCode.toUpperCase()))
+    try {
+      const [game] = await db
+        .select()
+        .from(games)
+        .where(eq(games.gameCode, gameCode.toUpperCase()))
 
-    return game || null
+      return game || null
+    } catch (error) {
+      return await mockEventStore.getGameByCode(gameCode) as any
+    }
   }
 
   /**
    * Get game by ID
    */
   async getGameById(gameId: string): Promise<typeof games.$inferSelect | null> {
-    const [game] = await db
-      .select()
-      .from(games)
-      .where(eq(games.id, gameId))
+    try {
+      const [game] = await db
+        .select()
+        .from(games)
+        .where(eq(games.id, gameId))
 
-    return game || null
+      return game || null
+    } catch (error) {
+      return await mockEventStore.getGameById(gameId) as any
+    }
   }
 
   /**

@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(false) // Changed to false by default
+  const [loading, setLoading] = useState(true) // Start loading until auth check completes
   const [isGuest, setIsGuest] = useState(true) // Start as guest
 
   const refreshProfile = async () => {

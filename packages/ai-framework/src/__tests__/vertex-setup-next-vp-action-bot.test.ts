@@ -6,17 +6,20 @@ describe('VertexSetupNextVPBot', () => {
   let gameFlow: GameFlowManager
   let bot: VertexSetupNextVPBot
   let config: BotConfig
+  let playerIds: string[]
 
   beforeEach(() => {
-    // Create a test game
-    gameFlow = new GameFlowManager()
-    gameFlow.createGame({
-      playerNames: ['TestBot', 'Human'],
+    // Create a test game (3 players minimum)
+    gameFlow = GameFlowManager.createGame({
+      playerNames: ['TestBot', 'Human1', 'Human2'],
       randomizePlayerOrder: false
     })
 
+    // Get actual player IDs from the game state
+    playerIds = Array.from(gameFlow.getState().players.keys())
+
     config = {
-      playerId: 'player_0',
+      playerId: playerIds[0], // Use the actual first player ID
       thinkingTimeMs: 0, // No delay for tests
       enableLogging: false
     }
@@ -30,7 +33,7 @@ describe('VertexSetupNextVPBot', () => {
     })
 
     it('should use default config values when not provided', () => {
-      const defaultBot = new VertexSetupNextVPBot(gameFlow, { playerId: 'test' })
+      const defaultBot = new VertexSetupNextVPBot(gameFlow, { playerId: playerIds[1] })
       expect(defaultBot).toBeDefined()
     })
   })
@@ -41,7 +44,7 @@ describe('VertexSetupNextVPBot', () => {
       
       // Ensure we're in setup1 phase
       expect(gameState.phase).toBe('setup1')
-      expect(gameState.currentPlayer).toBe('player_0')
+      expect(gameState.currentPlayer).toBe(playerIds[0])
 
       const action = bot.testSetupStrategy(gameState, 'setup1')
       
@@ -79,7 +82,7 @@ describe('VertexSetupNextVPBot', () => {
       const mockMainGameState = {
         ...gameState,
         phase: 'actions' as const,
-        currentPlayer: 'player_0'
+        currentPlayer: playerIds[0]
       }
 
       const action = bot.testActionStrategy(mockMainGameState)
@@ -87,7 +90,7 @@ describe('VertexSetupNextVPBot', () => {
       // Should either return a valid action or null (if no good moves)
       if (action) {
         expect(action.type).toBeDefined()
-        expect(action.playerId).toBe('player_0')
+        expect(action.playerId).toBe(playerIds[0])
       }
     })
   })
@@ -106,18 +109,26 @@ describe('VertexSetupNextVPBot', () => {
     })
 
     it('should prevent concurrent turn execution', async () => {
-      // Start first turn execution
+      // Start first turn execution (don't await)
       const firstTurn = bot.executeTurn()
       
-      // Try to start second turn immediately
-      const secondTurn = await bot.executeTurn()
+      // Try to start second turn immediately (don't await)
+      const secondTurn = bot.executeTurn()
       
-      expect(secondTurn.success).toBe(false)
-      expect(secondTurn.error).toContain('already processing')
+      // Now await both
+      const [firstResult, secondResult] = await Promise.all([firstTurn, secondTurn])
       
-      // Wait for first turn to complete
-      const firstResult = await firstTurn
-      expect(firstResult.success).toBe(true)
+      // One should succeed, one should fail
+      const results = [firstResult, secondResult]
+      const successCount = results.filter(r => r.success).length
+      const failCount = results.filter(r => !r.success).length
+      
+      expect(successCount).toBe(1)
+      expect(failCount).toBe(1)
+      
+      // The failed one should have the right error message
+      const failedResult = results.find(r => !r.success)
+      expect(failedResult?.error).toContain('Bot is already processing')
     })
   })
 

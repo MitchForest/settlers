@@ -2,6 +2,7 @@ import { GameState, GameAction, ResourceCards } from '../types'
 import { BaseActionProcessor, ValidationResult, ProcessResult } from './index'
 import { BUILDING_COSTS, VICTORY_POINTS } from '../constants'
 import { subtractResources, addResources, hasResources } from '../core/calculations'
+import { checkDistanceRule, isConnectedToPlayerNetwork } from '../core/placement-rules'
 
 interface BuildingAction extends GameAction {
   type: 'placeBuilding'
@@ -199,13 +200,35 @@ export class BuildingProcessor extends BaseActionProcessor<BuildingAction> {
         console.log(`✅ VALIDATION PASSED: Valid settlement found at ${vertexId} for city upgrade`)
       }
     } else {
-      // Placing new settlement
+      // Placing new settlement - validate placement rules
       if (vertex.building) {
         errors.push({
           field: 'building',
           message: 'Vertex already occupied',
           code: 'VERTEX_OCCUPIED'
         })
+      }
+      
+      // CRITICAL: Check distance rule for settlement placement
+      if (!checkDistanceRule(state.board, vertexId)) {
+        console.log(`🚨 PLACEMENT RULE VIOLATION: Distance rule failed for settlement at ${vertexId}`)
+        errors.push({
+          field: 'placement',
+          message: 'Settlements must be at least 2 edges apart (distance rule violation)',
+          code: 'DISTANCE_RULE_VIOLATION'
+        })
+      }
+      
+      // CRITICAL: Check network connectivity (only during regular play, not setup)
+      if (state.phase !== 'setup1' && state.phase !== 'setup2') {
+        if (!isConnectedToPlayerNetwork(state, action.playerId, vertexId)) {
+          console.log(`🚨 PLACEMENT RULE VIOLATION: Settlement at ${vertexId} not connected to player ${action.playerId} road network`)
+          errors.push({
+            field: 'placement',
+            message: 'Settlement must be connected to your road network',
+            code: 'NETWORK_CONNECTIVITY_VIOLATION'
+          })
+        }
       }
     }
     

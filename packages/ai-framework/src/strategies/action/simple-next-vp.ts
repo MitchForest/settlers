@@ -102,9 +102,9 @@ export class SimpleNextVPStrategy {
     
     if (scores.length > 0) {
       return {
-        type: 'placeBuilding',
+        type: 'build',
         playerId,
-        data: { buildingType: 'settlement', vertexId: scores[0].vertexId }
+        data: { buildingType: 'settlement', position: scores[0]?.vertexId }
       }
     }
     
@@ -145,18 +145,18 @@ export class SimpleNextVPStrategy {
       // Simple heuristic: build any road that might help expansion
       // TODO: Improve this with actual pathfinding
       return {
-        type: 'placeRoad',
+        type: 'build',
         playerId,
-        data: { edgeId: possibleRoads[0] }
+        data: { buildingType: 'road', position: possibleRoads[0] }
       }
     }
     
     // If no building paths, create new expansion opportunities
     if (possibleRoads.length > 0) {
       return {
-        type: 'placeRoad',
+        type: 'build',
         playerId,
-        data: { edgeId: possibleRoads[0] }
+        data: { buildingType: 'road', position: possibleRoads[0] }
       }
     }
     
@@ -374,9 +374,9 @@ export class SimpleNextVPStrategy {
     if (playerSettlements.length > 0) {
       // For now, just upgrade the first settlement found
       return {
-        type: 'placeBuilding',
+        type: 'build',
         playerId,
-        data: { buildingType: 'city', vertexId: playerSettlements[0] }
+        data: { buildingType: 'city', position: playerSettlements[0] }
       }
     }
     
@@ -393,9 +393,9 @@ export class SimpleNextVPStrategy {
         const possibleRoads = getPossibleRoadPositions(gameState, playerId)
         if (possibleRoads.length > 0) {
           return {
-            type: 'placeRoad',
+            type: 'build',
             playerId,
-            data: { edgeId: possibleRoads[0] }
+            data: { buildingType: 'road', position: possibleRoads[0] }
           }
         }
         return null

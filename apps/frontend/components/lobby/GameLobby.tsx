@@ -107,7 +107,7 @@ export function GameLobby({
             <h1 className={ds(designSystem.text.heading, 'text-4xl font-bold')}>Game Lobby</h1>
             <div className={ds(componentStyles.glassCard, 'inline-flex items-center gap-3 rounded-lg px-6 py-3 border-white/30')}>
               <span className={ds(designSystem.text.body, 'text-lg')}>Game Code:</span>
-              <code className="text-3xl font-mono font-bold text-yellow-400">{gameCode}</code>
+              <code className="text-3xl font-mono font-bold text-yellow-400">{gameCode || 'Loading...'}</code>
               <Button
                 variant="ghost"
                 size="sm"

@@ -86,6 +86,16 @@ export class BankTradeProcessor extends BaseActionProcessor<BankTradeAction> {
       })
     }
 
+    // Validate bank has resources to give
+    if (!hasResources(state.bankResources, requesting)) {
+      const requestedType = Object.entries(requesting).find(([_, amount]) => amount > 0)?.[0]
+      errors.push({
+        field: 'requesting',
+        message: `Bank does not have enough ${requestedType} resources for this trade`,
+        code: 'BANK_INSUFFICIENT_RESOURCES'
+      })
+    }
+
     // Validate trade ratio (4:1 for bank trades)
     const totalOffering = Object.values(offering).reduce((sum, val) => sum + val, 0)
     const totalRequesting = Object.values(requesting).reduce((sum, val) => sum + val, 0)
@@ -145,6 +155,10 @@ export class BankTradeProcessor extends BaseActionProcessor<BankTradeAction> {
     // Execute the trade
     player.resources = subtractResources(player.resources, offering)
     player.resources = addResources(player.resources, requesting)
+    
+    // Update bank resources (reverse of player trade)
+    newState.bankResources = addResources(newState.bankResources, offering)
+    newState.bankResources = subtractResources(newState.bankResources, requesting)
     
     // Create events
     const events: GameEvent[] = [

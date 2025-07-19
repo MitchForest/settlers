@@ -122,6 +122,17 @@ export function findNewExpansionPaths(gameState: GameState, playerId: PlayerId):
  * Get vertices where player has settlements
  */
 function getPlayerSettlements(gameState: GameState, playerId: PlayerId): string[] {
+  // Validate input parameters
+  if (!gameState?.board?.vertices) {
+    console.error('[getPlayerSettlements] Invalid game state: missing board or vertices')
+    return []
+  }
+  
+  if (!playerId) {
+    console.error('[getPlayerSettlements] Invalid playerId')
+    return []
+  }
+
   const settlements: string[] = []
   
   for (const [vertexId, vertex] of gameState.board.vertices) {
@@ -245,7 +256,7 @@ function estimateDistance(gameState: GameState, vertex1: string, vertex2: string
 /**
  * Find road endpoints from a specific settlement
  */
-function findRoadEndpointsFromSettlement(gameState: GameState, playerId: PlayerId, settlementVertex: string): RoadEndpoint[] {
+function findRoadEndpointsFromSettlement(gameState: GameState, playerId: PlayerId, _settlementVertex: string): RoadEndpoint[] {
   // Simplified implementation - return endpoints connected to this settlement
   return findRoadEndpoints(gameState, playerId).filter(endpoint => 
     endpoint.distanceFromSettlement <= 3 // Rough proximity filter
@@ -323,23 +334,29 @@ export function findBestExpansionRoad(
   
   if (roadScores.length === 0) {
     // Fallback: any road connected to settlement
-    return possibleRoads.find(edgeId => {
+    const fallbackRoad = possibleRoads.find(edgeId => {
       const connectedVertices = findConnectedVertices(gameState, edgeId)
       return connectedVertices.includes(settlementVertexId)
-    }) || possibleRoads[0]
+    })
+    return fallbackRoad ?? possibleRoads[0] ?? null
   }
   
   // Sort by score and return best
   roadScores.sort((a, b) => b.score - a.score)
-  console.log(`🛣️ Best road from ${settlementVertexId}: ${roadScores[0].edgeId} (score: ${roadScores[0].score}, ${roadScores[0].reasoning})`)
+  const bestRoad = roadScores[0]
+  if (!bestRoad) {
+    return null
+  }
   
-  return roadScores[0].edgeId
+  console.log(`🛣️ Best road from ${settlementVertexId}: ${bestRoad.edgeId} (score: ${bestRoad.score}, ${bestRoad.reasoning})`)
+  
+  return bestRoad.edgeId
 }
 
 /**
  * Score the potential for placing a settlement at a future vertex
  */
-function scoreFutureSettlementPotential(gameState: GameState, vertexId: string, playerId: PlayerId) {
+function scoreFutureSettlementPotential(gameState: GameState, vertexId: string, _playerId: PlayerId) {
   let score = 0
   let reasoning = ''
   
@@ -359,7 +376,7 @@ function scoreFutureSettlementPotential(gameState: GameState, vertexId: string, 
   let hexCount = 0
   
   for (const hexCoord of vertex.position.hexes) {
-    for (const [hexId, hex] of gameState.board.hexes) {
+    for (const [_hexId, hex] of gameState.board.hexes) {
       if (hex.position.q === hexCoord.q && 
           hex.position.r === hexCoord.r && 
           hex.position.s === hexCoord.s) {
@@ -393,7 +410,7 @@ function scoreFutureSettlementPotential(gameState: GameState, vertexId: string, 
 /**
  * Check if this road opens a new direction from the settlement
  */
-function checkIfNewDirection(gameState: GameState, playerId: PlayerId, settlementVertexId: string, newEdgeId: string): boolean {
+function checkIfNewDirection(gameState: GameState, playerId: PlayerId, settlementVertexId: string, _newEdgeId: string): boolean {
   // Get existing roads from this settlement
   const existingRoads = getPlayerRoads(gameState, playerId)
   const connectedRoads = existingRoads.filter(edgeId => {

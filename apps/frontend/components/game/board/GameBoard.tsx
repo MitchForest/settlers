@@ -6,6 +6,7 @@ import { GameTheme } from '@/lib/theme-types'
 import { HexGridLayer } from './layers/HexGridLayer'
 import { PortLayer } from './layers/PortLayer'
 import { PieceLayer } from './layers/PieceLayer'
+import { BuildingPlacementLayer } from './layers/BuildingPlacementLayer'
 import { useGameStore } from '@/stores/gameStore'
 import { useSimplePanZoom } from '@/lib/use-simple-pan-zoom'
 
@@ -13,9 +14,11 @@ interface GameBoardProps {
   board: Board
   theme: GameTheme | null
   onGameAction?: (action: GameAction) => void
+  placementMode?: 'settlement' | 'city' | 'road' | null
+  onPlacementModeChange?: (mode: 'settlement' | 'city' | 'road' | null) => void
 }
 
-export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
+export function GameBoard({ board, theme, onGameAction, placementMode, onPlacementModeChange }: GameBoardProps) {
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -125,6 +128,17 @@ export function GameBoard({ board, theme, onGameAction }: GameBoardProps) {
           />
           <PortLayer board={board} />
           <PieceLayer board={board} />
+          {gameState && localPlayerId && onGameAction && (
+            <BuildingPlacementLayer
+              board={board}
+              gameState={gameState}
+              localPlayerId={localPlayerId}
+              isMyTurn={gameState.currentPlayer === localPlayerId}
+              placementMode={placementMode || null}
+              onGameAction={onGameAction}
+              onModeChange={onPlacementModeChange || (() => {})}
+            />
+          )}
         </svg>
       </div>
       

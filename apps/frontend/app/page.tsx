@@ -34,7 +34,7 @@ export default function Home() {
     setShowMagicLink
   } = useAppStore()
   const [showGuestProfile, setShowGuestProfile] = useState(false)
-  const { user, profile, loading: authLoading, isGuest } = useAuth()
+  const { user, profile: _profile, loading: _authLoading, isGuest } = useAuth()
 
   useEffect(() => {
     checkSystemStatus()
@@ -58,10 +58,11 @@ export default function Home() {
   }
 
   const handleGameCreated = async (gameCode: string, gameId: string, hostPlayerId?: string, lobbyUrl?: string) => {
-    console.log('Game created successfully:', { gameCode, gameId, hostPlayerId, lobbyUrl })
+    console.log('🎯 Game created successfully:', { gameCode, gameId, hostPlayerId, lobbyUrl })
     
     if (lobbyUrl) {
       // Use the session-based URL provided by the backend
+      console.log('🔄 Navigating to lobby:', lobbyUrl)
       router.push(lobbyUrl)
     } else if (hostPlayerId) {
       // Fallback to old method (shouldn't happen with new backend)
@@ -79,7 +80,7 @@ export default function Home() {
 
   // Temporarily override for demo - always show as connected if API works
   const isSystemConnected = apiStatus === 'connected' // && dbStatus === 'connected'
-  const isAuthenticated = user && !isGuest
+  const _isAuthenticated = user && !isGuest
 
   // Handle authentication interception
   const handleGameAction = (action: 'create' | 'join') => {

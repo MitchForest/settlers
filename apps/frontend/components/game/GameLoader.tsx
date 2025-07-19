@@ -18,7 +18,7 @@ export function GameLoader({ players, onLoaded, children }: GameLoaderProps) {
   useEffect(() => {
     if (!gameEngine && !isLoading && !error) {
       // Start loading packages
-      loadGamePackages(players)
+      loadGamePackages()
         .catch(console.error)
     }
   }, [players, loadGamePackages, gameEngine, isLoading, error])
@@ -50,7 +50,7 @@ export function GameLoader({ players, onLoaded, children }: GameLoaderProps) {
           <h3 className="text-lg font-semibold text-red-600 mb-2">Loading Error</h3>
           <p className="text-gray-600 mb-4">{error}</p>
           <button 
-            onClick={() => loadGamePackages(players).then(onLoaded)}
+            onClick={() => loadGamePackages().then(() => onLoaded({ gameEngine, aiSystem }))}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             Retry

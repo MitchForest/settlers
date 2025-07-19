@@ -2,15 +2,26 @@
   "name": "@settlers/ai-framework",
   "version": "0.1.0",
   "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "vitest",
-    "test:initial-placement": "vitest run --reporter=verbose initial-placement"
+    "test:initial-placement": "vitest run --reporter=verbose initial-placement",
+    "lint": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@settlers/game-engine": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@eslint/js": "^9.31.0",
+    "@typescript-eslint/eslint-plugin": "^8.37.0", 
+    "@typescript-eslint/parser": "^8.37.0",
+    "eslint": "^9.31.0",
+    "typescript": "^5.8.3",
     "vitest": "^2.0.0"
   }
 } 

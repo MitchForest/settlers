@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState, useCallback } from 'react'
+import React, { use, useEffect, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
 import { PlayerSidebar } from '@/components/game/ui/PlayerSidebar'
@@ -11,7 +11,7 @@ import { TurnActionsPanel } from '@/components/game/ui/TurnActionsPanel'
 
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { RotateCcw, Palette, LogOut, Info } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import type { GameAction } from '@settlers/game-engine'
 import { loadGameEngine } from '@/lib/game-engine-loader'
 import { DynamicLoading } from '@/components/ui/dynamic-loading'
@@ -43,12 +43,20 @@ function GamePageContent({ gameId }: { gameId: string }) {
     enableToasts: true,
     enableNotifications: true
   })
-  
-  const [gameEngine, setGameEngine] = useState<unknown | null>(null)
 
+  // Dialog management reference
+  const dialogsRef = React.useRef<{
+    robberVictim?: (hexId: string) => void
+    discardCards?: (playerId: string, requiredDiscards: number) => void
+    developmentCard?: (cardType: 'knight' | 'yearOfPlenty' | 'monopoly' | 'roadBuilding') => void
+  }>({})
+
+  // Building placement mode state
+  const [placementMode, setPlacementMode] = React.useState<'settlement' | 'city' | 'road' | null>(null)
+  
   // Load game engine on mount
   useEffect(() => {
-    loadGameEngine().then(setGameEngine).catch(console.error)
+    loadGameEngine().catch(console.error)
   }, [])
 
   // Get player ID from URL params or localStorage
@@ -208,6 +216,8 @@ function GamePageContent({ gameId }: { gameId: string }) {
       <GameInterface 
         isConnected={turnManager.isConnected}
         gameId={gameId}
+        onGameAction={handleGameActionLegacy}
+        onOpenDialog={dialogsRef.current}
       />
 
       {/* Main game display */}
@@ -217,6 +227,8 @@ function GamePageContent({ gameId }: { gameId: string }) {
           board={currentGameState.board}
           theme={theme}
           onGameAction={handleGameActionLegacy}
+          placementMode={placementMode}
+          onPlacementModeChange={setPlacementMode}
         />
         
         {/* Players Panel - Top edge to edge */}
@@ -245,6 +257,8 @@ function GamePageContent({ gameId }: { gameId: string }) {
               localPlayer={localPlayer}
               isMyTurn={turnManager.isMyTurn}
               onAction={handleGameActionLegacy}
+              onOpenDialog={dialogsRef.current.developmentCard}
+              onEnterPlacementMode={setPlacementMode}
             />
 
             {/* Turn Actions Panel */}

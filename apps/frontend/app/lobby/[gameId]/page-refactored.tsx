@@ -20,7 +20,7 @@ import {
   SessionError,
   RecoveryAction 
 } from '@/lib/session-types'
-import type { LobbyPlayer } from '@/lib/types/lobby-types'
+// import type { LobbyPlayer } from '@/lib/types/lobby-types'
 import { ConnectionStatus } from '@/components/ui/connection-status'
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
@@ -68,6 +68,7 @@ export default function LobbyPageRefactored({ params }: { params: Promise<PagePa
   // This hook handles ALL WebSocket complexity internally
   const gameWebSocket = useGameWebSocket({
     sessionToken,
+    gameId,
     session: state.session!,
     onLobbyJoined: (data) => {
       console.log('🎮 Lobby joined successfully:', data)
@@ -87,7 +88,8 @@ export default function LobbyPageRefactored({ params }: { params: Promise<PagePa
     },
     onError: (error) => {
       console.error('🎮 WebSocket error:', error)
-      toast.error(`Game error: ${error}`)
+      const errorMessage = typeof error === 'string' ? error : error.message || 'Unknown error'
+      toast.error(`Game error: ${errorMessage}`)
     }
   })
 
@@ -335,7 +337,7 @@ export default function LobbyPageRefactored({ params }: { params: Promise<PagePa
         </div>
         
         {/* Connection status */}
-        <ConnectionStatus status={gameWebSocket.status} />
+        <ConnectionStatus status={gameWebSocket.status === 'failed' ? 'error' : gameWebSocket.status as 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'offline'} />
       </HoneycombBackground>
     )
   }

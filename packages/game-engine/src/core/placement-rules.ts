@@ -54,6 +54,27 @@ export function getDistanceRuleViolations(board: Board): string[] {
  * Uses graph traversal to find all reachable positions
  */
 export function getPlayerRoadNetwork(state: GameState, playerId: PlayerId): Set<string> {
+  // Validate input parameters
+  if (!state) {
+    console.error('[getPlayerRoadNetwork] Invalid state: null or undefined')
+    return new Set<string>()
+  }
+  
+  if (!state.board) {
+    console.error('[getPlayerRoadNetwork] Invalid state: missing board')
+    return new Set<string>()
+  }
+  
+  if (!state.board.vertices) {
+    console.error('[getPlayerRoadNetwork] Invalid state: missing board.vertices')
+    return new Set<string>()
+  }
+  
+  if (!playerId) {
+    console.error('[getPlayerRoadNetwork] Invalid playerId: null or undefined')
+    return new Set<string>()
+  }
+
   const reachableVertices = new Set<string>()
   const visitedEdges = new Set<string>()
   
@@ -238,6 +259,27 @@ function getSetupPhaseTargetSettlement(state: GameState, playerId: PlayerId): st
  * Considers distance rule and network connectivity
  */
 export function getPossibleSettlementPositions(state: GameState, playerId: PlayerId): string[] {
+  // Validate input parameters
+  if (!state) {
+    console.error('[getPossibleSettlementPositions] Invalid state: null or undefined')
+    return []
+  }
+  
+  if (!state.board) {
+    console.error('[getPossibleSettlementPositions] Invalid state: missing board')
+    return []
+  }
+  
+  if (!state.board.vertices) {
+    console.error('[getPossibleSettlementPositions] Invalid state: missing board.vertices')
+    return []
+  }
+  
+  if (!playerId) {
+    console.error('[getPossibleSettlementPositions] Invalid playerId: null or undefined')
+    return []
+  }
+
   const validPositions: string[] = []
   const networkVertices = getPlayerRoadNetwork(state, playerId)
   
@@ -267,6 +309,27 @@ export function getPossibleSettlementPositions(state: GameState, playerId: Playe
  * Considers network connectivity and setup phase rules
  */
 export function getPossibleRoadPositions(state: GameState, playerId: PlayerId): string[] {
+  // Validate input parameters
+  if (!state) {
+    console.error('[getPossibleRoadPositions] Invalid state: null or undefined')
+    return []
+  }
+  
+  if (!state.board) {
+    console.error('[getPossibleRoadPositions] Invalid state: missing board')
+    return []
+  }
+  
+  if (!state.board.edges) {
+    console.error('[getPossibleRoadPositions] Invalid state: missing board.edges')
+    return []
+  }
+  
+  if (!playerId) {
+    console.error('[getPossibleRoadPositions] Invalid playerId: null or undefined')
+    return []
+  }
+
   const validPositions: string[] = []
   
   state.board.edges.forEach((edge, edgeId) => {

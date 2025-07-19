@@ -85,6 +85,7 @@ app.post('/create', async (c) => {
     })
 
     // Create game using event store
+    console.log('🔄 Calling eventStore.createGame...')
     const result = await eventStore.createGame({
       id: gameId,
       gameCode,
@@ -92,6 +93,7 @@ app.post('/create', async (c) => {
       hostPlayerName: finalHostPlayerName,
       hostAvatarEmoji: finalHostAvatarEmoji
     })
+    console.log('✅ eventStore.createGame completed')
 
     // Generate proper session token for the host
     const authToken = c.req.header('Authorization')?.replace('Bearer ', '') || ''

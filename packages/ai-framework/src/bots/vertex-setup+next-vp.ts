@@ -63,7 +63,7 @@ export class VertexSetupNextVPBot {
     const startTime = Date.now()
     const actionsExecuted: GameAction[] = []
     const phaseTransitions: GamePhase[] = []
-    const maxActions = 20 // Prevent infinite loops
+    const maxActions = 10 // Prevent infinite loops - reduced for performance
     
     try {
       const initialState = this.gameFlow.getState()

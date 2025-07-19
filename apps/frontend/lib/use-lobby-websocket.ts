@@ -147,10 +147,15 @@ export function useLobbyWebSocket(options: UseLobbyWebSocketOptions) {
       
       // Set up timeout for auto-join
       const joinTimeout = window.setTimeout(() => {
-        console.error('🎮 Auto-join timeout - game creation may be stuck')
-        setError('Connection timeout during game join')
+        console.error('🎮 Auto-join timeout - game creation may be stuck', {
+          gameId,
+          status: newStatus,
+          wsUrl,
+          hasSessionToken: !!sessionToken
+        })
+        setError('Connection timeout during game join - check backend logs')
         optionsRef.current.onError?.('Connection timeout during game join')
-      }, 15000) // 15 second timeout for game join
+      }, 20000) // 20 second timeout for game join (increased from 15s)
       
       // The backend now auto-joins on connection, so we don't need to send joinLobby
       // Just clear the timeout when we receive the first lobby state
@@ -221,7 +226,9 @@ export function useLobbyWebSocket(options: UseLobbyWebSocketOptions) {
     return await send({ type: 'startGame', gameId }, 15000) // Longer timeout for game start
   }, [send, gameId])
 
-  const addAIBot = useCallback(async (name: string, difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
+  const addAIBot = useCallback(async (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => {
+    // Generate a name automatically based on personality
+    const name = `${personality.charAt(0).toUpperCase() + personality.slice(1)} Bot`
     console.log('🎮 Adding AI bot:', name, difficulty, personality)
     return await send({ 
       type: 'addAIBot', 

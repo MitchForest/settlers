@@ -30,7 +30,7 @@ export function smartDiscard(gameState: GameState, playerId: PlayerId): DiscardR
   
   // Strategy: Keep resources for current goal, discard excess/duplicates
   const discard = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }
-  let remaining = toDiscard
+  const remaining = toDiscard
   
   // 1. Never discard if we can build something important immediately
   if (buildOption?.canBuild) {

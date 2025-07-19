@@ -118,16 +118,16 @@ function handleSetupPhase(gameState: GameState, playerId: PlayerId): GameAction 
     // Place settlement
     const vertexId = strategy.selectFirstSettlement(gameState, playerId)
     return {
-      type: 'placeBuilding',
+      type: 'build',
       playerId,
-      data: { buildingType: 'settlement', vertexId }
+      data: { buildingType: 'settlement', position: vertexId }
     }
   } else if (possibleRoads.length > 0) {
     // Place road - just take first available for now
     return {
-      type: 'placeRoad',
+      type: 'build',
       playerId,
-      data: { edgeId: possibleRoads[0] }
+      data: { buildingType: 'road', position: possibleRoads[0] }
     }
   }
   

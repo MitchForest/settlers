@@ -29,11 +29,33 @@ import {
   createGameMessageError
 } from './types/game-message-types'
 
+export interface LobbyData {
+  gameId: string
+  gameCode: string
+  players: Array<{
+    id: string
+    name: string
+    isReady: boolean
+    isAI?: boolean
+    avatarEmoji: string
+    isHost: boolean
+  }>
+  maxPlayers: number
+  canStart: boolean
+  isHost: boolean
+}
+
 interface UseGameWebSocketOptions {
   sessionToken: string
   gameId: string
   playerId?: PlayerId
   spectatorMode?: boolean
+  session?: any // For the refactored page
+  
+  // Lobby callbacks
+  onLobbyJoined?: (data: LobbyData) => void
+  onLobbyUpdate?: (players: LobbyData['players'], canStart: boolean) => void
+  onGameStarted?: () => void
   
   // Turn management callbacks
   onTurnStarted?: (data: {
@@ -424,6 +446,25 @@ export function useGameWebSocket(options: UseGameWebSocketOptions) {
     return Math.max(0, connectionState.currentTurn.timeRemaining - elapsed)
   }, [connectionState.currentTurn])
 
+  // Lobby management methods
+  const startGame = useCallback((): boolean => {
+    // TODO: Implement actual start game logic
+    console.log('🎮 Starting game...')
+    return true
+  }, [])
+
+  const addAIBot = useCallback((difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic'): boolean => {
+    // TODO: Implement actual add AI bot logic  
+    console.log('🤖 Adding AI bot...', { difficulty, personality })
+    return true
+  }, [])
+
+  const removeAIBot = useCallback((botPlayerId: string): boolean => {
+    // TODO: Implement actual remove AI bot logic
+    console.log('🗑️ Removing AI bot...', botPlayerId)
+    return true
+  }, [])
+
   return {
     // Connection state
     status: connectionState.status,
@@ -448,6 +489,11 @@ export function useGameWebSocket(options: UseGameWebSocketOptions) {
     // Utility methods
     getConnectionHealth,
     getRemainingTurnTime,
+    
+    // Lobby management methods
+    startGame,
+    addAIBot,
+    removeAIBot,
     
     // Raw send for custom messages
     sendMessage

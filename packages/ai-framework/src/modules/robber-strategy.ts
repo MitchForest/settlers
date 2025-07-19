@@ -73,6 +73,9 @@ export function selectRobberTarget(gameState: GameState, playerId: PlayerId): Ro
   
   if (candidates.length > 0) {
     const best = candidates[0]
+    if (!best) {
+      return null
+    }
     console.log(`🎯 Best robber target: ${best.reasoning} (score: ${best.score.toFixed(1)})`)
     return {
       hexPosition: best.hexPosition,
@@ -137,6 +140,13 @@ export function selectStealTarget(gameState: GameState, playerId: PlayerId, avai
   
   if (candidates.length > 0) {
     const best = candidates[0]
+    if (!best) {
+      return {
+        targetPlayerId: availableTargets[0] ?? 'unknown',
+        reasoning: 'Fallback target',
+        likelihood: 0.5
+      }
+    }
     console.log(`🎯 Best steal target: ${best.targetPlayerId} (${best.reasoning})`)
     return {
       targetPlayerId: best.targetPlayerId,
@@ -146,7 +156,7 @@ export function selectStealTarget(gameState: GameState, playerId: PlayerId, avai
   }
   
   return {
-    targetPlayerId: availableTargets[0],
+    targetPlayerId: availableTargets[0] ?? 'unknown',
     reasoning: 'Random fallback',
     likelihood: 0.5
   }

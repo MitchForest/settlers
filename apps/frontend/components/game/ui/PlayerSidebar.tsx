@@ -12,6 +12,8 @@ interface PlayerSidebarProps {
   localPlayer: Player
   isMyTurn: boolean
   onAction: (action: GameAction) => void
+  onOpenDialog?: (cardType: 'knight' | 'yearOfPlenty' | 'monopoly' | 'roadBuilding') => void
+  onEnterPlacementMode?: (mode: 'settlement' | 'city' | 'road') => void
 }
 
 // Resource emojis mapping
@@ -86,7 +88,7 @@ const ACTION_INFO = {
   }
 } as const
 
-export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: PlayerSidebarProps) {
+export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction, onOpenDialog, onEnterPlacementMode }: PlayerSidebarProps) {
   // Get real-time turn data from turn store
   const { currentTurn, aiTurn, notifications } = useTurnStore()
   
@@ -267,7 +269,7 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                 ) : (
                   <>
                     <User className="w-6 h-6 mx-auto mb-2 text-orange-400" />
-                    Waiting for other player's turn
+                    Waiting for other player&apos;s turn
                   </>
                 )}
               </div>
@@ -361,7 +363,13 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
               {gameState.phase === 'actions' && (
                 <>
                   <Button 
-                    onClick={() => handleAction('build', { buildingType: 'settlement' })}
+                    onClick={() => {
+                      if (onEnterPlacementMode) {
+                        onEnterPlacementMode('settlement')
+                      } else {
+                        handleAction('build', { buildingType: 'settlement' })
+                      }
+                    }}
                     disabled={!canBuildSettlement}
                     variant="outline"
                     className={ds(
@@ -394,7 +402,13 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                   </Button>
 
                   <Button 
-                    onClick={() => handleAction('build', { buildingType: 'city' })}
+                    onClick={() => {
+                      if (onEnterPlacementMode) {
+                        onEnterPlacementMode('city')
+                      } else {
+                        handleAction('build', { buildingType: 'city' })
+                      }
+                    }}
                     disabled={!canBuildCity}
                     variant="outline"
                     className={ds(
@@ -427,7 +441,13 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                   </Button>
 
                   <Button 
-                    onClick={() => handleAction('build', { buildingType: 'road' })}
+                    onClick={() => {
+                      if (onEnterPlacementMode) {
+                        onEnterPlacementMode('road')
+                      } else {
+                        handleAction('build', { buildingType: 'road' })
+                      }
+                    }}
                     disabled={!canBuildRoad}
                     variant="outline"
                     className={ds(
@@ -534,7 +554,19 @@ export function PlayerSidebar({ gameState, localPlayer, isMyTurn, onAction }: Pl
                 playableCards.map((card, index) => (
                   <Button
                     key={index}
-                    onClick={() => handleAction('playCard', { cardType: card.type })}
+                    onClick={() => {
+                      // For interactive cards, open dialog instead of direct play
+                      if (card.type === 'knight' || card.type === 'yearOfPlenty' || 
+                          card.type === 'monopoly' || card.type === 'roadBuilding') {
+                        if (onOpenDialog) {
+                          onOpenDialog(card.type)
+                        } else {
+                          handleAction('playCard', { cardType: card.type })
+                        }
+                      } else {
+                        handleAction('playCard', { cardType: card.type })
+                      }
+                    }}
                     disabled={!isMyTurn}
                     variant="outline"
                     className={ds(
