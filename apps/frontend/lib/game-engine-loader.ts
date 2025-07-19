@@ -1,22 +1,34 @@
 // Dynamic Game Engine Loader - Only loads heavy game logic when needed
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { logPackageLoad } from './package-loading-monitor'
 
-let gameEnginePromise: Promise<unknown> | null = null
-let aiSystemPromise: Promise<unknown> | null = null
+let gameEnginePromise: Promise<any> | null = null
+let aiSystemPromise: Promise<any> | null = null
+
+// Cache for loaded modules
+let gameEngineModule: any | null = null
+let aiSystemModule: any | null = null
 
 /**
  * Loads the game engine package dynamically when entering a game
  * This avoids loading ~300KB of game logic on the homepage
  */
-export async function loadGameEngine() {
+export async function loadGameEngine(): Promise<any> {
   if (!gameEnginePromise) {
     logPackageLoad('game-engine', 'Game logic required')
     console.log('🎮 Loading game engine...')
-    // Dynamic import will be resolved at runtime when packages are built
-    gameEnginePromise = import('@settlers/game-engine' as string).catch(() => {
-      console.warn('Game engine not available yet')
-      return {}
+    
+    gameEnginePromise = import('@settlers/game-engine').then((module) => {
+      console.log('✅ Game engine loaded successfully')
+      gameEngineModule = module
+      return gameEngineModule
+    }).catch((error) => {
+      console.warn('⚠️ Game engine not available:', error)
+      // Return empty module for graceful degradation
+      const emptyModule = {}
+      gameEngineModule = emptyModule
+      return emptyModule
     })
   }
   return gameEnginePromise
@@ -26,13 +38,21 @@ export async function loadGameEngine() {
  * Loads the AI system package dynamically when adding AI players
  * This avoids loading ~400KB of AI logic unless AI is actually used
  */
-export async function loadAISystem() {
+export async function loadAISystem(): Promise<any> {
   if (!aiSystemPromise) {
     logPackageLoad('ai-system', 'AI players detected')
     console.log('🤖 Loading AI system...')
-    aiSystemPromise = import('@settlers/ai-system' as string).catch(() => {
-      console.warn('AI system not available yet')
-      return {}
+    
+    aiSystemPromise = import('@settlers/ai-system').then((module) => {
+      console.log('✅ AI system loaded successfully')
+      aiSystemModule = module
+      return aiSystemModule
+    }).catch((error) => {
+      console.warn('⚠️ AI system not available:', error)
+      // Return empty module for graceful degradation
+      const emptyModule = {}
+      aiSystemModule = emptyModule
+      return emptyModule
     })
   }
   return aiSystemPromise
@@ -42,12 +62,74 @@ export async function loadAISystem() {
  * Loads the core calculations package when needed
  * This is lighter but still only loaded when needed
  */
-export async function loadCoreLite() {
+export async function loadCoreLite(): Promise<any> {
   // Use the main game engine for now, since game-engine-lite doesn't exist
   return loadGameEngine().catch(() => {
     console.warn('Core lite not available yet')
     return {}
   })
+}
+
+/**
+ * Check if game engine is already loaded (synchronous)
+ */
+export function isGameEngineLoaded(): boolean {
+  return gameEngineModule !== null
+}
+
+/**
+ * Check if AI system is already loaded (synchronous)
+ */
+export function isAISystemLoaded(): boolean {
+  return aiSystemModule !== null
+}
+
+/**
+ * Get the cached game engine module if already loaded
+ * Returns null if not loaded yet
+ */
+export function getCachedGameEngine(): any | null {
+  return gameEngineModule
+}
+
+/**
+ * Get the cached AI system module if already loaded
+ * Returns null if not loaded yet
+ */
+export function getCachedAISystem(): any | null {
+  return aiSystemModule
+}
+
+/**
+ * Reset the loading state (useful for testing or reloading)
+ */
+export function resetLoaders() {
+  gameEnginePromise = null
+  aiSystemPromise = null
+  gameEngineModule = null
+  aiSystemModule = null
+}
+
+/**
+ * React hook for loading game engine with loading states
+ */
+export function useGameEngine() {
+  return {
+    loadGameEngine,
+    isLoaded: isGameEngineLoaded(),
+    module: getCachedGameEngine()
+  }
+}
+
+/**
+ * React hook for loading AI system with loading states
+ */
+export function useAISystem() {
+  return {
+    loadAISystem,
+    isLoaded: isAISystemLoaded(),
+    module: getCachedAISystem()
+  }
 }
 
 /**

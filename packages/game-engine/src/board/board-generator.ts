@@ -160,33 +160,37 @@ export function generateBoard(): Board {
 /**
  * Generate vertices using proper hexagon geometry
  * Each vertex is the intersection of 3 hexagons
+ * Uses canonical IDs to prevent duplicates
  */
 function generateVertices(hexPositions: HexCoordinate[]): Map<string, Vertex> {
-  const vertices = new Map<string, Vertex>()
+  const vertexHexSets = new Map<string, { hexes: HexCoordinate[], direction: 'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW' }>()
   
-  // For each hex, get its 6 corners and create vertices
+  // Collect all possible vertex positions
   hexPositions.forEach(hexCoord => {
-    // Use Honeycomb to get the 6 vertex directions for this hex
     const directions: Array<'N' | 'NE' | 'SE' | 'S' | 'SW' | 'NW'> = ['N', 'NE', 'SE', 'S', 'SW', 'NW']
     
     directions.forEach(direction => {
-      // Create a unique vertex ID based on the hex and direction
-      const vertexId = `${hexCoord.q},${hexCoord.r},${hexCoord.s}-${direction}`
+      const touchingHexes = getHexesTouchingVertex(hexCoord, direction)
+      const canonicalId = createCanonicalVertexId(touchingHexes)
       
-      if (!vertices.has(vertexId)) {
-        // Calculate which 3 hexes touch this vertex
-        const touchingHexes = getHexesTouchingVertex(hexCoord, direction)
-        
-        vertices.set(vertexId, {
-          id: vertexId,
-          position: {
-            hexes: touchingHexes,
-            direction
-          },
-          building: null,
-          port: null
-        })
+      // Only store if we haven't seen this vertex yet
+      if (!vertexHexSets.has(canonicalId)) {
+        vertexHexSets.set(canonicalId, { hexes: touchingHexes, direction })
       }
+    })
+  })
+  
+  // Create deduplicated vertices
+  const vertices = new Map<string, Vertex>()
+  vertexHexSets.forEach(({ hexes, direction }, vertexId) => {
+    vertices.set(vertexId, {
+      id: vertexId,
+      position: {
+        hexes,
+        direction
+      },
+      building: null,
+      port: null
     })
   })
   
@@ -292,6 +296,16 @@ function compareHexCoords(a: HexCoordinate, b: HexCoordinate): number {
   if (a.q !== b.q) return a.q - b.q
   if (a.r !== b.r) return a.r - b.r
   return a.s - b.s
+}
+
+/**
+ * Create a canonical vertex ID based on the hexes it touches
+ * This ensures the same vertex gets the same ID regardless of creation order
+ */
+function createCanonicalVertexId(hexes: HexCoordinate[]): string {
+  // Sort hexes to create consistent ID regardless of creation order
+  const sortedHexes = [...hexes].sort(compareHexCoords)
+  return sortedHexes.map(h => `${h.q},${h.r},${h.s}`).join('|')
 }
 
 // Generate standard Catan ports with alternating pattern

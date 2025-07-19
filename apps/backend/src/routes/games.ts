@@ -93,8 +93,32 @@ app.post('/create', async (c) => {
       hostAvatarEmoji: finalHostAvatarEmoji
     })
 
-    // Generate session URL for the host
-    const sessionUrl = `/lobby/${gameId}?player=${result.hostPlayer.id}`
+    // Generate proper session token for the host
+    const authToken = c.req.header('Authorization')?.replace('Bearer ', '') || ''
+    
+    // Create session payload matching frontend format
+    const sessionPayload = {
+      gameId,
+      playerId: result.hostPlayer.id,
+      authToken,
+      role: 'host' as const,
+      permissions: ['start_game', 'add_ai_bots', 'remove_ai_bots', 'kick_players', 'game_actions'],
+      expiresAt: Date.now() + (4 * 60 * 60 * 1000),
+      issuedAt: Date.now(),
+      gameCode
+    }
+    
+    // Generate JWT token matching frontend SimpleJWT implementation
+    const header = { alg: 'HS256', typ: 'JWT' }
+    const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64')
+    const encodedPayload = Buffer.from(JSON.stringify(sessionPayload)).toString('base64')
+    
+    const secret = process.env.JWT_SECRET || 'settlers-dev-secret-key'
+    const signature = Buffer.from(`${encodedHeader}.${encodedPayload}.${secret}`).toString('base64')
+    
+    const sessionToken = `${encodedHeader}.${encodedPayload}.${signature}`
+    
+    const sessionUrl = `/lobby/${gameId}?s=${encodeURIComponent(sessionToken)}`
 
     return c.json({
       success: true,

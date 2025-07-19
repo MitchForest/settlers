@@ -1,9 +1,9 @@
 import { eq, and, or, sql } from 'drizzle-orm'
 import { db } from '../db/index'
-import { userProfiles } from '../db/schema'
 import { eventStore } from '../db/event-store-repository'
 import type { FriendEvent } from '@settlers/game-engine'
 import { server as unifiedWebSocketServer } from '../websocket/unified-server'
+import { supabaseAdmin } from '../auth/supabase'
 
 // **FRIENDS DOMAIN TYPES**
 
@@ -739,24 +739,16 @@ export class FriendsCommandService {
       // This is allowed because it's a search operation, not state reconstruction
       const searchQuery = `%${query.toLowerCase()}%`
       
-      const users = await db
-        .select({
-          id: userProfiles.id,
-          name: userProfiles.name,
-          email: userProfiles.email,
-          avatarEmoji: userProfiles.avatarEmoji,
-        })
-        .from(userProfiles)
-        .where(
-          and(
-            or(
-              sql`LOWER(${userProfiles.name}) LIKE ${searchQuery}`,
-              sql`LOWER(${userProfiles.email}) LIKE ${searchQuery}`
-            ),
-            sql`${userProfiles.id} != ${currentUserId}`
-          )
-        )
+      const { data: users, error } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id, name, email, avatar_emoji')
+        .or(`name.ilike.${searchQuery},email.ilike.${searchQuery}`)
+        .neq('id', currentUserId)
         .limit(limit)
+      
+      if (error) {
+        throw new Error(`Failed to search users: ${error.message}`)
+      }
 
       if (users.length === 0) {
         return []
@@ -767,6 +759,7 @@ export class FriendsCommandService {
       if (!friendsState.success || !friendsState.state) {
         return users.map(user => ({
           ...user,
+          avatarEmoji: user.avatar_emoji,
           friendshipStatus: 'none' as const
         }))
       }
@@ -785,6 +778,7 @@ export class FriendsCommandService {
 
         return {
           ...user,
+          avatarEmoji: user.avatar_emoji,
           friendshipStatus
         }
       })
@@ -800,18 +794,21 @@ export class FriendsCommandService {
    */
   private async getUserBasicInfo(userId: string): Promise<UserBasicInfo | null> {
     try {
-      const [user] = await db
-        .select({
-          id: userProfiles.id,
-          name: userProfiles.name,
-          email: userProfiles.email,
-          avatarEmoji: userProfiles.avatarEmoji,
-        })
-        .from(userProfiles)
-        .where(eq(userProfiles.id, userId))
-        .limit(1)
+      const { data: user, error } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id, name, email, avatar_emoji')
+        .eq('id', userId)
+        .single()
 
-      return user || null
+      if (error) {
+        console.error('Error getting user basic info:', error)
+        return null
+      }
+
+      return user ? {
+        ...user,
+        avatarEmoji: user.avatar_emoji
+      } : null
     } catch (error) {
       console.error('Error getting user basic info:', error)
       return null

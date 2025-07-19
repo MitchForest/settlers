@@ -21,7 +21,7 @@ import { ConnectionStatus } from '@/components/ui/connection-status'
 
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<'testing' | 'connected' | 'failed'>('testing')
-  const [dbStatus, setDbStatus] = useState<'unknown' | 'connected' | 'failed'>('unknown')
+  const [_dbStatus, setDbStatus] = useState<'unknown' | 'connected' | 'failed'>('unknown')
   const [pendingAction, setPendingAction] = useState<'create' | 'join' | 'observe' | null>(null)
   
   const router = useRouter()
@@ -128,14 +128,13 @@ export default function Home() {
     }
   }
 
-  return (
+    return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      <HoneycombBackground />
-      
-      {/* Header */}
-      <header className="relative z-10 flex justify-between items-center p-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Builders</h1>
+      <HoneycombBackground>
+        {/* Header */}
+        <header className="relative z-10 flex justify-between items-center p-6">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-foreground">Builders</h1>
           <ConnectionStatus 
             status={isSystemConnected ? 'connected' : (apiStatus === 'testing' ? 'connecting' : 'error')}
             className="hidden sm:flex"
@@ -252,6 +251,7 @@ export default function Home() {
         }}
         onSuccess={handleAuthSuccess}
       />
+      </HoneycombBackground>
     </div>
   )
 }

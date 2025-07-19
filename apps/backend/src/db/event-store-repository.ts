@@ -1,7 +1,7 @@
 import { eq, and, asc, desc, gte, lte, inArray, sql } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { db } from './index'
-import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from './schema'
+import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from '../../drizzle/schema'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
 import type { 

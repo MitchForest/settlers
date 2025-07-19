@@ -1,0 +1,16 @@
+{
+  "name": "@settlers/ai-framework",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:initial-placement": "vitest run --reporter=verbose initial-placement"
+  },
+  "dependencies": {
+    "@settlers/game-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vitest": "^2.0.0"
+  }
+} 

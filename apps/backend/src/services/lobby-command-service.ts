@@ -1,7 +1,7 @@
 import { eventStore, EventType } from '../db/event-store-repository'
 import type { GameEvent } from '@settlers/game-engine'
 import { db } from '../db/index'
-import { players } from '../db/schema'
+import { players } from '../../drizzle/schema'
 import { eq } from 'drizzle-orm'
 
 // Import types directly instead of from cross-package dependencies

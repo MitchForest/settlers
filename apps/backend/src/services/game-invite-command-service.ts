@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { db } from '../db/index'
-import { userProfiles, games } from '../db/schema'
+import { games } from '../../drizzle/schema'
 import { eventStore } from '../db/event-store-repository'
 import type { GameInviteEvent } from '@settlers/game-engine'
 import { server as unifiedWebSocketServer } from '../websocket/unified-server'
+import { supabaseAdmin } from '../auth/supabase'
 
 export interface SendGameInviteCommand {
   fromUserId: string
@@ -384,18 +385,21 @@ export class GameInviteCommandService {
 
   private async getUserBasicInfo(userId: string): Promise<any> {
     try {
-      const [user] = await db
-        .select({
-          id: userProfiles.id,
-          name: userProfiles.name,
-          email: userProfiles.email,
-          avatarEmoji: userProfiles.avatarEmoji,
-        })
-        .from(userProfiles)
-        .where(eq(userProfiles.id, userId))
-        .limit(1)
+      const { data: user, error } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id, name, email, avatar_emoji')
+        .eq('id', userId)
+        .single()
 
-      return user || null
+      if (error) {
+        console.error('Error getting user basic info:', error)
+        return null
+      }
+
+      return user ? {
+        ...user,
+        avatarEmoji: user.avatar_emoji
+      } : null
     } catch (error) {
       console.error('Error getting user basic info:', error)
       return null

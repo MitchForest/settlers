@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { use, useEffect, useState, useCallback } from 'react'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameBoard } from '@/components/game/board/GameBoard'
@@ -11,7 +13,9 @@ import { Button } from '@/components/ui/button'
 // Removed unused Dialog components
 import { toast } from 'sonner'
 import { RotateCcw, Palette, LogOut, Info } from 'lucide-react'
-import { GameAction, GameFlowManager } from '@settlers/game-engine'
+import type { GameAction } from '@settlers/game-engine'
+import { loadGameEngine } from '@/lib/game-engine-loader'
+import { DynamicLoading } from '@/components/ui/dynamic-loading'
 import { useGameStore } from '@/stores/gameStore'
 import { useRouter } from 'next/navigation'
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
@@ -22,8 +26,7 @@ interface PageParams {
   gameId: string
 }
 
-export default function GamePage({ params }: { params: Promise<PageParams> }) {
-  const { gameId } = use(params)
+function GamePageContent({ gameId }: { gameId: string }) {
   const router = useRouter()
   
   // Theme loading
@@ -39,8 +42,14 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     updateGameState 
   } = useGameStore()
   
-  const [gameManager, setGameManager] = useState<GameFlowManager | null>(null)
+  const [gameManager, setGameManager] = useState<any | null>(null)
+  const [gameEngine, setGameEngine] = useState<any | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+
+  // Load game engine on mount
+  useEffect(() => {
+    loadGameEngine().then(setGameEngine).catch(console.error)
+  }, [])
 
   // Get player ID from URL params or localStorage
   const getPlayerIdForGame = useCallback(() => {
@@ -79,12 +88,12 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   // Update game manager when state changes
   useEffect(() => {
-    if (gameState) {
-      const manager = new GameFlowManager(gameState)
+    if (gameState && gameEngine?.GameFlowManager) {
+      const manager = new gameEngine.GameFlowManager(gameState)
       setGameManager(manager)
       setIsConnecting(false)
     }
-  }, [gameState])
+  }, [gameState, gameEngine])
 
   // Auto-load settlers theme when component mounts
   useEffect(() => {
@@ -144,7 +153,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
               toast.success(`Rolled ${dice.die1} + ${dice.die2} = ${dice.sum}`)
               
               // Show resource distribution if any
-              const resourceEvent = result.events.find(e => e.type === 'resourcesDistributed')
+              const resourceEvent = result.events.find((e: any) => e.type === 'resourcesDistributed')
               if (resourceEvent) {
                 const distribution = resourceEvent.data.distribution as Record<string, Record<string, number>>
                 let totalGained = 0
@@ -163,14 +172,14 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           
         case 'build':
           // Check if this started placement mode
-          const placementEvent = result.events.find(e => e.type === 'placementModeStarted')
+          const placementEvent = result.events.find((e: any) => e.type === 'placementModeStarted')
           if (placementEvent) {
             toast.info(`Click on the board to place your ${placementEvent.data.buildingType}`)
           }
           break
           
         case 'buyCard':
-          const cardEvent = result.events.find(e => e.type === 'developmentCardPurchased')
+          const cardEvent = result.events.find((e: any) => e.type === 'developmentCardPurchased')
           if (cardEvent) {
             toast.success(`Development card purchased!`)
           }
@@ -185,7 +194,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           break
           
         case 'stealResource':
-          const stealEvent = result.events.find(e => e.type === 'resourceStolen')
+          const stealEvent = result.events.find((e: any) => e.type === 'resourceStolen')
           if (stealEvent) {
             const targetPlayer = result.newState.players.get(stealEvent.data.targetPlayerId)
             toast.success(`Stole a ${stealEvent.data.resourceType} from ${targetPlayer?.name}!`)
@@ -193,12 +202,12 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
             toast.info('No resources to steal')
           }
           // Show resource distribution if any
-          const resourceEvent = result.events.find(e => e.type === 'resourcesDistributed')
+          const resourceEvent = result.events.find((e: any) => e.type === 'resourcesDistributed')
           if (resourceEvent) {
             const distribution = resourceEvent.data.distribution as Record<string, Record<string, number>>
             let totalGained = 0
-            Object.values(distribution).forEach((playerResources) => {
-              Object.values(playerResources).forEach((amount) => {
+            Object.values(distribution).forEach((playerResources: any) => {
+              Object.values(playerResources).forEach((amount: any) => {
                 totalGained += amount
               })
             })
@@ -221,7 +230,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           break
 
         case 'portTrade':
-          const portEvent = result.events.find(e => e.type === 'portTradeExecuted')
+          const portEvent = result.events.find((e: any) => e.type === 'portTradeExecuted')
           if (portEvent) {
             const portType = portEvent.data.portType
             toast.success(`${portType === 'generic' ? 'Generic' : portType} port trade completed!`)
@@ -229,7 +238,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           break
 
         case 'createTradeOffer':
-          const tradeOfferEvent = result.events.find(e => e.type === 'tradeOfferCreated')
+          const tradeOfferEvent = result.events.find((e: any) => e.type === 'tradeOfferCreated')
           if (tradeOfferEvent) {
             const isOpen = tradeOfferEvent.data.isOpenOffer
             toast.success(isOpen ? 'Open trade offer created!' : 'Trade offer sent!')
@@ -237,7 +246,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           break
 
         case 'acceptTrade':
-          const acceptEvent = result.events.find(e => e.type === 'tradeAccepted')
+          const acceptEvent = result.events.find((e: any) => e.type === 'tradeAccepted')
           if (acceptEvent) {
             const initiatorName = result.newState.players.get(acceptEvent.data.initiator)?.name
             toast.success(`Trade with ${initiatorName} completed!`)
@@ -245,7 +254,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           break
 
         case 'rejectTrade':
-          const rejectEvent = result.events.find(e => e.type === 'tradeRejected')
+          const rejectEvent = result.events.find((e: any) => e.type === 'tradeRejected')
           if (rejectEvent) {
             const initiatorName = result.newState.players.get(rejectEvent.data.initiator)?.name
             toast.info(`Trade with ${initiatorName} rejected`)
@@ -476,5 +485,19 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
       {/* Connection Status */}
       <ConnectionStatus status={connectionStatus} />
     </HoneycombBackground>
+  )
+}
+
+export default function GamePage({ params }: { params: Promise<PageParams> }) {
+  const { gameId } = use(params)
+  
+  return (
+    <DynamicLoading
+      loader={loadGameEngine}
+      loadingMessage="Loading game engine..."
+      errorMessage="Failed to load game engine"
+    >
+      <GamePageContent gameId={gameId} />
+    </DynamicLoading>
   )
 } 

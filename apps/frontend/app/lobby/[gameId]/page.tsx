@@ -172,8 +172,9 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
       
       setState(prev => ({ ...prev, connectionStatus: 'connecting' }))
       
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000'
-      const ws = new WebSocket(`${wsUrl}/ws?s=${encodeURIComponent(sessionToken)}`)
+      // WebSocket server is on port 8080 with path /ws
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'
+      const ws = new WebSocket(`${wsUrl}?s=${encodeURIComponent(sessionToken)}`)
       
       // Track this connection
       currentConnectionRef.current = ws
@@ -189,7 +190,7 @@ export default function LobbyPage({ params }: { params: Promise<PageParams> }) {
           }))
         }
         
-        // Session is automatically validated on server, no need to send joinWithSession
+        // Session is automatically validated and user is auto-joined to game
       }
       
       ws.onmessage = (event) => {

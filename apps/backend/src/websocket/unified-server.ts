@@ -1,7 +1,51 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { IncomingMessage } from 'http'
+import { URL } from 'url'
 import { lobbyCommandService } from '../services/lobby-command-service'
 import { eventStore } from '../db/event-store-repository'
+
+// JWT Session Types
+interface GameSessionPayload {
+  gameId: string
+  playerId: string
+  authToken: string
+  role: 'host' | 'player' | 'observer'
+  permissions: string[]
+  expiresAt: number
+  issuedAt: number
+  gameCode?: string
+}
+
+// Simple JWT implementation (matching frontend)
+class SimpleJWT {
+  private static readonly SECRET = process.env.JWT_SECRET || 'settlers-dev-secret-key'
+  
+  static verify(token: string): { valid: boolean; payload?: GameSessionPayload; error?: string } {
+    try {
+      const [headerB64, payloadB64, signature] = token.split('.')
+      if (!headerB64 || !payloadB64 || !signature) {
+        return { valid: false, error: 'Invalid token format' }
+      }
+      
+      // Verify signature
+      const expectedSignature = Buffer.from(`${headerB64}.${payloadB64}.${this.SECRET}`).toString('base64')
+      if (signature !== expectedSignature) {
+        return { valid: false, error: 'Invalid signature' }
+      }
+      
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString())
+      
+      // Check expiration
+      if (payload.expiresAt && Date.now() > payload.expiresAt) {
+        return { valid: false, error: 'Token expired' }
+      }
+      
+      return { valid: true, payload }
+    } catch {
+      return { valid: false, error: 'Malformed token' }
+    }
+  }
+}
 
 interface ClientConnection {
   ws: WebSocket
@@ -11,6 +55,7 @@ interface ClientConnection {
   lastSequence: number
   heartbeatInterval?: NodeJS.Timeout
   isAlive: boolean
+  session?: GameSessionPayload
 }
 
 // **PROPER MESSAGE TYPE INTERFACES**
@@ -96,16 +141,81 @@ export class UnifiedWebSocketServer {
     console.log(`🌐 WebSocket server listening on port ${port}`)
   }
 
-  private handleConnection(ws: WebSocket, _request: IncomingMessage): void {
+  private handleConnection(ws: WebSocket, request: IncomingMessage): void {
     console.log('🔌 New WebSocket connection')
 
-    const connection: Partial<ClientConnection> = {
-      ws,
-      isAlive: true
+    // Extract session token from URL parameter
+    const url = new URL(request.url || '', 'ws://localhost')
+    const sessionToken = url.searchParams.get('s')
+    
+    if (!sessionToken) {
+      console.log('❌ No session token provided')
+      ws.close(4001, 'Authentication required')
+      return
     }
 
-    // Set up heartbeat
-    this.setupHeartbeat(connection as ClientConnection)
+    // Validate session token
+    const { valid, payload, error } = SimpleJWT.verify(decodeURIComponent(sessionToken))
+    
+    if (!valid || !payload) {
+      console.log('❌ Invalid session token:', error)
+      ws.close(4002, `Authentication failed: ${error}`)
+      return
+    }
+
+    console.log('✅ Session validated for user:', payload.playerId, 'game:', payload.gameId)
+
+    // Auto-join game based on session
+    this.handleAuthenticatedConnection(ws, payload)
+  }
+
+  private async handleAuthenticatedConnection(ws: WebSocket, session: GameSessionPayload): Promise<void> {
+    try {
+      // Auto-join the game using session data
+      const result = await lobbyCommandService.joinGame({
+        gameId: session.gameId,
+        userId: session.playerId.split('_')[1] || session.playerId, // Extract userId from playerId
+        playerName: session.playerId, // For now, use playerId as name
+        avatarEmoji: '👤'
+      })
+
+      if (!result.success) {
+        console.log('❌ Failed to auto-join game:', result.error)
+        ws.close(4003, `Join failed: ${result.error}`)
+        return
+      }
+
+      // Set up connection tracking with session
+      const connection: ClientConnection = {
+        ws,
+        gameId: session.gameId,
+        playerId: result.playerId,
+        userId: session.playerId.split('_')[1] || session.playerId,
+        lastSequence: 0,
+        isAlive: true,
+        session
+      }
+
+      this.setupHeartbeat(connection)
+      this.connectionToGame.set(ws, connection)
+
+      if (!this.gameConnections.has(session.gameId)) {
+        this.gameConnections.set(session.gameId, new Set())
+      }
+      this.gameConnections.get(session.gameId)!.add(connection)
+
+      // Send success response
+      this.sendResponse(ws, {
+        success: true,
+        data: { message: 'Auto-joined game successfully' }
+      })
+
+      console.log('✅ User auto-joined game:', session.gameId)
+
+    } catch (error) {
+      console.error('❌ Error in auto-join:', error)
+      ws.close(4004, 'Server error during join')
+    }
 
     ws.on('message', async (data: Buffer) => {
       try {
@@ -172,9 +282,7 @@ export class UnifiedWebSocketServer {
 
       switch (messageType) {
         // **GAME ENTITY** - Real game operations
-        case 'joinGame':
-          await this.handleJoinGame(ws, message.data)
-          break
+        // joinGame is now automatic via session authentication
         case 'leaveGame':
           await this.handleLeaveGame(ws, message.data)
           break

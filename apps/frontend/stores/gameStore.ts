@@ -6,18 +6,17 @@ import type { ReactFlowInstance } from 'reactflow'
 import { API_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { ReliableWebSocketManager, ConnectionStatus } from '../lib/websocket-manager'
+import type { GameState, Player, GameAction as EngineGameAction } from '@settlers/game-engine'
+import type { AIPlayerConfig } from '@settlers/ai-system'
+import { loadGameEngine, loadAISystem, isGameEngineLoaded, isAISystemLoaded } from '../lib/game-engine-loader'
 
-// TODO: GameState will be dynamically imported when game engine loads
-type GameState = any
-// TODO: Player will be dynamically imported when game engine loads  
-type Player = any
-// TODO: GameAction will be dynamically imported when game engine loads
-type GameAction = LightGameAction
+// Use proper types now that we have them defined
+type GameAction = EngineGameAction | LightGameAction
 
 // Loading states for dynamic packages
 interface GameEngineState {
-  gameEngine: unknown | null
-  aiSystem: unknown | null
+  gameEngine: any | null  // Will be typed properly when loaded
+  aiSystem: any | null    // Will be typed properly when loaded
   isLoading: boolean
   error: string | null
 }
@@ -71,7 +70,7 @@ export interface GameStore extends GameEngineState {
   startGame: (gameId: string) => Promise<void>
   
   // Game Engine Loading
-  loadGamePackages: (players: unknown[]) => Promise<{ gameEngine: unknown; aiSystem: unknown | null }>
+  loadGamePackages: (players: unknown[]) => Promise<{ gameEngine: any; aiSystem: any | null }>
   
   // AI Bot Actions
   addAIBot: (gameId: string, difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => Promise<void>
@@ -462,8 +461,12 @@ export const useGameStore = create<GameStore>()(
         })
         
         try {
-          const { loadGamePackages } = await import('../lib/game-engine-loader')
-          const { gameEngine, aiSystem } = await loadGamePackages(players)
+          // Always load the game engine
+          const gameEngine = await loadGameEngine()
+          
+          // Only load AI system if there are AI players
+          const hasAIPlayers = Array.isArray(players) && players.some((p: any) => p.isBot || p.type === 'ai')
+          const aiSystem = hasAIPlayers ? await loadAISystem() : null
           
           set((state) => {
             state.gameEngine = gameEngine
@@ -539,7 +542,14 @@ export const useGameStore = create<GameStore>()(
         try {
           const state = get().gameState
           if (!state || !state.players || !state.currentPlayer) return null
-          return state.players.get(state.currentPlayer) || null
+          
+          // Handle both Map and Array structures
+          if (state.players instanceof Map) {
+            return state.players.get(state.currentPlayer) || null
+          } else if (Array.isArray(state.players)) {
+            return (state.players as Player[]).find((p: Player) => p.id === state.currentPlayer) || null
+          }
+          return null
         } catch (error) {
           console.error('❌ Error getting current player:', error)
           return null
@@ -563,7 +573,14 @@ export const useGameStore = create<GameStore>()(
           const state = get().gameState
           const localId = get().localPlayerId
           if (!state || !localId || !state.players) return null
-          return state.players.get(localId) || null
+          
+          // Handle both Map and Array structures
+          if (state.players instanceof Map) {
+            return state.players.get(localId) || null
+          } else if (Array.isArray(state.players)) {
+            return (state.players as Player[]).find((p: Player) => p.id === localId) || null
+          }
+          return null
         } catch (error) {
           console.error('❌ Error getting my player:', error)
           return null

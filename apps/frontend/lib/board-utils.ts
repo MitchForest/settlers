@@ -1,9 +1,5 @@
 import { defineHex, Grid, hexToPoint, Orientation } from 'honeycomb-grid'
-import type { VertexPosition } from '@settlers/game-engine'
-// TODO: Board will be dynamically imported when game engine loads
-interface Board {
-  hexes: Map<string, { position: { q: number; r: number } }>
-}
+import type { VertexPosition, Board } from '@settlers/game-engine'
 
 // CRITICAL: This must match HexTile.tsx HEX_RADIUS constant
 export const HEX_RADIUS = 50  // Increased from 32 to make hexes more visible

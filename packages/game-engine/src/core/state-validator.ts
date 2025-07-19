@@ -293,9 +293,9 @@ export function canPlayDevelopmentCard(
     return { isValid: false, reason: 'Card already played' }
   }
   
-  // Victory point cards can be played anytime on your turn
+  // Victory point cards cannot be played - they remain hidden and count automatically
   if (card.type === 'victory') {
-    return { isValid: true }
+    return { isValid: false, reason: 'Victory point cards cannot be played - they remain hidden' }
   }
   
   // Other cards only during actions phase

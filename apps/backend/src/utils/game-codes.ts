@@ -3,7 +3,7 @@
  */
 
 import { db } from '../db/index'
-import { games } from '../db/schema'
+import { games } from '../../drizzle/schema'
 import { eq } from 'drizzle-orm'
 
 // Game code format: 6 uppercase letters/numbers

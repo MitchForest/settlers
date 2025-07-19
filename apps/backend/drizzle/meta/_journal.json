@@ -1,54 +1,19 @@
 {
-  "version": "5",
-  "dialect": "pg",
+  "version": "7",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1752808920092,
-      "tag": "0000_illegal_pride",
+      "version": "7",
+      "when": 1752899392512,
+      "tag": "0000_perfect_arachne",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "5",
-      "when": 1752816865772,
-      "tag": "0001_neat_whirlwind",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
       "version": "7",
-      "when": 1752817375727,
-      "tag": "0002_smooth_storm",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1752817815894,
-      "tag": "0003_easy_scarlet_witch",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1752846470398,
-      "tag": "0004_dusty_random",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1752848810189,
-      "tag": "0005_striped_maddog",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1752885217289,
-      "tag": "0006_sudden_robin_chapel",
+      "when": 1752899488801,
+      "tag": "0001_cynical_thunderbird",
       "breakpoints": true
     }
   ]

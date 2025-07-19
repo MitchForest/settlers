@@ -1,5 +1,5 @@
 import { hexCache, HEX_RADIUS } from './board-utils'
-import { VertexPosition, EdgePosition, HexCoordinate } from '@settlers/game-engine'
+import type { VertexPosition, EdgePosition, HexCoordinate } from '@settlers/game-engine'
 
 /**
  * Hex Geometry Utilities

@@ -30,34 +30,42 @@ export async function healthCheck() {
 }
 
 /**
- * Validate session token with backend
+ * Validate session token locally using JWT verification
  */
 export async function validatePlayerSession(sessionToken: string): Promise<SessionValidation> {
   try {
-    const response = await fetch(`${API_URL}/api/session/validate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ sessionToken })
-    })
+    // Import parseSessionToken for local validation
+    const { parseSessionToken } = await import('./session-utils')
     
-    const data = await response.json()
+    const { session, error } = parseSessionToken(sessionToken)
     
-    if (!response.ok) {
+    if (error || !session) {
       return {
         valid: false,
-        reason: data.error || 'Validation failed',
+        reason: error?.message || 'Invalid session token',
         permissions: []
       }
     }
     
-    return data
+    // Check if token is expired
+    if (session.expiresAt < Date.now()) {
+      return {
+        valid: false,
+        reason: 'Session expired',
+        permissions: []
+      }
+    }
+    
+    return {
+      valid: true,
+      reason: 'Valid session',
+      permissions: session.permissions || []
+    }
   } catch (error) {
     console.error('Session validation failed:', error)
     return {
       valid: false,
-      reason: 'Network error during validation',
+      reason: 'Validation error',
       permissions: []
     }
   }
@@ -79,7 +87,7 @@ export async function createGame(gameData: {
       throw new Error('No authentication token available')
     }
     
-    const response = await fetch(`${API_URL}/api/games`, {
+    const response = await fetch(`${API_URL}/api/games/create`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',

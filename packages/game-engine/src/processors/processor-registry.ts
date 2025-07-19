@@ -19,6 +19,7 @@ import { StealResourceProcessor } from './steal-resource-processor'
 import { DiscardProcessor } from './discard-processor'
 import { BuyCardProcessor } from './buy-card-processor'
 import { BankTradeProcessor } from './bank-trade-processor'
+import { PlayCardProcessor } from './play-card-processor'
 
 export class ProcessorRegistry {
   private processors: ActionProcessor[] = []
@@ -68,8 +69,9 @@ export class ProcessorRegistry {
       new StealResourceProcessor(this.stateManager, this.eventFactory, this.postProcessor),
       new DiscardProcessor(this.stateManager, this.eventFactory, this.postProcessor),
       new BuyCardProcessor(),
-      new BankTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor)
-      // Core game processors complete! Additional features (portTrade, playCard, etc.) can be added as needed
+      new BankTradeProcessor(this.stateManager, this.eventFactory, this.postProcessor),
+      new PlayCardProcessor(this.stateManager, this.eventFactory, this.postProcessor)
+      // Core game processors complete!
     )
   }
 
