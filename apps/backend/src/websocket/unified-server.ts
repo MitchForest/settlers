@@ -53,11 +53,12 @@ class SimpleJWT {
 interface ClientConnection {
   ws: WebSocket
   gameId: string
-  playerId?: string
+  playerId?: string | null
   userId?: string
   lastSequence: number
   heartbeatInterval?: NodeJS.Timeout
   isAlive: boolean
+  isSpectator?: boolean
   session?: GameSessionPayload
 }
 
@@ -71,12 +72,17 @@ interface BaseMessage {
 
 // GAME ENTITY - Real game operations
 interface GameMessage extends BaseMessage {
-  type: 'joinGame' | 'leaveGame' | 'addAIBot' | 'removeAIBot' | 'startGame' | 'updateGameSettings'
+  type: 'joinGame' | 'leaveGame' | 'addAIBot' | 'removeAIBot' | 'startGame' | 'updateGameSettings' |
+        'gameAction' | 'endTurn' | 'requestGameSync' | 'joinAsSpectator' | 'leaveAsSpectator'
   data: {
     gameId: string
     userId?: string
     playerName?: string
     avatarEmoji?: string
+    // Game action specific fields
+    action?: any
+    finalAction?: any
+    userName?: string
     // Additional fields based on message type
     [key: string]: unknown
   }
@@ -388,6 +394,23 @@ export class UnifiedWebSocketServer {
           break
         case 'updateGameSettings':
           await this.handleUpdateGameSettings(ws, message.data)
+          break
+
+        // **GAME ACTIONS** - In-game actions and turn management
+        case 'gameAction':
+          await this.handleGameAction(ws, message.data)
+          break
+        case 'endTurn':
+          await this.handleEndTurn(ws, message.data)
+          break
+        case 'requestGameSync':
+          await this.handleRequestGameSync(ws, message.data)
+          break
+        case 'joinAsSpectator':
+          await this.handleJoinAsSpectator(ws, message.data)
+          break
+        case 'leaveAsSpectator':
+          await this.handleLeaveAsSpectator(ws, message.data)
           break
 
         // **SOCIAL ENTITY** - Friends and social features
@@ -1144,7 +1167,221 @@ export class UnifiedWebSocketServer {
     }
   }
 
+  // ============= GAME ACTION HANDLERS =============
 
+  /**
+   * Handle game action from player
+   */
+  private async handleGameAction(ws: WebSocket, data: any): Promise<void> {
+    const connection = this.connectionToGame.get(ws)
+    if (!connection || !connection.playerId) {
+      this.sendError(ws, 'Not connected to a game')
+      return
+    }
+
+    const { action } = data
+    if (!action || !action.type) {
+      this.sendError(ws, 'Invalid game action')
+      return
+    }
+
+    try {
+      console.log(`🎮 Processing game action: ${action.type} from ${connection.playerId}`)
+      
+      // Import game services dynamically to avoid circular dependencies
+      const { GameStateManager } = await import('../services/game-state-manager')
+      const gameStateManager = new GameStateManager(this)
+      
+      const result = await gameStateManager.processPlayerAction(
+        connection.gameId, 
+        connection.playerId, 
+        action
+      )
+
+      if (result.success) {
+        this.sendResponse(ws, {
+          success: true,
+          data: {
+            type: 'actionResult',
+            action: action.type,
+            success: true,
+            error: result.error,
+            message: result.message
+          }
+        })
+      } else {
+        this.sendError(ws, result.error || 'Action failed', {
+          action: action.type,
+          message: result.message
+        })
+      }
+
+    } catch (error) {
+      console.error('Error handling game action:', error)
+      this.sendError(ws, 'Failed to process game action')
+    }
+  }
+
+  /**
+   * Handle end turn request
+   */
+  private async handleEndTurn(ws: WebSocket, data: any): Promise<void> {
+    const connection = this.connectionToGame.get(ws)
+    if (!connection || !connection.playerId) {
+      this.sendError(ws, 'Not connected to a game')
+      return
+    }
+
+    try {
+      console.log(`🎮 Processing end turn from ${connection.playerId}`)
+      
+      // Import turn manager dynamically
+      const { TurnManager } = await import('../services/turn-manager')
+      const { GameStateManager } = await import('../services/game-state-manager')
+      
+      const gameStateManager = new GameStateManager(this)
+      const turnManager = new TurnManager(gameStateManager, this)
+      
+      await turnManager.endTurn(connection.gameId, connection.playerId, data.finalAction)
+
+      this.sendResponse(ws, {
+        success: true,
+        data: {
+          type: 'turnEnded',
+          playerId: connection.playerId
+        }
+      })
+
+    } catch (error) {
+      console.error('Error handling end turn:', error)
+      this.sendError(ws, 'Failed to end turn')
+    }
+  }
+
+  /**
+   * Handle game sync request
+   */
+  private async handleRequestGameSync(ws: WebSocket, data: any): Promise<void> {
+    const connection = this.connectionToGame.get(ws)
+    if (!connection) {
+      this.sendError(ws, 'Not connected to a game')
+      return
+    }
+
+    try {
+      console.log(`🔄 Processing game sync request for ${connection.gameId}`)
+      
+      const { GameStateManager } = await import('../services/game-state-manager')
+      const gameStateManager = new GameStateManager(this)
+      
+      const { gameState, sequence } = await gameStateManager.getGameStateSync(connection.gameId)
+
+      this.sendResponse(ws, {
+        success: true,
+        data: {
+          type: 'gameSync',
+          gameState: gameState,
+          sequence: sequence
+        }
+      })
+
+    } catch (error) {
+      console.error('Error handling game sync:', error)
+      this.sendError(ws, 'Failed to sync game state')
+    }
+  }
+
+  /**
+   * Handle join as spectator
+   */
+  private async handleJoinAsSpectator(ws: WebSocket, data: any): Promise<void> {
+    const { gameId, userId, userName } = data
+    
+    if (!gameId || !userId) {
+      this.sendError(ws, 'Game ID and User ID required')
+      return
+    }
+
+    try {
+      // Set up spectator connection
+      const connection: ClientConnection = {
+        ws,
+        gameId,
+        playerId: null, // Spectators don't have player IDs
+        userId,
+        lastSequence: 0,
+        isAlive: true,
+        isSpectator: true
+      }
+
+      this.setupHeartbeat(connection)
+      this.connectionToGame.set(ws, connection)
+
+      if (!this.gameConnections.has(gameId)) {
+        this.gameConnections.set(gameId, new Set())
+      }
+      this.gameConnections.get(gameId)!.add(connection)
+
+      // Send current game state to spectator
+      const { GameStateManager } = await import('../services/game-state-manager')
+      const gameStateManager = new GameStateManager(this)
+      const { gameState, sequence } = await gameStateManager.getGameStateSync(gameId)
+
+      this.sendResponse(ws, {
+        success: true,
+        data: {
+          type: 'joinedAsSpectator',
+          gameState,
+          sequence
+        }
+      })
+
+      console.log(`👁️ ${userId} joined game ${gameId} as spectator`)
+
+    } catch (error) {
+      console.error('Error joining as spectator:', error)
+      this.sendError(ws, 'Failed to join as spectator')
+    }
+  }
+
+  /**
+   * Handle leave as spectator
+   */
+  private async handleLeaveAsSpectator(ws: WebSocket, data: any): Promise<void> {
+    const connection = this.connectionToGame.get(ws)
+    if (!connection || !connection.isSpectator) {
+      this.sendError(ws, 'Not connected as spectator')
+      return
+    }
+
+    this.handleDisconnection(ws)
+    
+    this.sendResponse(ws, {
+      success: true,
+      data: {
+        type: 'leftAsSpectator'
+      }
+    })
+  }
+
+  /**
+   * Broadcast message to all connections in a game
+   */
+  public async broadcastToGame(gameId: string, message: any): Promise<void> {
+    const gameConnections = this.gameConnections.get(gameId)
+    if (!gameConnections) {
+      console.log(`No connections found for game ${gameId}`)
+      return
+    }
+
+    console.log(`📢 Broadcasting to game ${gameId} (${gameConnections.size} connections)`)
+    
+    for (const connection of gameConnections) {
+      if (connection.ws.readyState === WebSocket.OPEN) {
+        this.sendResponse(connection.ws, message)
+      }
+    }
+  }
 
   public close(): void {
     // Clear cleanup interval
