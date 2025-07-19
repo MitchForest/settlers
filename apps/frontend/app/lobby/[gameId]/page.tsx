@@ -20,7 +20,7 @@ import {
   SessionError,
   RecoveryAction 
 } from '@/lib/session-types'
-import { LobbyPlayer } from '@settlers/core'
+import { LobbyPlayer } from '@settlers/game-engine'
 import { ConnectionStatus } from '@/components/ui/connection-status'
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
-import { Board, GameAction } from '@settlers/core'
+import { Board, GameAction } from '@settlers/game-engine'
 import { GameTheme } from '@/lib/theme-types'
 import { HexGridLayer } from './layers/HexGridLayer'
 import { PortLayer } from './layers/PortLayer'

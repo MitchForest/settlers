@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.1",
-    "@settlers/core": "workspace:*",
+    "@settlers/game-engine": "workspace:*",
+    "@settlers/ai-system": "workspace:*",
     "@supabase/supabase-js": "^2.51.0",
     "@types/uuid": "^10.0.0",
     "drizzle-orm": "^0.44.3",

@@ -2,7 +2,7 @@ import { eq, and, or, sql } from 'drizzle-orm'
 import { db } from '../db/index'
 import { userProfiles } from '../db/schema'
 import { eventStore } from '../db/event-store-repository'
-import { FriendEvent } from '@settlers/core/src/events/friend-event-store'
+import type { FriendEvent } from '@settlers/game-engine'
 import { server as unifiedWebSocketServer } from '../websocket/unified-server'
 
 // **FRIENDS DOMAIN TYPES**

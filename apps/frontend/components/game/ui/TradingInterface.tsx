@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import { GameState, Player, GameAction, Trade, ResourceCards } from '@settlers/core'
+import { GameState, Player, GameAction, Trade, ResourceCards } from '@settlers/game-engine'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'

@@ -1,6 +1,6 @@
 'use client'
 
-import { Player, GameState, GameAction, BUILDING_COSTS, hasResources } from '@settlers/core'
+import { Player, GameState, GameAction, BUILDING_COSTS, hasResources } from '@settlers/game-engine'
 import { Button } from '@/components/ui/button'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 

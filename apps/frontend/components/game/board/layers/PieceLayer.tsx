@@ -1,15 +1,21 @@
 'use client'
 
-import { Board, Vertex, Edge, GameState } from '@settlers/core'
 import { SettlementPiece } from '../pieces/SettlementPiece'
 import { CityPiece } from '../pieces/CityPiece'
 import { RoadPiece } from '../pieces/RoadPiece'
 
 import { getVertexPixelPosition, getEdgePixelPositions } from '@/lib/hex-geometry'
+import type { Vertex, Edge, Board } from '@settlers/game-engine'
+
+// NOTE: This component only runs AFTER game engine is dynamically loaded
+// So we use loose typing here - the actual game engine will provide proper types
+// When packages are properly split, this will import from @settlers/game-engine
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface PieceLayerProps {
   board: Board
-  gameState?: GameState // Optional game state to get player colors
+  gameState?: any // Optional game state to get player colors
   hexSize?: number
   onSettlementClick?: (vertexId: string) => void
   onCityClick?: (vertexId: string) => void
@@ -61,7 +67,7 @@ export function PieceLayer({
         return (
           <RoadPiece
             key={edge.id}
-            road={edge.connection}
+            road={edge.connection as any}
             startPosition={positions.start}
             endPosition={positions.end}
             playerColor={getPlayerColor(edge.connection.owner)}
@@ -80,7 +86,7 @@ export function PieceLayer({
           return (
             <SettlementPiece
               key={vertex.id}
-              building={vertex.building}
+              building={vertex.building as any}
               position={position}
               playerColor={getPlayerColor(vertex.building.owner)}
               onClick={() => onSettlementClick?.(vertex.id)}
@@ -90,7 +96,7 @@ export function PieceLayer({
           return (
             <CityPiece
               key={vertex.id}
-              building={vertex.building}
+              building={vertex.building as any}
               position={position}
               playerColor={getPlayerColor(vertex.building.owner)}
               onClick={() => onCityClick?.(vertex.id)}

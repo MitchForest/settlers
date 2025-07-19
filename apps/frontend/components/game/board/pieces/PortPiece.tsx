@@ -1,6 +1,6 @@
 'use client'
 
-import { Port, ResourceType } from '@settlers/core'
+import { Port, ResourceType } from '@settlers/game-engine'
 import { useGameTheme } from '@/components/theme-provider'
 import { TOKEN_DESIGN, PIECE_EMOJIS } from '../../../../lib/game-constants'
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Road } from '@settlers/core'
+import { Road } from '@settlers/game-engine'
 import { ROAD_DESIGN } from '../../../../lib/game-constants'
 
 interface RoadPieceProps {

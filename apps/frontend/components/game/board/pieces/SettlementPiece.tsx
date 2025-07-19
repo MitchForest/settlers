@@ -1,6 +1,6 @@
 'use client'
 
-import { Building } from '@settlers/core'
+import { Building } from '@settlers/game-engine'
 import { TOKEN_DESIGN, PIECE_EMOJIS } from '../../../../lib/game-constants'
 
 interface SettlementPieceProps {

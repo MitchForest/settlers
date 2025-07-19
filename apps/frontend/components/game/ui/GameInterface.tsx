@@ -1,7 +1,7 @@
 'use client'
 
 import { useGameStore } from '@/stores/gameStore'
-import { GameAction } from '@settlers/core'
+import { GameAction } from '@settlers/game-engine'
 import { Button } from '@/components/ui/button'
 import { 
   Dialog, 
@@ -40,7 +40,10 @@ export function GameInterface({ onGameAction: _onGameAction }: GameInterfaceProp
     console.error('GameInterface: Player not found in game', {
       localPlayerId,
       gameStatePlayerIds: Array.from(gameState.players.keys()),
-      gameStatePlayers: Array.from(gameState.players.values()).map(p => ({ id: p.id, name: p.name })),
+      gameStatePlayers: Array.from(gameState.players.values()).map((p: unknown) => {
+        const player = p as { id: string; name: string }
+        return { id: player.id, name: player.name }
+      }),
       playerExistsInGame: gameState.players.has(localPlayerId)
     })
     return (

@@ -3,7 +3,7 @@
 
 import { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { DomainError } from '@settlers/core/src/shared/errors'
+import { DomainError } from '@settlers/game-engine'
 
 /**
  * Standardized API response envelope
@@ -41,7 +41,7 @@ export function successResponse<T>(
     }
   }
   
-  return c.json(response, statusCode as any)
+  return c.json(response, statusCode as 200 | 201 | 400 | 401 | 403 | 404 | 422 | 500)
 }
 
 /**
@@ -83,7 +83,7 @@ export function errorResponse(
     }
   }
   
-  return c.json(response, statusCode as any)
+  return c.json(response, statusCode as 200 | 201 | 400 | 401 | 403 | 404 | 422 | 500)
 }
 
 /**

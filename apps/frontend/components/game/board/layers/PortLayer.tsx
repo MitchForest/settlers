@@ -1,6 +1,6 @@
 'use client'
 
-import { Board } from '@settlers/core'
+import { Board } from '@settlers/game-engine'
 import { PortPiece } from '../pieces/PortPiece'
 import { hexToPixel } from '@/lib/board-utils'
 

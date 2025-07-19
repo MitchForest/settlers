@@ -1,6 +1,6 @@
 'use client'
 
-import { Player, GameState } from '@settlers/core'
+import { Player, GameState } from '@settlers/game-engine'
 import { PlayerAvatar } from './AvatarPicker'
 
 import { Badge } from '@/components/ui/badge'

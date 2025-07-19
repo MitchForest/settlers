@@ -8,7 +8,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useGameStore } from '@/stores/gameStore'
-import { GameState } from '@settlers/core'
+// TODO: Will be updated when game engine is properly modularized
+type GameState = any
 
 // Mock the WebSocket manager to avoid actual connections
 vi.mock('@/lib/websocket-manager', () => ({

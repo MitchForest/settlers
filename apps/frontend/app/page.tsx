@@ -13,7 +13,7 @@ import { MagicLinkDialog } from '@/components/auth/MagicLinkDialog'
 // Removed unused import: ProfileSetupDialog
 import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
 import { useRouter } from 'next/navigation'
-import { useGameStore } from '@/stores/gameStore'
+import { useAppStore } from '@/stores/appStore'
 import { useAuth } from '@/lib/auth-context'
 // Removed unused import: ds, componentStyles
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
@@ -22,14 +22,19 @@ import { ConnectionStatus } from '@/components/ui/connection-status'
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<'testing' | 'connected' | 'failed'>('testing')
   const [dbStatus, setDbStatus] = useState<'unknown' | 'connected' | 'failed'>('unknown')
-  const [showCreateGame, setShowCreateGame] = useState(false)
-  const [showJoinGame, setShowJoinGame] = useState(false)
-  const [showObserveGame, setShowObserveGame] = useState(false)
-  const [showMagicLink, setShowMagicLink] = useState(false)
   const [pendingAction, setPendingAction] = useState<'create' | 'join' | 'observe' | null>(null)
   
   const router = useRouter()
-  const { setLocalPlayerId } = useGameStore()
+  const { 
+    showCreateGame,
+    setShowCreateGame,
+    showJoinGame,
+    setShowJoinGame,
+    showObserveGame,
+    setShowObserveGame,
+    showMagicLink,
+    setShowMagicLink
+  } = useAppStore()
   const { user, profile, loading: authLoading, isGuest } = useAuth()
 
   useEffect(() => {
@@ -63,8 +68,7 @@ export default function Home() {
       // Fallback to old method (shouldn't happen with new backend)
       console.warn('No lobbyUrl provided, falling back to legacy method')
       
-      // Set the player ID in the store for legacy compatibility
-      setLocalPlayerId(hostPlayerId)
+      // Note: Player ID will be managed by lobby/game components
       
       // Navigate to lobby (will need session validation)
       router.push(`/lobby/${gameId}`)

@@ -1,12 +1,12 @@
 // ============= Lobby Serialization =============
 // Handles serialization/deserialization of lobby state for database storage
 
-import { 
+import type { 
   LobbyState, 
   LobbyPlayer, 
-  SerializedLobbyState 
-} from '@settlers/core/src/lobby-types'
-import { PlayerId } from '@settlers/core/src/types'
+  SerializedLobbyState,
+  PlayerId
+} from '@settlers/game-engine'
 
 /**
  * Serializes a LobbyState for database storage
@@ -79,7 +79,7 @@ export function loadLobbyFromDB(gameRecord: {
   gameCode: string | null
   hostPlayerId: string | null
   status: string
-  lobbyState: any
+  lobbyState: Record<string, unknown>
   createdAt: Date
   updatedAt: Date
 }): LobbyState {
@@ -91,6 +91,6 @@ export function loadLobbyFromDB(gameRecord: {
     throw new Error(`Expected lobby status, got: ${gameRecord.status}`)
   }
 
-  const serializedLobby = gameRecord.lobbyState as SerializedLobbyState
+  const serializedLobby = gameRecord.lobbyState as unknown as SerializedLobbyState
   return deserializeLobbyState(serializedLobby)
 } 

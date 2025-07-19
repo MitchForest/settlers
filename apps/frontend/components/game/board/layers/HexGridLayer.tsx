@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
-import { Board } from '@settlers/core'
+import { Board } from '@settlers/game-engine'
 import { GameTheme } from '@/lib/theme-types'
 import { hexToPixel } from '@/lib/board-utils'
 import { HexTile } from './HexTile'

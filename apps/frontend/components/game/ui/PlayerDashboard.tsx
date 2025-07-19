@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useGameTheme } from '@/components/theme-provider'
 import { GameTheme } from '@/lib/theme-types'
-import { Player, ResourceCards, GamePhase, BUILDING_COSTS } from '@settlers/core'
-import { hasResources } from '@settlers/core'
+import { Player, ResourceCards, GamePhase, BUILDING_COSTS } from '@settlers/game-engine'
+import { hasResources } from '@settlers/game-engine'
 
 interface PlayerDashboardProps {
   player: Player

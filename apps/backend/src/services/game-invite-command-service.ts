@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '../db/index'
 import { userProfiles, games } from '../db/schema'
 import { eventStore } from '../db/event-store-repository'
-import { GameInviteEvent } from '@settlers/core/src/events/game-invite-event-store'
+import type { GameInviteEvent } from '@settlers/game-engine'
 import { server as unifiedWebSocketServer } from '../websocket/unified-server'
 
 export interface SendGameInviteCommand {

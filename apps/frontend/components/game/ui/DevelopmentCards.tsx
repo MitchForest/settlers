@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { DevelopmentCard, DevelopmentCardType } from '@settlers/core'
+import { DevelopmentCard, DevelopmentCardType } from '@settlers/game-engine'
 import { cn } from '@/lib/utils'
 
 interface DevelopmentCardsProps {

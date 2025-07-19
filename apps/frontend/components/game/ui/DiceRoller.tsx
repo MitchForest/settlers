@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { DiceRoll, GameAction } from '@settlers/core'
+import { DiceRoll, GameAction } from '@settlers/game-engine'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface DiceRollerProps {

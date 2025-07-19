@@ -237,7 +237,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Join a real game
    */
-  private async handleJoinGame(ws: WebSocket, data: any): Promise<void> {
+  private async handleJoinGame(ws: WebSocket, data: GameMessage['data']): Promise<void> {
     const { gameId, userId, playerName, avatarEmoji } = data
 
     if (!gameId || !userId || !playerName) {
@@ -298,16 +298,21 @@ export class UnifiedWebSocketServer {
     }
   }
 
-  private async handleAddAIBot(ws: WebSocket, data: any): Promise<void> {
+  private async handleAddAIBot(ws: WebSocket, data: GameMessage['data']): Promise<void> {
     const connection = this.connectionToGame.get(ws)
     if (!connection) {
       this.sendError(ws, 'Not connected to a lobby')
       return
     }
 
-    const { name, difficulty = 'medium', personality = 'balanced' } = data
+    const name = data.name as string
+    const difficultyValue = (data.difficulty as string) || 'medium'
+    const personalityValue = (data.personality as string) || 'balanced'
+    
+    const difficulty = ['easy', 'medium', 'hard'].includes(difficultyValue) ? difficultyValue as 'easy' | 'medium' | 'hard' : 'medium'
+    const personality = ['aggressive', 'balanced', 'defensive', 'economic'].includes(personalityValue) ? personalityValue as 'aggressive' | 'balanced' | 'defensive' | 'economic' : 'balanced'
 
-    if (!name) {
+    if (!name || typeof name !== 'string') {
       this.sendError(ws, 'AI bot name is required')
       return
     }
@@ -345,7 +350,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Leave current game
    */
-  private async handleLeaveGame(ws: WebSocket, _data: any): Promise<void> {
+  private async handleLeaveGame(ws: WebSocket, _data: GameMessage['data']): Promise<void> {
     const connection = this.connectionToGame.get(ws)
     if (!connection?.playerId) {
       this.sendError(ws, 'Not connected to a lobby')
@@ -379,7 +384,7 @@ export class UnifiedWebSocketServer {
     }
   }
 
-  private async handleStartGame(ws: WebSocket, data: any): Promise<void> {
+  private async handleStartGame(ws: WebSocket, _data: unknown): Promise<void> {
     const connection = this.connectionToGame.get(ws)
     if (!connection) {
       this.sendError(ws, 'Not connected to a lobby')
@@ -585,8 +590,11 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Send game invite to friend
    */
-  private async handleSendGameInvite(ws: WebSocket, data: any): Promise<void> {
-    const { fromUserId, toUserId, gameId, message } = data
+  private async handleSendGameInvite(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const fromUserId = (data.fromUserId || data.userId) as string
+    const toUserId = (data.toUserId || data.targetUserId) as string
+    const gameId = data.gameId as string
+    const message = data.message as string | undefined
 
     if (!fromUserId || !toUserId || !gameId) {
       this.sendError(ws, 'Missing required fields: fromUserId, toUserId, gameId')
@@ -623,8 +631,10 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Respond to game invite
    */
-  private async handleRespondToGameInvite(ws: WebSocket, data: any): Promise<void> {
-    const { userId, inviteId, response } = data
+  private async handleRespondToGameInvite(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const inviteId = data.inviteId as string
+    const response = data.response as 'accept' | 'decline'
 
     if (!userId || !inviteId || !response) {
       this.sendError(ws, 'Missing required fields: userId, inviteId, response')
@@ -673,7 +683,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Remove AI bot from game
    */
-  private async handleRemoveAIBot(ws: WebSocket, _data: any): Promise<void> {
+  private async handleRemoveAIBot(ws: WebSocket, _data: GameMessage['data']): Promise<void> {
     // TODO: Implement AI bot removal when AI system is built
     this.sendError(ws, 'Remove AI bot not yet implemented')
   }
@@ -681,7 +691,7 @@ export class UnifiedWebSocketServer {
   /**
    * GAME ENTITY: Update game settings
    */
-  private async handleUpdateGameSettings(ws: WebSocket, _data: any): Promise<void> {
+  private async handleUpdateGameSettings(ws: WebSocket, _data: GameMessage['data']): Promise<void> {
     // TODO: Implement game settings update when settings system is built
     this.sendError(ws, 'Update game settings not yet implemented')
   }
@@ -689,7 +699,7 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Connect for social features (friends, presence, etc.)
    */
-  private async handleConnectSocial(ws: WebSocket, data: any): Promise<void> {
+  private async handleConnectSocial(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
     const { userId } = data
 
     if (!userId) {
@@ -737,8 +747,10 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Send friend request
    */
-  private async handleSendFriendRequest(ws: WebSocket, data: any): Promise<void> {
-    const { userId, targetUserId, message } = data
+  private async handleSendFriendRequest(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const targetUserId = data.targetUserId as string
+    const message = data.message as string | undefined
 
     if (!userId || !targetUserId) {
       this.sendError(ws, 'Missing required fields: userId, targetUserId')
@@ -775,8 +787,9 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Accept friend request
    */
-  private async handleAcceptFriendRequest(ws: WebSocket, data: any): Promise<void> {
-    const { userId, requestId } = data
+  private async handleAcceptFriendRequest(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const requestId = data.requestId as string
 
     if (!userId || !requestId) {
       this.sendError(ws, 'Missing required fields: userId, requestId')
@@ -811,8 +824,9 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Reject friend request  
    */
-  private async handleRejectFriendRequest(ws: WebSocket, data: any): Promise<void> {
-    const { userId, requestId } = data
+  private async handleRejectFriendRequest(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const requestId = data.requestId as string
 
     if (!userId || !requestId) {
       this.sendError(ws, 'Missing required fields: userId, requestId')
@@ -846,8 +860,9 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Remove friend
    */
-  private async handleRemoveFriend(ws: WebSocket, data: any): Promise<void> {
-    const { userId, friendshipId } = data
+  private async handleRemoveFriend(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const friendshipId = data.friendshipId as string
 
     if (!userId || !friendshipId) {
       this.sendError(ws, 'Missing required fields: userId, friendshipId')
@@ -881,8 +896,10 @@ export class UnifiedWebSocketServer {
   /**
    * SOCIAL ENTITY: Update presence status
    */
-  private async handleUpdatePresence(ws: WebSocket, data: any): Promise<void> {
-    const { userId, status, gameId } = data
+  private async handleUpdatePresence(ws: WebSocket, data: SocialMessage['data']): Promise<void> {
+    const userId = data.userId as string
+    const status = data.status as 'online' | 'away' | 'busy' | 'offline'
+    const gameId = data.gameId as string | undefined
 
     if (!userId || !status) {
       this.sendError(ws, 'Missing required fields: userId, status')

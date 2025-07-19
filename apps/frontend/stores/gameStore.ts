@@ -1,13 +1,24 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
-import { GameState, GameAction, PlayerId, Player, LobbyPlayer } from '@settlers/core'
+import type { GameAction, PlayerId, Player, LobbyPlayer } from '@settlers/game-engine'
+
+// TODO: GameState will be dynamically imported when game engine loads
+type GameState = any
+
+// Loading states for dynamic packages
+interface GameEngineState {
+  gameEngine: unknown | null
+  aiSystem: unknown | null
+  isLoading: boolean
+  error: string | null
+}
 import type { ReactFlowInstance } from 'reactflow'
 import { API_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { ReliableWebSocketManager, ConnectionStatus } from '../lib/websocket-manager'
 
-export interface GameStore {
+export interface GameStore extends GameEngineState {
   // Core State
   gameState: GameState | null
   localPlayerId: PlayerId | null
@@ -55,6 +66,9 @@ export interface GameStore {
   connectToLobby: (gameId: string, playerId: string) => void
   startGame: (gameId: string) => Promise<void>
   
+  // Game Engine Loading
+  loadGamePackages: (players: unknown[]) => Promise<{ gameEngine: unknown; aiSystem: unknown | null }>
+  
   // AI Bot Actions
   addAIBot: (gameId: string, difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => Promise<void>
   removeAIBot: (gameId: string, botPlayerId: string) => Promise<void>
@@ -74,6 +88,12 @@ export const useGameStore = create<GameStore>()(
       flowInstance: null,
       wsManager: null,
       connectionStatus: 'disconnected',
+      
+      // Game engine state
+      gameEngine: null,
+      aiSystem: null,
+      isLoading: false,
+      error: null,
       
       // Lobby state
       lobbyState: 'idle',
@@ -349,7 +369,7 @@ export const useGameStore = create<GameStore>()(
                 // Update lobby players list with new AI bot
                 set((state) => {
                   // Check if bot already exists to prevent duplicates
-                  const existingBot = state.lobbyPlayers.find(p => p.id === data.bot.id)
+                  const existingBot = state.lobbyPlayers.find((p: LobbyPlayer) => p.id === data.bot.id)
                   if (!existingBot) {
                     state.lobbyPlayers.push(data.bot)
                   }
@@ -358,7 +378,7 @@ export const useGameStore = create<GameStore>()(
               case 'aiBotRemoved':
                 // Remove AI bot from lobby players list
                 set((state) => {
-                  state.lobbyPlayers = state.lobbyPlayers.filter(p => p.id !== data.botPlayerId)
+                  state.lobbyPlayers = state.lobbyPlayers.filter((p: LobbyPlayer) => p.id !== data.botPlayerId)
                 })
                 break
               case 'error':
@@ -428,6 +448,33 @@ export const useGameStore = create<GameStore>()(
         
         const data = await response.json()
         if (!data.success) throw new Error(data.error)
+      },
+
+      // Load game packages based on player composition
+      loadGamePackages: async (players: unknown[]) => {
+        set((state) => {
+          state.isLoading = true
+          state.error = null
+        })
+        
+        try {
+          const { loadGamePackages } = await import('../lib/game-engine-loader')
+          const { gameEngine, aiSystem } = await loadGamePackages(players)
+          
+          set((state) => {
+            state.gameEngine = gameEngine
+            state.aiSystem = aiSystem
+            state.isLoading = false
+          })
+          
+          return { gameEngine, aiSystem }
+        } catch (error) {
+          set((state) => {
+            state.error = error instanceof Error ? error.message : 'Failed to load game packages'
+            state.isLoading = false
+          })
+          throw error
+        }
       },
 
       addAIBot: async (gameId, difficulty, personality) => {

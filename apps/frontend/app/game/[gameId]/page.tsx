@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 // Removed unused Dialog components
 import { toast } from 'sonner'
 import { RotateCcw, Palette, LogOut, Info } from 'lucide-react'
-import { GameAction, GameFlowManager } from '@settlers/core'
+import { GameAction, GameFlowManager } from '@settlers/game-engine'
 import { useGameStore } from '@/stores/gameStore'
 import { useRouter } from 'next/navigation'
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
@@ -385,10 +385,10 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
         <PlayersPanel
           gameState={gameState}
           playerAvatars={Object.fromEntries(
-            Array.from(gameState.players.entries()).map(([id, player]) => [
-              id, 
-              { avatar: '👤', name: player.name }
-            ])
+                        Array.from(gameState.players.entries()).map((entry: unknown) => {
+              const [id, player] = entry as [string, { name: string }]
+              return [id, { avatar: '👤', name: player.name }]
+            })
           )}
         />
 

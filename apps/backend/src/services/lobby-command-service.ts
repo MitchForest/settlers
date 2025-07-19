@@ -1,5 +1,5 @@
 import { eventStore, EventType } from '../db/event-store-repository'
-import { GameEvent } from '@settlers/core/src/events/event-store'
+import type { GameEvent } from '@settlers/game-engine'
 import { db } from '../db/index'
 import { players } from '../db/schema'
 import { eq } from 'drizzle-orm'
@@ -33,7 +33,7 @@ interface GameSettings {
   maxPlayers: number
   allowObservers: boolean
   aiEnabled: boolean
-  customRules?: Record<string, any>
+  customRules?: Record<string, unknown>
 }
 
 interface AISettings {

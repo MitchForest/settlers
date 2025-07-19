@@ -4,9 +4,13 @@ import { db } from './index'
 import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from './schema'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
-import { GameEvent } from '@settlers/core/src/events/event-store'
-import { FriendEvent, FriendEventType } from '@settlers/core/src/events/friend-event-store'
-import { GameInviteEvent, GameInviteEventType } from '@settlers/core/src/events/game-invite-event-store'
+import type { 
+  GameEvent, 
+  FriendEvent, 
+  FriendEventType,
+  GameInviteEvent, 
+  GameInviteEventType 
+} from '@settlers/game-engine'
 
 // Event type mappings for segregated architecture
 export const PLAYER_EVENT_TYPES = ['player_joined', 'player_left', 'ai_player_added', 'ai_player_removed'] as const
@@ -187,7 +191,7 @@ export class EventStoreRepository {
       : this.options.maxEventsPerQuery
 
     // Build common where conditions
-    const buildWhereConditions = (table: any) => {
+    const buildWhereConditions = (table: typeof gameEvents | typeof playerEvents) => {
       const whereConditions = [eq(table.gameId, gameId)]
 
       if (options?.fromSequence !== undefined) {
@@ -202,7 +206,7 @@ export class EventStoreRepository {
     }
 
     // Fetch player events
-    let playerEventsPromise = Promise.resolve<any[]>([])
+    let playerEventsPromise = Promise.resolve<Array<typeof playerEvents.$inferSelect>>([])
     if (!options?.eventTypes || options.eventTypes.some(t => isPlayerEvent(t))) {
       const playerEventTypeFilter = options?.eventTypes?.filter(isPlayerEvent)
       const playerWhereConditions = buildWhereConditions(playerEvents)
@@ -220,7 +224,7 @@ export class EventStoreRepository {
     }
 
     // Fetch game events
-    let gameEventsPromise = Promise.resolve<any[]>([])
+    let gameEventsPromise = Promise.resolve<Array<typeof gameEvents.$inferSelect>>([])
     if (!options?.eventTypes || options.eventTypes.some(t => isGameEvent(t))) {
       const gameEventTypeFilter = options?.eventTypes?.filter(isGameEvent)
       const gameWhereConditions = buildWhereConditions(gameEvents)
@@ -433,7 +437,7 @@ export class EventStoreRepository {
       gameId: dbEvent.gameId,
       playerId: dbEvent.playerId,
       eventType: dbEvent.eventType as PlayerEventType,
-      data: dbEvent.data as Record<string, any>,
+      data: dbEvent.data as Record<string, unknown>,
       sequenceNumber: Number(dbEvent.sequenceNumber),
       timestamp: new Date(dbEvent.timestamp),
       eventTable: 'player_events'
@@ -449,7 +453,7 @@ export class EventStoreRepository {
       gameId: dbEvent.gameId,
       contextPlayerId: dbEvent.contextPlayerId || undefined,
       eventType: dbEvent.eventType as GameEventType,
-      data: dbEvent.data as Record<string, any>,
+      data: dbEvent.data as Record<string, unknown>,
       sequenceNumber: Number(dbEvent.sequenceNumber),
       timestamp: new Date(dbEvent.timestamp),
       eventTable: 'game_events'
@@ -549,7 +553,7 @@ export class EventStoreRepository {
       id: dbEvent.id,
       aggregateId: dbEvent.aggregateId,
       eventType: dbEvent.eventType as FriendEventType,
-      data: dbEvent.data as Record<string, any>,
+      data: dbEvent.data as Record<string, unknown>,
       sequenceNumber: Number(dbEvent.sequenceNumber),
       timestamp: new Date(dbEvent.timestamp)
     }
@@ -648,7 +652,7 @@ export class EventStoreRepository {
       id: dbEvent.id,
       aggregateId: dbEvent.aggregateId,
       eventType: dbEvent.eventType as GameInviteEventType,
-      data: dbEvent.data as Record<string, any>,
+      data: dbEvent.data as Record<string, unknown>,
       sequenceNumber: Number(dbEvent.sequenceNumber),
       timestamp: dbEvent.timestamp
     }
