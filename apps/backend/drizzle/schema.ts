@@ -15,180 +15,31 @@ export const tradeStatus = pgEnum("trade_status", ['pending', 'accepted', 'decli
 export const tradeType = pgEnum("trade_type", ['player_to_player', 'player_to_bank', 'harbor_trade'])
 
 
-export const friendEventSequences = pgTable("friend_event_sequences", {
-	aggregateId: uuid("aggregate_id").primaryKey().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	nextSequence: bigint("next_sequence", { mode: "number" }).default(1).notNull(),
-});
+// LEGACY TABLES - DEPRECATED BY UNIFIED SYSTEM
+// These tables are replaced by unified_events and will be dropped
 
-export const friendEvents = pgTable("friend_events", {
-	id: text().primaryKey().notNull(),
-	aggregateId: uuid("aggregate_id").notNull(),
-	eventType: friendEventType("event_type").notNull(),
-	data: json().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
-	timestamp: timestamp({ precision: 3, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("friend_events_aggregate_sequence_idx").using("btree", table.aggregateId.asc().nullsLast().op("uuid_ops"), table.sequenceNumber.asc().nullsLast().op("int8_ops")),
-	index("friend_events_aggregate_type_idx").using("btree", table.aggregateId.asc().nullsLast().op("uuid_ops"), table.eventType.asc().nullsLast().op("uuid_ops")),
-	index("friend_events_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("timestamp_ops")),
-	unique("friend_events_aggregate_id_sequence_number_unique").on(table.aggregateId, table.sequenceNumber),
-]);
-
-export const gameInviteEventSequences = pgTable("game_invite_event_sequences", {
-	aggregateId: uuid("aggregate_id").primaryKey().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	nextSequence: bigint("next_sequence", { mode: "number" }).default(1).notNull(),
-});
-
-export const gameInviteEvents = pgTable("game_invite_events", {
-	id: text().primaryKey().notNull(),
-	aggregateId: uuid("aggregate_id").notNull(),
-	eventType: gameInviteEventType("event_type").notNull(),
-	data: json().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
-	timestamp: timestamp({ precision: 3, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("invite_events_aggregate_sequence_idx").using("btree", table.aggregateId.asc().nullsLast().op("uuid_ops"), table.sequenceNumber.asc().nullsLast().op("int8_ops")),
-	index("invite_events_aggregate_type_idx").using("btree", table.aggregateId.asc().nullsLast().op("uuid_ops"), table.eventType.asc().nullsLast().op("uuid_ops")),
-	index("invite_events_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("timestamp_ops")),
-	unique("game_invite_events_aggregate_id_sequence_number_unique").on(table.aggregateId, table.sequenceNumber),
-]);
-
-export const gameEvents = pgTable("game_events", {
-	id: text().primaryKey().notNull(),
+// UNIFIED EVENT SOURCING TABLES - ZERO TECHNICAL DEBT
+export const unifiedEvents = pgTable("unified_events", {
+	id: text("id").primaryKey().notNull(),
 	gameId: text("game_id").notNull(),
-	eventType: gameEventType("event_type").notNull(),
-	data: json().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	eventType: text("event_type").notNull(),
+	eventData: json("event_data").notNull(),
 	sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
-	timestamp: timestamp({ precision: 3, mode: 'string' }).defaultNow().notNull(),
+	timestamp: timestamp("timestamp", { precision: 3, mode: 'string' }).defaultNow().notNull(),
+	contextUserId: text("context_user_id"),
 	contextPlayerId: text("context_player_id"),
+	contextConnectionId: text("context_connection_id"),
 }, (table) => [
-	index("game_events_context_player_idx").using("btree", table.contextPlayerId.asc().nullsLast().op("text_ops")),
-	index("game_events_game_sequence_idx").using("btree", table.gameId.asc().nullsLast().op("int8_ops"), table.sequenceNumber.asc().nullsLast().op("int8_ops")),
-	index("game_events_game_type_idx").using("btree", table.gameId.asc().nullsLast().op("text_ops"), table.eventType.asc().nullsLast().op("text_ops")),
-	index("game_events_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("timestamp_ops")),
-	foreignKey({
-			columns: [table.contextPlayerId],
-			foreignColumns: [players.id],
-			name: "game_events_context_player_id_players_id_fk"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.gameId],
-			foreignColumns: [games.id],
-			name: "game_events_game_id_games_id_fk"
-		}).onDelete("cascade"),
-	unique("game_events_game_id_sequence_number_unique").on(table.gameId, table.sequenceNumber),
+	index("unified_events_game_sequence_idx").using("btree", table.gameId.asc().nullsLast(), table.sequenceNumber.asc().nullsLast()),
+	index("unified_events_game_type_idx").using("btree", table.gameId.asc().nullsLast(), table.eventType.asc().nullsLast()),
+	index("unified_events_timestamp_idx").using("btree", table.timestamp.asc().nullsLast()),
+	unique("unified_events_game_sequence_unique").on(table.gameId, table.sequenceNumber),
 ]);
 
-export const players = pgTable("players", {
-	id: text().primaryKey().notNull(),
-	gameId: text("game_id").notNull(),
-	userId: uuid("user_id"),
-	playerType: playerType("player_type").notNull(),
-	name: text().notNull(),
-	avatarEmoji: text("avatar_emoji"),
-	color: text().notNull(),
-	joinOrder: integer("join_order").notNull(),
-	isHost: boolean("is_host").default(false).notNull(),
-	joinedAt: timestamp("joined_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-	leftAt: timestamp("left_at", { precision: 3, mode: 'string' }),
-}, (table) => [
-	index("players_game_player_idx").using("btree", table.gameId.asc().nullsLast().op("text_ops"), table.id.asc().nullsLast().op("text_ops")),
-	foreignKey({
-			columns: [table.gameId],
-			foreignColumns: [games.id],
-			name: "players_game_id_games_id_fk"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [userProfiles.id],
-			name: "players_user_id_user_profiles_id_fk"
-		}).onDelete("set null"),
-	unique("players_game_id_join_order_unique").on(table.gameId, table.joinOrder),
-	unique("players_game_id_color_unique").on(table.gameId, table.color),
-]);
-
-export const games = pgTable("games", {
-	id: text().primaryKey().notNull(),
-	gameCode: varchar("game_code", { length: 10 }).notNull(),
-	createdAt: timestamp("created_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-	currentPhase: gamePhase("current_phase").default('lobby').notNull(),
-	currentPlayerId: text("current_player_id"),
-	isActive: boolean("is_active").default(true).notNull(),
-	endedAt: timestamp("ended_at", { precision: 3, mode: 'string' }),
-	winnerId: text("winner_id"),
-}, (table) => [
-	index("games_active_idx").using("btree", table.isActive.asc().nullsLast().op("bool_ops")),
-	index("games_game_code_idx").using("btree", table.gameCode.asc().nullsLast().op("text_ops")),
-	index("games_phase_idx").using("btree", table.currentPhase.asc().nullsLast().op("enum_ops")),
-	unique("games_game_code_unique").on(table.gameCode),
-]);
-
-export const gameEventSequences = pgTable("game_event_sequences", {
+export const unifiedEventSequences = pgTable("unified_event_sequences", {
 	gameId: text("game_id").primaryKey().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
 	nextSequence: bigint("next_sequence", { mode: "number" }).default(1).notNull(),
-}, (table) => [
-	foreignKey({
-			columns: [table.gameId],
-			foreignColumns: [games.id],
-			name: "game_event_sequences_game_id_games_id_fk"
-		}).onDelete("cascade"),
-]);
-
-export const gameObservers = pgTable("game_observers", {
-	id: text().primaryKey().notNull(),
-	gameId: text("game_id").notNull(),
-	userId: uuid("user_id").notNull(),
-	joinedAt: timestamp("joined_at", { precision: 3, mode: 'string' }).defaultNow().notNull(),
-	leftAt: timestamp("left_at", { precision: 3, mode: 'string' }),
-}, (table) => [
-	index("game_observers_game_idx").using("btree", table.gameId.asc().nullsLast().op("text_ops")),
-	index("game_observers_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
-	foreignKey({
-			columns: [table.gameId],
-			foreignColumns: [games.id],
-			name: "game_observers_game_id_games_id_fk"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [userProfiles.id],
-			name: "game_observers_user_id_user_profiles_id_fk"
-		}).onDelete("cascade"),
-	unique("game_observers_game_id_user_id_unique").on(table.gameId, table.userId),
-]);
-
-export const playerEvents = pgTable("player_events", {
-	id: text().primaryKey().notNull(),
-	gameId: text("game_id").notNull(),
-	playerId: text("player_id").notNull(),
-	eventType: playerEventType("event_type").notNull(),
-	data: json().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
-	timestamp: timestamp({ precision: 3, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("player_events_game_sequence_idx").using("btree", table.gameId.asc().nullsLast().op("text_ops"), table.sequenceNumber.asc().nullsLast().op("int8_ops")),
-	index("player_events_game_type_idx").using("btree", table.gameId.asc().nullsLast().op("text_ops"), table.eventType.asc().nullsLast().op("text_ops")),
-	index("player_events_player_idx").using("btree", table.playerId.asc().nullsLast().op("text_ops")),
-	index("player_events_timestamp_idx").using("btree", table.timestamp.asc().nullsLast().op("timestamp_ops")),
-	foreignKey({
-			columns: [table.gameId],
-			foreignColumns: [games.id],
-			name: "player_events_game_id_games_id_fk"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.playerId],
-			foreignColumns: [players.id],
-			name: "player_events_player_id_players_id_fk"
-		}).onDelete("cascade"),
-	unique("player_events_game_id_sequence_number_unique").on(table.gameId, table.sequenceNumber),
-]);
+});
 
 export const userProfiles = pgTable("user_profiles", {
 	id: uuid().primaryKey().notNull(),

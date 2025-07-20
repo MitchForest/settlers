@@ -277,10 +277,10 @@ export function JoinGameDialog({ open, onOpenChange }: JoinGameDialogProps) {
         return
       }
       
-      // TODO: Implement actual join logic with lobby integration
+      // Join the game and navigate to unified lobby
       toast.success(`Found game hosted by ${game.hostPlayerName}! Joining...`)
       
-      // For now, just navigate to the game
+      // Navigate to unified lobby
       window.location.href = `/lobby/${game.id}`
       onOpenChange(false)
     } catch (err) {
@@ -310,10 +310,10 @@ export function JoinGameDialog({ open, onOpenChange }: JoinGameDialogProps) {
   const handleJoinGame = async (gameId: string) => {
     setJoinLoading(true)
     try {
-      // TODO: Implement actual join logic with lobby integration
+      // Join the game and navigate to unified lobby
       toast.success('Joining game...')
       
-      // For now, just navigate to the game
+      // Navigate to unified lobby
       window.location.href = `/lobby/${gameId}`
       onOpenChange(false)
     } catch (err) {

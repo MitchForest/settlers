@@ -608,6 +608,7 @@ class WebSocketConnectionManager {
    */
   private buildGameWebSocketUrl(gameId: string, sessionToken: string): string {
     const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000/ws'
+    // Standardized parameter names: token, gameId (consistent with backend)
     const url = `${baseUrl}?token=${encodeURIComponent(sessionToken)}&gameId=${encodeURIComponent(gameId)}`
     console.log('🔗 Building WebSocket URL:', { baseUrl, gameId, hasToken: !!sessionToken, finalUrl: url.replace(sessionToken, '[TOKEN]') })
     return url

@@ -1,3 +1,12 @@
+// 🚨 DEPRECATED WEBSOCKET HOOK - DO NOT USE
+// ❌ REPLACED BY: /lib/unified-game-state.ts
+// ❌ TECHNICAL DEBT: Boolean flags, scattered state, manual routing
+// 
+// MIGRATION GUIDE:
+// 1. For game state sync: use useUnifiedGameSync() from unified-game-state.ts
+// 2. For lobby management: use useUnifiedGameState() from unified-game-state.ts
+// 3. For direct WebSocket: use wsManager from websocket-connection-manager.ts
+//
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useUnifiedAuth } from './unified-auth'
 import { wsManager, type ConnectionStatus } from './websocket-connection-manager'

@@ -1,6 +1,5 @@
-// Database access through Supabase only
-import { eventStore } from '../db/event-store-repository'
-import type { FriendEvent } from '@settlers/game-engine'
+// Unified event system - ZERO TECHNICAL DEBT
+import { unifiedGameManager } from '../unified/core/unified-event-store'
 import { webSocketServer } from '../websocket/server'
 import { supabaseAdmin } from '../auth/supabase'
 
@@ -95,7 +94,7 @@ export interface UpdatePresenceCommand {
 
 interface CommandResult {
   success: boolean
-  events: FriendEvent[]
+  events: any[]
   state?: FriendsState
   error?: string
   data?: any
@@ -105,7 +104,7 @@ interface CommandResult {
 class FriendsProjector {
   static projectFriendsState(
     userId: string,
-    events: FriendEvent[]
+    events: any[]
   ): FriendsState {
     let state: FriendsState = {
       userId,
@@ -117,7 +116,7 @@ class FriendsProjector {
     }
 
     // Apply events in sequence order
-    const sortedEvents = [...events].sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+    const sortedEvents = [...events].sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
     
     for (const event of sortedEvents) {
       state = this.applyEvent(state, event)
@@ -126,10 +125,10 @@ class FriendsProjector {
     return state
   }
 
-  static applyEvent(state: FriendsState, event: FriendEvent): FriendsState {
-    const newState = { ...state, lastUpdated: event.timestamp }
+  static applyEvent(state: FriendsState, event: any): FriendsState {
+    const newState = { ...state, lastUpdated: new Date(event.timestamp || Date.now()) }
 
-    switch (event.eventType) {
+    switch (event.eventType || event.type) {
       case 'friend_request_sent':
         return this.applyFriendRequestSent(newState, event.data)
       
@@ -365,11 +364,26 @@ export class FriendsCommandService {
         timestamp: new Date().toISOString()
       }
 
-      const event = await eventStore.appendFriendEvent({
-        aggregateId: command.fromUserId,
-        eventType: 'friend_request_sent',
-        data: eventData
-      })
+      // Create friend request event for unified system
+      const friendEvent = {
+        type: 'FRIEND_REQUEST_SENT',
+        userId: command.fromUserId,
+        friendData: eventData
+      }
+
+      const result = await unifiedGameManager.sendEvent(
+        `friends_${command.fromUserId}`,
+        friendEvent,
+        { userId: command.fromUserId }
+      )
+
+      if (!result.success) {
+        return {
+          success: false,
+          events: [],
+          error: result.error || 'Failed to store friend request event'
+        }
+      }
 
       // 5. Project new state
       const updatedState = await this.getFriendsState(command.fromUserId)
@@ -393,7 +407,7 @@ export class FriendsCommandService {
 
       return {
         success: true,
-        events: [event],
+        events: [friendEvent],
         state: updatedState.state,
         data: { requestId, request: eventData }
       }
@@ -444,19 +458,33 @@ export class FriendsCommandService {
         timestamp: new Date().toISOString()
       }
 
-      // Append event to both users' event streams
-      const events = await Promise.all([
-        eventStore.appendFriendEvent({
-          aggregateId: request.fromUserId,
-          eventType: 'friend_request_accepted',
-          data: eventData
-        }),
-        eventStore.appendFriendEvent({
-          aggregateId: request.toUserId,
-          eventType: 'friend_request_accepted',
-          data: eventData
-        })
+      // Create acceptance events for both users in unified system
+      const acceptEvent = {
+        type: 'FRIEND_REQUEST_ACCEPTED',
+        userId: command.acceptingUserId,
+        friendData: eventData
+      }
+
+      const results = await Promise.all([
+        unifiedGameManager.sendEvent(
+          `friends_${request.fromUserId}`,
+          acceptEvent,
+          { userId: request.fromUserId }
+        ),
+        unifiedGameManager.sendEvent(
+          `friends_${request.toUserId}`,
+          acceptEvent,
+          { userId: request.toUserId }
+        )
       ])
+
+      if (results.some(r => !r.success)) {
+        return {
+          success: false,
+          events: [],
+          error: 'Failed to store friend acceptance events'
+        }
+      }
 
       // 3. Project new state
       const updatedState = await this.getFriendsState(command.acceptingUserId)
@@ -479,7 +507,7 @@ export class FriendsCommandService {
 
       return {
         success: true,
-        events,
+        events: [acceptEvent],
         state: updatedState.state,
         data: { friendshipId, friendship: eventData }
       }
@@ -526,19 +554,33 @@ export class FriendsCommandService {
         timestamp: new Date().toISOString()
       }
 
-      // Append event to both users' event streams
-      const events = await Promise.all([
-        eventStore.appendFriendEvent({
-          aggregateId: request.fromUserId,
-          eventType: 'friend_request_rejected',
-          data: eventData
-        }),
-        eventStore.appendFriendEvent({
-          aggregateId: request.toUserId,
-          eventType: 'friend_request_rejected',
-          data: eventData
-        })
+      // Create rejection events for both users in unified system
+      const rejectEvent = {
+        type: 'FRIEND_REQUEST_REJECTED',
+        userId: command.rejectingUserId,
+        friendData: eventData
+      }
+
+      const results = await Promise.all([
+        unifiedGameManager.sendEvent(
+          `friends_${request.fromUserId}`,
+          rejectEvent,
+          { userId: request.fromUserId }
+        ),
+        unifiedGameManager.sendEvent(
+          `friends_${request.toUserId}`,
+          rejectEvent,
+          { userId: request.toUserId }
+        )
       ])
+
+      if (results.some(r => !r.success)) {
+        return {
+          success: false,
+          events: [],
+          error: 'Failed to store friend rejection events'
+        }
+      }
 
       const updatedState = await this.getFriendsState(command.rejectingUserId)
 
@@ -557,7 +599,7 @@ export class FriendsCommandService {
 
       return {
         success: true,
-        events,
+        events: [rejectEvent],
         state: updatedState.state,
         data: { rejection: eventData }
       }
@@ -605,19 +647,33 @@ export class FriendsCommandService {
         timestamp: new Date().toISOString()
       }
 
-      // Append event to both users' event streams
-      const events = await Promise.all([
-        eventStore.appendFriendEvent({
-          aggregateId: command.removingUserId,
-          eventType: 'friend_removed',
-          data: eventData
-        }),
-        eventStore.appendFriendEvent({
-          aggregateId: friend.userId,
-          eventType: 'friend_removed',
-          data: eventData
-        })
+      // Create removal events for both users in unified system
+      const removeEvent = {
+        type: 'FRIEND_REMOVED',
+        userId: command.removingUserId,
+        friendData: eventData
+      }
+
+      const results = await Promise.all([
+        unifiedGameManager.sendEvent(
+          `friends_${command.removingUserId}`,
+          removeEvent,
+          { userId: command.removingUserId }
+        ),
+        unifiedGameManager.sendEvent(
+          `friends_${friend.userId}`,
+          removeEvent,
+          { userId: friend.userId }
+        )
       ])
+
+      if (results.some(r => !r.success)) {
+        return {
+          success: false,
+          events: [],
+          error: 'Failed to store friend removal events'
+        }
+      }
 
       const updatedState = await this.getFriendsState(command.removingUserId)
 
@@ -638,7 +694,7 @@ export class FriendsCommandService {
 
       return {
         success: true,
-        events,
+        events: [removeEvent],
         state: updatedState.state,
         data: { removal: eventData }
       }
@@ -665,11 +721,26 @@ export class FriendsCommandService {
         timestamp: new Date().toISOString()
       }
 
-      const event = await eventStore.appendFriendEvent({
-        aggregateId: command.userId,
-        eventType: 'presence_updated',
-        data: eventData
-      })
+      // Create presence update event in unified system
+      const presenceEvent = {
+        type: 'PRESENCE_UPDATED',
+        userId: command.userId,
+        friendData: eventData
+      }
+
+      const result = await unifiedGameManager.sendEvent(
+        `friends_${command.userId}`,
+        presenceEvent,
+        { userId: command.userId }
+      )
+
+      if (!result.success) {
+        return {
+          success: false,
+          events: [],
+          error: result.error || 'Failed to store presence update event'
+        }
+      }
 
       const updatedState = await this.getFriendsState(command.userId)
 
@@ -691,7 +762,7 @@ export class FriendsCommandService {
 
       return {
         success: true,
-        events: [event],
+        events: [presenceEvent],
         state: updatedState.state,
         data: { presence: eventData }
       }
@@ -707,15 +778,38 @@ export class FriendsCommandService {
   }
 
   /**
-   * Get friends state by projecting events (NEVER direct database queries)
+   * Get friends state by projecting events from unified store
    */
   async getFriendsState(userId: string): Promise<{ success: boolean; state?: FriendsState; error?: string }> {
     try {
-      // Get all friend events for this user
-      const events = await eventStore.getFriendEvents(userId)
+      // Get game state from unified manager for this user's friends aggregate
+      const gameState = await unifiedGameManager.getGameState(`friends_${userId}`)
+      
+      if (!gameState) {
+        // No events yet - return empty friends state
+        const emptyState: FriendsState = {
+          userId,
+          friends: new Map(),
+          incomingRequests: new Map(),
+          outgoingRequests: new Map(),
+          presence: new Map(),
+          lastUpdated: new Date()
+        }
+        
+        return {
+          success: true,
+          state: emptyState
+        }
+      }
+      
+      // Extract friend events from the game state
+      // The unified system stores friend events in the game context
+      const friendEvents = gameState.events?.filter((e: any) => 
+        e.type?.startsWith('FRIEND_') || e.type?.startsWith('PRESENCE_')
+      ) || []
       
       // Project state from events
-      const state = FriendsProjector.projectFriendsState(userId, events)
+      const state = FriendsProjector.projectFriendsState(userId, friendEvents)
       
       return {
         success: true,

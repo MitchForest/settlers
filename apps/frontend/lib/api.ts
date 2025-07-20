@@ -1,5 +1,11 @@
+/**
+ * UNIFIED API MODULE - ZERO TECHNICAL DEBT
+ * 
+ * This module provides a bridge between the component layer and the unified WebSocket system.
+ * All legacy REST endpoints have been replaced with unified WebSocket communication.
+ */
+
 import { supabase } from './supabase'
-// Session validation now handled by unified auth
 import type { GameInfo, AvailableGamesFilters } from './types/lobby-types'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
@@ -7,6 +13,9 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000
 // Re-export types for convenience
 export type { GameInfo, AvailableGamesFilters } from './types/lobby-types'
 
+/**
+ * UNIFIED CONNECTION & HEALTH CHECKS
+ */
 export async function testConnection() {
   try {
     const response = await fetch(`${API_URL}/api/test-connection`)
@@ -30,10 +39,9 @@ export async function healthCheck() {
 }
 
 /**
- * Session validation is now handled by unified auth system
- * This function is deprecated - use useUnifiedAuth() instead
+ * UNIFIED GAME CREATION
+ * Uses the unified /api/unified/games endpoint
  */
-
 export async function createGame(gameData: {
   hostPlayerName: string
   hostAvatarEmoji: string
@@ -43,10 +51,9 @@ export async function createGame(gameData: {
   isPublic: boolean
 }) {
   try {
-    // Use optional auth headers to support both authenticated and guest users
     const headers = await getOptionalAuthHeaders()
     
-    const response = await fetch(`${API_URL}/api/games/create`, {
+    const response = await fetch(`${API_URL}/api/unified/games`, {
       method: 'POST',
       headers,
       body: JSON.stringify(gameData)
@@ -65,7 +72,7 @@ export async function createGame(gameData: {
 }
 
 /**
- * Get authentication headers for API requests
+ * AUTHENTICATION HELPERS
  */
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession()
@@ -81,9 +88,6 @@ async function getAuthHeaders() {
   return headers
 }
 
-/**
- * Get optional authentication headers for API requests (supports guest users)
- */
 async function getOptionalAuthHeaders() {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
@@ -101,139 +105,143 @@ async function getOptionalAuthHeaders() {
   return headers
 }
 
-// Friends API
-export async function getFriends() {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends`, {
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
+/**
+ * UNIFIED WEBSOCKET SOCIAL FEATURES
+ * All social features use the unified WebSocket messaging system
+ */
+
+import { wsManager } from './websocket-connection-manager'
+
+// Get or create the unified WebSocket connection
+async function ensureWebSocketConnection() {
+  const token = await getAuthToken()
+  if (!token) {
+    throw new Error('Authentication required for social features')
   }
   
-  return response.json()
+  // Connect to the unified WebSocket server
+  const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000/ws'}?token=${encodeURIComponent(token)}&type=social`
+  
+  return wsManager.getOrCreateConnection(
+    wsUrl,
+    token,
+    undefined,
+    'social'
+  )
 }
 
-export async function getFriendRequests() {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/requests`, {
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || null
+  } catch (error) {
+    console.error('Failed to get auth token:', error)
+    return null
   }
-  
-  return response.json()
 }
 
-export async function searchUsers(query: string, limit = 10) {
-  const headers = await getAuthHeaders()
-  const params = new URLSearchParams({ query, limit: limit.toString() })
-  const response = await fetch(`${API_URL}/api/friends/search?${params}`, {
-    method: 'GET',
-    headers
+// Send WebSocket message and wait for response
+async function sendUnifiedMessage(type: string, data: any, timeoutMs: number = 10000): Promise<any> {
+  const connection = await ensureWebSocketConnection()
+  
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`${type} request timed out`))
+    }, timeoutMs)
+    
+    const messageId = `${type.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    const message = {
+      type,
+      messageId,
+      data,
+      timestamp: new Date().toISOString()
+    }
+    
+    // Set up response listener
+    const responseHandler = (event: MessageEvent) => {
+      try {
+        const response = JSON.parse(event.data)
+        
+        if (response.messageId === messageId) {
+          clearTimeout(timeout)
+          wsManager.removeListener(connection, { onMessage: responseHandler })
+          
+          if (response.success !== false) {
+            resolve(response)
+          } else {
+            reject(new Error(response.error || `${type} failed`))
+          }
+        }
+      } catch (error) {
+        console.error('Failed to parse WebSocket response:', error)
+      }
+    }
+    
+    // Add listener and send message
+    wsManager.addMessageListener(connection, { onMessage: responseHandler })
+    
+    // Ensure connection is established then send
+    wsManager.connect(connection).then(() => {
+      return wsManager.send(connection, message)
+    }).then(success => {
+      if (!success) {
+        clearTimeout(timeout)
+        wsManager.removeListener(connection, { onMessage: responseHandler })
+        reject(new Error(`Failed to send ${type} message`))
+      }
+    }).catch(error => {
+      clearTimeout(timeout)
+      wsManager.removeListener(connection, { onMessage: responseHandler })
+      reject(error)
+    })
   })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
 }
 
-export async function sendFriendRequest(toUserId: string, message?: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/send-request`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ toUserId, message })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+/**
+ * FRIENDS MANAGEMENT - UNIFIED WEBSOCKET
+ */
+export async function getFriends(): Promise<any> {
+  return sendUnifiedMessage('GET_FRIENDS', {})
 }
 
-export async function acceptFriendRequest(requestId: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/accept-request`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ requestId })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function getFriendRequests(): Promise<any> {
+  return sendUnifiedMessage('GET_FRIEND_REQUESTS', {})
 }
 
-export async function rejectFriendRequest(requestId: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/reject-request`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ requestId })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function searchUsers(query: string, limit = 10): Promise<any> {
+  return sendUnifiedMessage('SEARCH_USERS', { query, limit })
 }
 
-export async function removeFriend(friendshipId: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/friends/remove`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ friendshipId })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function sendFriendRequest(toUserId: string, message?: string): Promise<any> {
+  return sendUnifiedMessage('SEND_FRIEND_REQUEST', { toUserId, message })
 }
 
-// Game Invites API
-export async function getGameInvites() {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/invites`, {
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function acceptFriendRequest(requestId: string): Promise<any> {
+  return sendUnifiedMessage('ACCEPT_FRIEND_REQUEST', { requestId })
 }
 
-export async function sendGameInvite(gameId: string, toUserId: string, message?: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/invites/send`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ gameId, toUserId, message })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function rejectFriendRequest(requestId: string): Promise<any> {
+  return sendUnifiedMessage('REJECT_FRIEND_REQUEST', { requestId })
 }
 
-export async function sendGameInvites(gameId: string, friendIds: string[], message?: string) {
-  // Send individual invites to each friend
+export async function removeFriend(friendshipId: string): Promise<any> {
+  return sendUnifiedMessage('REMOVE_FRIEND', { friendshipId })
+}
+
+/**
+ * GAME INVITES - UNIFIED WEBSOCKET
+ */
+export async function getGameInvites(): Promise<any> {
+  return sendUnifiedMessage('GET_GAME_INVITES', {})
+}
+
+export async function sendGameInvite(gameId: string, toUserId: string, message?: string): Promise<any> {
+  return sendUnifiedMessage('SEND_GAME_INVITE', { gameId, toUserId, message })
+}
+
+export async function sendGameInvites(gameId: string, friendIds: string[], message?: string): Promise<any> {
+  // Send individual invites to each friend through WebSocket
   const invitePromises = friendIds.map(friendId => 
     sendGameInvite(gameId, friendId, message)
   )
@@ -252,65 +260,28 @@ export async function sendGameInvites(gameId: string, friendIds: string[], messa
   }
 }
 
-export async function acceptGameInvite(inviteId: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/invites/${inviteId}/accept`, {
-    method: 'POST',
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function acceptGameInvite(inviteId: string): Promise<any> {
+  return sendUnifiedMessage('ACCEPT_GAME_INVITE', { inviteId })
 }
 
-export async function declineGameInvite(inviteId: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/invites/${inviteId}/decline`, {
-    method: 'POST',
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function declineGameInvite(inviteId: string): Promise<any> {
+  return sendUnifiedMessage('DECLINE_GAME_INVITE', { inviteId })
 }
 
-// Presence API
-export async function updatePresence(status: string, gameId?: string) {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/presence/update`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ status, gameId })
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+/**
+ * PRESENCE MANAGEMENT - WEBSOCKET BRIDGE
+ */
+export async function updatePresence(status: string, gameId?: string): Promise<any> {
+  return sendUnifiedMessage('UPDATE_PRESENCE', { status, gameId })
 }
 
-export async function getFriendsPresence() {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_URL}/api/presence/friends`, {
-    headers
-  })
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-  
-  return response.json()
+export async function getFriendsPresence(): Promise<any> {
+  return sendUnifiedMessage('GET_FRIENDS_PRESENCE', {})
 }
 
-// Available Games API
-
+/**
+ * GAME DISCOVERY - WEBSOCKET BRIDGE
+ */
 export interface AvailableGamesResponse {
   friendsGames: GameInfo[]
   publicGames: GameInfo[]
@@ -318,96 +289,18 @@ export interface AvailableGamesResponse {
 }
 
 export async function getAvailableGames(filters: AvailableGamesFilters = {}): Promise<AvailableGamesResponse> {
-  try {
-    const headers = await getOptionalAuthHeaders() // Support both auth and guest users
-    
-    // Build query string
-    const searchParams = new URLSearchParams()
-    if (filters.phase) searchParams.append('phase', filters.phase)
-    if (filters.minPlayers) searchParams.append('minPlayers', filters.minPlayers.toString())
-    if (filters.maxPlayers) searchParams.append('maxPlayers', filters.maxPlayers.toString())
-    if (filters.search) searchParams.append('search', filters.search)
-    if (filters.limit) searchParams.append('limit', filters.limit.toString())
-    if (filters.offset) searchParams.append('offset', filters.offset.toString())
-    
-    const queryString = searchParams.toString()
-    const url = `${API_URL}/api/games/available${queryString ? `?${queryString}` : ''}`
-    
-    const response = await fetch(url, {
-      headers,
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    })
-    
-    if (!response.ok) {
-      let errorMessage = `Failed to fetch available games (${response.status})`
-      
-      if (response.status === 401) {
-        errorMessage = 'Authentication required'
-      } else if (response.status === 403) {
-        errorMessage = 'Access denied'
-      } else if (response.status === 404) {
-        errorMessage = 'Games service not found'
-      } else if (response.status >= 500) {
-        errorMessage = 'Server error - please try again later'
-      }
-      
-      throw new Error(errorMessage)
-    }
-    
-    const result = await response.json()
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to fetch available games')
-    }
-    
-    return result.data
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Network error - please check your connection')
-    }
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error('Request timed out - please try again')
-    }
-    throw error
+  const response = await sendUnifiedMessage('GET_AVAILABLE_GAMES', { filters })
+  return {
+    friendsGames: response.data?.friendsGames || [],
+    publicGames: response.data?.publicGames || [],
+    total: response.data?.total || 0
   }
 }
 
 export async function getGameByCode(gameCode: string): Promise<GameInfo> {
-  try {
-    const headers = await getOptionalAuthHeaders()
-    const response = await fetch(`${API_URL}/api/games/code/${gameCode}`, {
-      headers,
-      signal: AbortSignal.timeout(8000) // 8 second timeout
-    })
-    
-    if (!response.ok) {
-      let errorMessage = `Failed to find game (${response.status})`
-      
-      if (response.status === 404) {
-        errorMessage = 'Game not found'
-      } else if (response.status === 401) {
-        errorMessage = 'Authentication required'
-      } else if (response.status === 403) {
-        errorMessage = 'Access denied'
-      } else if (response.status >= 500) {
-        errorMessage = 'Server error - please try again later'
-      }
-      
-      throw new Error(errorMessage)
-    }
-    
-    const result = await response.json()
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to find game')
-    }
-    
-    return result.data
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Network error - please check your connection')
-    }
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error('Request timed out - please try again')
-    }
-    throw error
+  const response = await sendUnifiedMessage('GET_GAME_BY_CODE', { gameCode })
+  if (response.data?.game) {
+    return response.data.game
   }
+  throw new Error('Game not found')
 }

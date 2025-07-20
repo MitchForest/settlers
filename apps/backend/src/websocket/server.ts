@@ -1,3 +1,7 @@
+// LEGACY WEBSOCKET SERVER - TO BE REMOVED
+// ❌ REPLACED BY: /unified/websocket/unified-websocket-server.ts
+// ❌ TECHNICAL DEBT: Scattered state management, boolean flags
+// 
 // Unified Bun-native WebSocket server with complete feature set
 import type { ServerWebSocket } from 'bun'
 import { db, games, players } from '../db/index'

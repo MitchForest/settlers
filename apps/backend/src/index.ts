@@ -4,14 +4,11 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 
-// Import routes
-import gamesRouter from './routes/games'
-import { friendsRouter } from './routes/friends'
-import { invitesRouter } from './routes/invites'
-import { presenceRouter } from './routes/presence'
+// Import UNIFIED routes ONLY (ZERO TECHNICAL DEBT)
+import unifiedGamesRouter from './unified/routes/unified-games-routes'
 
-// Import the Bun unified WebSocket server
-import { webSocketServer } from './websocket/server'
+// Import the UNIFIED WebSocket server (ZERO TECHNICAL DEBT)
+import { unifiedWebSocketServer } from './unified/websocket/unified-websocket-server'
 
 // Create Hono app
 const app = new Hono()
@@ -58,11 +55,65 @@ app.get('/health', (c) => {
   })
 })
 
-// API routes
-app.route('/api/games', gamesRouter)
-app.route('/api/friends', friendsRouter)
-app.route('/api/invites', invitesRouter)
-app.route('/api/presence', presenceRouter)
+// UNIFIED API routes (ZERO TECHNICAL DEBT)
+app.route('/api/unified/games', unifiedGamesRouter)
+
+// Redirect legacy routes to unified endpoints
+app.all('/api/friends', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified WebSocket system for friend management.',
+    migration: 'All friend operations now handled through real-time WebSocket connections.'
+  }, 410)
+})
+
+app.all('/api/friends/*', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified WebSocket system for friend management.',
+    migration: 'All friend operations now handled through real-time WebSocket connections.'
+  }, 410)
+})
+
+app.all('/api/invites', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified game system for invites.',
+    migration: 'Game invites now handled through unified game management system.'
+  }, 410)
+})
+
+app.all('/api/invites/*', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified game system for invites.',
+    migration: 'Game invites now handled through unified game management system.'
+  }, 410)
+})
+
+app.all('/api/presence', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified WebSocket system for presence.',
+    migration: 'User presence now handled through real-time WebSocket connections.'
+  }, 410)
+})
+
+app.all('/api/presence/*', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use unified WebSocket system for presence.',
+    migration: 'User presence now handled through real-time WebSocket connections.'
+  }, 410)
+})
+
+app.all('/api/games', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use /api/unified/games',
+    migration: 'All game operations migrated to unified event-sourced system.'
+  }, 410)
+})
+
+app.all('/api/games/*', (c) => {
+  return c.json({ 
+    error: 'Legacy route deprecated. Use /api/unified/games',
+    migration: 'All game operations migrated to unified event-sourced system.'
+  }, 410)
+})
 
 // Test connection endpoint
 app.get('/api/test-connection', (c) => {
@@ -158,18 +209,18 @@ if (process.env.NODE_ENV !== 'test') {
     
     websocket: {
       open: async (ws) => {
-        console.log('🔌 Bun WebSocket opened successfully')
-        await webSocketServer.handleOpen(ws)
+        console.log('🔌 Unified WebSocket opened successfully')
+        await unifiedWebSocketServer.handleOpen(ws)
       },
       
       message: async (ws, message) => {
-        console.log('🔌 Bun WebSocket message received:', message.toString())
-        await webSocketServer.handleMessage(ws, message.toString())
+        console.log('🔌 Unified WebSocket message received:', message.toString())
+        await unifiedWebSocketServer.handleMessage(ws, message.toString())
       },
       
       close: (ws) => {
-        console.log('🔌 Bun WebSocket closed')
-        webSocketServer.handleClose(ws)
+        console.log('🔌 Unified WebSocket closed')
+        unifiedWebSocketServer.handleClose(ws)
       },
     },
   })

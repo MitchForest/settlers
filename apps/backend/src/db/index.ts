@@ -15,19 +15,14 @@ const client = postgres(connectionString, {
 
 export const db = drizzle(client, { schema })
 
-// Export all tables from the event-sourced schema
+// Export tables from schema
 // Note: userProfiles is accessed via Supabase client, not Drizzle
 export const { 
-  games, 
-  players, 
-  playerEvents,
-  gameEvents, 
-  gameEventSequences,
-  friendEvents,
-  friendEventSequences,
-  gameInviteEvents,
-  gameInviteEventSequences,
-  gameObservers 
+  // UNIFIED EVENT SOURCING TABLES - ZERO TECHNICAL DEBT
+  unifiedEvents,
+  unifiedEventSequences,
+  // USER MANAGEMENT (kept)
+  userProfiles
 } = schema
 
 export type Database = typeof db 
