@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { generateSessionToken, buildGameURL } from '@/lib/session-utils'
+// No more custom session tokens - using Supabase JWT directly
 import { Loader2 } from 'lucide-react'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
@@ -67,31 +67,9 @@ function AuthCallbackContent() {
               if (gameUrlMatch) {
                 const [, pageType, gameId] = gameUrlMatch
                 
-                // Extract any existing session parameters
-                const redirectUrl = new URL(redirectTo, window.location.origin)
-                const existingPlayerId = redirectUrl.searchParams.get('playerId')
-                const existingGameCode = redirectUrl.searchParams.get('gameCode')
-                
-                if (existingPlayerId) {
-                  // Generate session token with auth data
-                  const sessionToken = generateSessionToken(
-                    gameId,
-                    existingPlayerId,
-                    data.session.access_token || '',
-                    'player', // Default role, will be validated server-side
-                    existingGameCode || undefined
-                  )
-                  
-                  // Build new URL with session token
-                  const gameUrl = buildGameURL(
-                    pageType as 'lobby' | 'game',
-                    gameId,
-                    sessionToken
-                  )
-                  
-                  router.push(gameUrl.fullUrl)
-                  return
-                }
+                // Direct redirect to game/lobby - unified auth will handle everything
+                router.push(`/${pageType}/${gameId}`)
+                return
               }
             }
             

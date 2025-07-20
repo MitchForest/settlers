@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, User, RefreshCw } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 import { upsertUserProfile } from '@/lib/supabase'
 import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 import { toast } from 'sonner'
@@ -22,7 +22,7 @@ export function ProfileSetupDialog({ open, onComplete }: ProfileSetupDialogProps
   const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [nameError, setNameError] = useState('')
-  const { user, refreshProfile } = useAuth()
+  const { user, refreshProfile } = useUnifiedAuth()
 
   const validateName = async (value: string) => {
     if (!value.trim()) {

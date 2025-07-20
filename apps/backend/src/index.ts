@@ -1,8 +1,8 @@
+// Bun-native unified server with HTTP + WebSocket support
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
-import { serve } from '@hono/node-server'
 
 // Import routes
 import gamesRouter from './routes/games'
@@ -10,8 +10,8 @@ import { friendsRouter } from './routes/friends'
 import { invitesRouter } from './routes/invites'
 import { presenceRouter } from './routes/presence'
 
-// Import the new event-sourced WebSocket server
-import { server as webSocketServer } from './websocket/unified-server'
+// Import the Bun unified WebSocket server
+import { webSocketServer } from './websocket/server'
 
 // Create Hono app
 const app = new Hono()
@@ -53,7 +53,7 @@ app.get('/health', (c) => {
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    architecture: 'event-sourced',
+    architecture: 'bun-native-unified',
     websocket: 'active'
   })
 })
@@ -68,31 +68,9 @@ app.route('/api/presence', presenceRouter)
 app.get('/api/test-connection', (c) => {
   return c.json({ 
     success: true, 
-    message: 'Backend connection successful',
-    architecture: 'event-sourced'
+    message: 'Bun unified server connection successful',
+    architecture: 'bun-native-unified'
   })
-})
-
-// Handle specific route method validation (allow OPTIONS for CORS)
-app.all('/api/games/create', async (c, next) => {
-  if (c.req.method !== 'POST' && c.req.method !== 'OPTIONS') {
-    throw new HTTPException(405, { message: 'Method not allowed' })
-  }
-  await next()
-})
-
-app.all('/api/games/join', async (c, next) => {
-  if (c.req.method !== 'POST' && c.req.method !== 'OPTIONS') {
-    throw new HTTPException(405, { message: 'Method not allowed' })
-  }
-  await next()
-})
-
-app.all('/api/games/info/*', async (c, next) => {
-  if (c.req.method !== 'GET' && c.req.method !== 'OPTIONS') {
-    throw new HTTPException(405, { message: 'Method not allowed' })
-  }
-  await next()
 })
 
 // 404 handler
@@ -104,7 +82,6 @@ app.notFound((c) => {
 app.onError((err, c) => {
   console.error('Server error:', err)
   
-  // Handle HTTPException (400, 401, etc.)
   if (err instanceof HTTPException) {
     return c.json({ 
       success: false,
@@ -118,40 +95,101 @@ app.onError((err, c) => {
   }, 500)
 })
 
-// Export the server for testing
-export { app as server }; // YES
-
-// Start HTTP server only if not in test environment
+// Start unified Bun server with HTTP + WebSocket
 if (process.env.NODE_ENV !== 'test') {
-  const httpPort = process.env.PORT || 4000
-  console.log(`🚀 Starting Settlers backend server...`)
-  console.log(`📡 HTTP API server will run on port ${httpPort}`)
-  console.log(`🌐 WebSocket server starting on port 8080`)
-  console.log(`🎯 Architecture: Event-sourced`)
+  const port = parseInt(process.env.PORT || '4000')
+  
+  console.log('🚀 Starting Bun unified server...')
+  console.log('📡 HTTP + WebSocket server on port', port)
+  console.log('🎯 Architecture: Bun-native unified')
 
-  // ✅ ACTUALLY START THE WEBSOCKET SERVER
-  console.log(`🔌 Starting WebSocket server...`)
-  // WebSocket server starts automatically when imported (singleton pattern)
+  const server = Bun.serve({
+    port,
+    async fetch(req, server) {
+      const url = new URL(req.url)
+      
+      // Handle WebSocket upgrade requests
+      if (url.pathname === '/ws') {
+        console.log('🔌 WebSocket upgrade request received:', { pathname: url.pathname, params: Array.from(url.searchParams.entries()) })
+        
+        const token = url.searchParams.get('token')
+        const gameId = url.searchParams.get('gameId')
+        
+        console.log('🔌 WebSocket parameters:', { hasToken: !!token, hasGameId: !!gameId, gameId })
+        
+        if (!token || !gameId) {
+          console.error('❌ WebSocket upgrade rejected: Missing token or gameId')
+          return new Response('Missing token or gameId', { status: 401 })
+        }
 
-  serve({
-    fetch: app.fetch,
-    port: parseInt(httpPort.toString())
-  }, (info) => {
-    console.log(`✅ HTTP server running on http://localhost:${info.port}`)
-    console.log(`✅ WebSocket server running on ws://localhost:8080/ws`)
-    console.log(`✅ Backend fully operational with event sourcing`)
+        // Validate Supabase JWT token
+        const { SupabaseJWTValidator } = await import('./auth/jwt-validator')
+        const { valid, user, error } = await SupabaseJWTValidator.validateToken(token)
+        
+        if (!valid || !user) {
+          return new Response(`Authentication failed: ${error}`, { status: 401 })
+        }
+
+        // Create session payload with validated user
+        const sessionPayload = {
+          gameId,
+          user,
+          role: 'player' as const,
+          permissions: ['game_actions']
+        }
+
+        // Upgrade the connection with validated session data
+        console.log('🔌 Attempting WebSocket upgrade...')
+        const success = server.upgrade(req, { data: { session: sessionPayload, token } })
+        console.log('🔌 WebSocket upgrade result:', success)
+        
+        if (success) {
+          console.log('✅ WebSocket upgrade successful')
+          return // Connection upgraded successfully
+        } else {
+          console.error('❌ WebSocket upgrade failed')
+          return new Response('Upgrade failed', { status: 400 })
+        }
+      }
+      
+      // Handle regular HTTP requests with Hono
+      return app.fetch(req)
+    },
+    
+    websocket: {
+      open: async (ws) => {
+        console.log('🔌 Bun WebSocket opened successfully')
+        await webSocketServer.handleOpen(ws)
+      },
+      
+      message: async (ws, message) => {
+        console.log('🔌 Bun WebSocket message received:', message.toString())
+        await webSocketServer.handleMessage(ws, message.toString())
+      },
+      
+      close: (ws) => {
+        console.log('🔌 Bun WebSocket closed')
+        webSocketServer.handleClose(ws)
+      },
+    },
   })
+
+  console.log(`✅ Bun unified server running on http://localhost:${port}`)
+  console.log(`✅ WebSocket endpoint: ws://localhost:${port}/ws`)
+  console.log(`✅ Architecture: Bun-native unified server`)
 
   // Graceful shutdown
   process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down servers...')
-    webSocketServer.close()
+    console.log('\n🛑 Shutting down Bun unified server...')
+    server.stop()
     process.exit(0)
   })
 
   process.on('SIGTERM', () => {
-    console.log('\n🛑 Shutting down servers...')
-    webSocketServer.close()
+    console.log('\n🛑 Shutting down Bun unified server...')
+    server.stop()
     process.exit(0)
   })
 }
+
+export { app }

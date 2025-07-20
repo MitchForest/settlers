@@ -182,6 +182,7 @@ class WebSocketConnectionManager {
       }, this.CONNECTION_TIMEOUT)
       
       try {
+        console.log('🔌 Creating WebSocket with URL:', connection.url)
         const ws = new WebSocket(connection.url)
         connection.ws = ws
         connection.connectionTimeout = timeoutId
@@ -202,9 +203,12 @@ class WebSocketConnectionManager {
         
         ws.onmessage = (event) => {
           // Enhanced message routing with pattern matching
+          console.log('🔌 Raw WebSocket message received:', event.data)
           try {
             const messageData = JSON.parse(event.data)
-            const messageType = messageData.type || 'unknown'
+            // Backend sends nested structure: {success: true, data: {type: "...", ...}}
+            const messageType = messageData.data?.type || messageData.type || 'unknown'
+            console.log('🔌 Parsed message:', { type: messageType, data: messageData })
             
             // Route messages based on patterns
             this.routeMessage(connection, event, messageType)
@@ -258,6 +262,8 @@ class WebSocketConnectionManager {
         
         ws.onerror = (error) => {
           console.error('🔌 WebSocket error:', error)
+          console.error('🔌 WebSocket URL that failed:', connection.url)
+          console.error('🔌 WebSocket readyState:', ws.readyState)
           window.clearTimeout(timeoutId)
           this.connectingKeys.delete(connectionKey)
           this.stopHealthCheck(connection)
@@ -601,8 +607,10 @@ class WebSocketConnectionManager {
    * 🔗 BUILD GAME WEBSOCKET URL
    */
   private buildGameWebSocketUrl(gameId: string, sessionToken: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'
-    return `${baseUrl}?s=${encodeURIComponent(sessionToken)}&gameId=${encodeURIComponent(gameId)}`
+    const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000/ws'
+    const url = `${baseUrl}?token=${encodeURIComponent(sessionToken)}&gameId=${encodeURIComponent(gameId)}`
+    console.log('🔗 Building WebSocket URL:', { baseUrl, gameId, hasToken: !!sessionToken, finalUrl: url.replace(sessionToken, '[TOKEN]') })
+    return url
   }
 
   /**

@@ -1,8 +1,7 @@
-import { eq, and, or, sql } from 'drizzle-orm'
-import { db } from '../db/index'
+// Database access through Supabase only
 import { eventStore } from '../db/event-store-repository'
 import type { FriendEvent } from '@settlers/game-engine'
-import { server as unifiedWebSocketServer } from '../websocket/unified-server'
+import { webSocketServer } from '../websocket/server'
 import { supabaseAdmin } from '../auth/supabase'
 
 // **FRIENDS DOMAIN TYPES**
@@ -377,7 +376,7 @@ export class FriendsCommandService {
 
       // 6. Send real-time notification to the recipient via unified WebSocket
       try {
-        unifiedWebSocketServer.sendSocialNotification(command.toUserId, {
+        webSocketServer.sendSocialNotification(command.toUserId, {
           type: 'friend_request_received',
           data: {
             fromUserId: command.fromUserId,
@@ -464,7 +463,7 @@ export class FriendsCommandService {
 
       // 4. Send real-time notification to the original requester
       try {
-        unifiedWebSocketServer.sendSocialNotification(request.fromUserId, {
+        webSocketServer.sendSocialNotification(request.fromUserId, {
           type: 'friend_request_accepted',
           data: {
             acceptedByUserId: command.acceptingUserId,
@@ -545,7 +544,7 @@ export class FriendsCommandService {
 
       // Send notification
       try {
-        unifiedWebSocketServer.sendSocialNotification(request.fromUserId, {
+        webSocketServer.sendSocialNotification(request.fromUserId, {
           type: 'friend_request_rejected',
           data: {
             rejectedByUserId: command.rejectingUserId
@@ -624,7 +623,7 @@ export class FriendsCommandService {
 
       // Send real-time notification to the removed friend
       try {
-        unifiedWebSocketServer.sendSocialNotification(friend.userId, {
+        webSocketServer.sendSocialNotification(friend.userId, {
           type: 'friend_removed',
           data: {
             removedByUserId: command.removingUserId,
@@ -676,7 +675,7 @@ export class FriendsCommandService {
 
       // Broadcast presence update to all friends via unified WebSocket
       try {
-        unifiedWebSocketServer.broadcastSocialNotification({
+        webSocketServer.broadcastSocialNotification({
           type: 'friend_presence_update',
           data: {
             userId: command.userId,

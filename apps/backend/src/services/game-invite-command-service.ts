@@ -1,9 +1,7 @@
-import { eq } from 'drizzle-orm'
-import { db } from '../db/index'
-import { games } from '../../drizzle/schema'
+// Database access through Supabase only
 import { eventStore } from '../db/event-store-repository'
 import type { GameInviteEvent } from '@settlers/game-engine'
-import { server as unifiedWebSocketServer } from '../websocket/unified-server'
+import { webSocketServer } from '../websocket/server'
 import { supabaseAdmin } from '../auth/supabase'
 
 export interface SendGameInviteCommand {
@@ -53,13 +51,14 @@ export class GameInviteCommandService {
         }
       }
 
-      // Validate game exists
-      const [game] = await db
-        .select()
-        .from(games)
-        .where(eq(games.id, command.gameId))
+      // Validate game exists using Supabase
+      const { data: game, error: gameError } = await supabaseAdmin
+        .from('games')
+        .select('*')
+        .eq('id', command.gameId)
+        .single()
 
-      if (!game) {
+      if (gameError || !game) {
         return {
           success: false,
           events: [],
@@ -93,7 +92,7 @@ export class GameInviteCommandService {
 
       // Send real-time notification via unified WebSocket server
       try {
-        unifiedWebSocketServer.sendSocialNotification(command.toUserId, {
+        webSocketServer.sendSocialNotification(command.toUserId, {
           type: 'game_invite_received',
           data: {
             inviteId,
@@ -156,7 +155,7 @@ export class GameInviteCommandService {
 
       // Send notification to inviter
       try {
-        unifiedWebSocketServer.sendSocialNotification(invite.fromUserId, {
+        webSocketServer.sendSocialNotification(invite.fromUserId, {
           type: 'game_invite_responded',
           data: {
             inviteId: command.inviteId,
@@ -215,7 +214,7 @@ export class GameInviteCommandService {
 
       // Send notification to inviter
       try {
-        unifiedWebSocketServer.sendSocialNotification(invite.fromUserId, {
+        webSocketServer.sendSocialNotification(invite.fromUserId, {
           type: 'game_invite_responded',
           data: {
             inviteId: command.inviteId,
@@ -274,7 +273,7 @@ export class GameInviteCommandService {
 
       // Send notification to invitee
       try {
-        unifiedWebSocketServer.sendSocialNotification(invite.toUserId, {
+        webSocketServer.sendSocialNotification(invite.toUserId, {
           type: 'game_invite_cancelled',
           data: {
             inviteId: command.inviteId,

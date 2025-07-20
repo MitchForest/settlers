@@ -2,7 +2,6 @@ import { eq, and, asc, desc, gte, lte, inArray, sql } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { db } from './index'
 import { games, players, gameEvents, playerEvents, gameEventSequences, friendEvents, friendEventSequences, gameInviteEvents, gameInviteEventSequences } from '../../drizzle/schema'
-import { mockEventStore } from './mock-event-store'
 
 // Use the core GameEvent interface directly - no more UnifiedGameEvent
 import type { 
@@ -88,8 +87,8 @@ export class EventStoreRepository {
     hostPlayerName: string
     hostAvatarEmoji?: string | null
   }): Promise<{ game: typeof games.$inferSelect; hostPlayer: typeof players.$inferSelect }> {
+    console.log('🎮 Creating game in database:', { gameId: gameData.id, gameCode: gameData.gameCode })
     
-    // Try database first, fallback to mock if connection fails
     try {
       return await db.transaction(async (tx) => {
       // Create game record
@@ -140,13 +139,8 @@ export class EventStoreRepository {
       return { game, hostPlayer }
     })
     } catch (error) {
-      console.warn('Database connection failed, using mock store:', error)
-      // Fallback to mock event store
-      const result = await mockEventStore.createGame(gameData)
-      return {
-        game: result.game as any,
-        hostPlayer: result.hostPlayer as any
-      }
+      console.error('❌ Database error creating game:', error)
+      throw new Error(`Failed to create game: ${error instanceof Error ? error.message : 'Unknown database error'}`)
     }
   }
 

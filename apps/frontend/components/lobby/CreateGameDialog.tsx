@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Copy, Users, Eye, EyeOff, Globe, Lock } from 'lucide-react'
 // Removed unused imports: componentStyles, designSystem, ds
 import { createGame } from '@/lib/api'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 import { getGuestSession, getGuestDisplayName, getGuestAvatar } from '@/lib/guest-session'
 import { toast } from 'sonner'
 
@@ -20,7 +20,8 @@ interface CreateGameDialogProps {
 }
 
 export function CreateGameDialog({ open, onClose, onGameCreated }: CreateGameDialogProps) {
-  const { profile, user, isGuest } = useAuth()
+  const { profile, user } = useUnifiedAuth()
+  const isGuest = !user
   
   // Game settings
   const [playerCount, setPlayerCount] = useState<3 | 4>(4)

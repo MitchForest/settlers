@@ -1,6 +1,7 @@
 import { GameState, GameAction, ProcessResult, GameFlowManager, PlayerId } from '@settlers/game-engine'
 import { eventStore } from '../db/event-store-repository'
-import { UnifiedWebSocketServer } from '../websocket/unified-server'
+// Import type only to avoid circular dependency
+import type { UnifiedWebSocketServer } from '../websocket/server'
 import { 
   SerializedGameState, 
   createGameStateUpdateMessage, 
@@ -737,4 +738,7 @@ export class GameStateManager {
       console.error(`❌ Failed to broadcast game end for ${gameId}:`, error)
     }
   }
-} 
+}
+
+// Export singleton instance - WebSocket server will be injected later to avoid circular dependency
+export const gameStateManager = new GameStateManager(null as any) 

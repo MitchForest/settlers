@@ -1,6 +1,7 @@
 import { GameState, GameAction, PlayerId, GamePhase } from '@settlers/game-engine'
 import { GameStateManager } from './game-state-manager'
-import { UnifiedWebSocketServer } from '../websocket/unified-server'
+// WebSocket server type (avoid circular dependency)
+import type { UnifiedWebSocketServer } from '../websocket/server'
 import { 
   createTurnStartedMessage, 
   createTurnEndedMessage, 

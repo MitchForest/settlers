@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { SessionValidation } from './session-types'
+// Session validation now handled by unified auth
 import type { GameInfo, AvailableGamesFilters } from './types/lobby-types'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
@@ -30,46 +30,9 @@ export async function healthCheck() {
 }
 
 /**
- * Validate session token locally using JWT verification
+ * Session validation is now handled by unified auth system
+ * This function is deprecated - use useUnifiedAuth() instead
  */
-export async function validatePlayerSession(sessionToken: string): Promise<SessionValidation> {
-  try {
-    // Import parseSessionToken for local validation
-    const { parseSessionToken } = await import('./session-utils')
-    
-    const { session, error } = parseSessionToken(sessionToken)
-    
-    if (error || !session) {
-      return {
-        valid: false,
-        reason: error?.message || 'Invalid session token',
-        permissions: []
-      }
-    }
-    
-    // Check if token is expired
-    if (session.expiresAt < Date.now()) {
-      return {
-        valid: false,
-        reason: 'Session expired',
-        permissions: []
-      }
-    }
-    
-    return {
-      valid: true,
-      reason: 'Valid session',
-      permissions: session.permissions || []
-    }
-  } catch (error) {
-    console.error('Session validation failed:', error)
-    return {
-      valid: false,
-      reason: 'Validation error',
-      permissions: []
-    }
-  }
-}
 
 export async function createGame(gameData: {
   hostPlayerName: string

@@ -14,7 +14,7 @@ import { GuestProfileDialog } from '@/components/auth/GuestProfileDialog'
 import { UserAvatarMenu } from '@/components/auth/UserAvatarMenu'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/stores/appStore'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 // Removed unused import: ds, componentStyles
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
 import { ConnectionStatus } from '@/components/ui/connection-status'
@@ -34,7 +34,8 @@ export default function Home() {
     setShowMagicLink
   } = useAppStore()
   const [showGuestProfile, setShowGuestProfile] = useState(false)
-  const { user, profile: _profile, loading: _authLoading, isGuest } = useAuth()
+  const { user, profile: _profile, loading: _authLoading } = useUnifiedAuth()
+  const isGuest = !user
 
   useEffect(() => {
     checkSystemStatus()

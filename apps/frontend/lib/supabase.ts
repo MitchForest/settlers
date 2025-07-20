@@ -15,7 +15,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'settlers-auth-token',
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     flowType: 'pkce',
-    debug: process.env.NODE_ENV === 'development'
+    debug: false // Disable GoTrueClient debug logs
   }
 })
 

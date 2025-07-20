@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RefreshCw } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 import { upsertUserProfile } from '@/lib/supabase'
 import { AVATAR_EMOJIS } from '@/lib/avatar-constants'
 // Removed unused imports: componentStyles, designSystem, ds
@@ -19,7 +19,7 @@ interface EditProfileDialogProps {
 }
 
 export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps) {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useUnifiedAuth()
   
   // Initialize with current profile values
   const [selectedAvatar, setSelectedAvatar] = useState('')

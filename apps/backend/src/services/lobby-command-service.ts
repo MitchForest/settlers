@@ -1,8 +1,6 @@
 import { eventStore, EventType } from '../db/event-store-repository'
 import type { GameEvent } from '@settlers/game-engine'
-import { db } from '../db/index'
-import { players } from '../../drizzle/schema'
-import { eq } from 'drizzle-orm'
+import { supabaseAdmin } from '../auth/supabase'
 
 // Import types directly instead of from cross-package dependencies
 interface LobbyState {
@@ -253,70 +251,78 @@ export class LobbyCommandService {
         return { success: false, error: 'AI player name is required' }
       }
 
-      // Use transaction to ensure atomicity
-      const result = await db.transaction(async (tx) => {
-        // Load current state from events
-        const events = await eventStore.getGameEvents(command.gameId)
-        const game = await eventStore.getGameById(command.gameId)
-        
-        if (!game) {
-          throw new Error('Game not found')
-        }
+      // Load current state from events
+      const events = await eventStore.getGameEvents(command.gameId)
+      const game = await eventStore.getGameById(command.gameId)
+      
+      if (!game) {
+        return { success: false, error: 'Game not found' }
+      }
 
-        const lobbyState = LocalLobbyProjector.projectLobbyState(
-          game.id, 
-          game.gameCode, 
-          events, 
-          game.createdAt ? new Date(game.createdAt) : new Date()
-        )
+      const lobbyState = LocalLobbyProjector.projectLobbyState(
+        game.id, 
+        game.gameCode, 
+        events, 
+        game.createdAt ? new Date(game.createdAt) : new Date()
+      )
 
-        // Business rule validations
-        if (lobbyState.isStarted) {
-          throw new Error('Cannot add AI player after game has started')
-        }
+      // Business rule validations
+      if (lobbyState.isStarted) {
+        return { success: false, error: 'Cannot add AI player after game has started' }
+      }
 
-        if (LocalLobbyStateUtils.getPlayerCount(lobbyState) >= lobbyState.settings.maxPlayers) {
-          throw new Error(`Lobby is full (max ${lobbyState.settings.maxPlayers} players)`)
-        }
+      if (LocalLobbyStateUtils.getPlayerCount(lobbyState) >= lobbyState.settings.maxPlayers) {
+        return { success: false, error: `Lobby is full (max ${lobbyState.settings.maxPlayers} players)` }
+      }
 
-        if (!lobbyState.settings.aiEnabled) {
-          throw new Error('AI players are not enabled for this game')
-        }
+      if (!lobbyState.settings.aiEnabled) {
+        return { success: false, error: 'AI players are not enabled for this game' }
+      }
 
-        // Generate AI player data
-        const playerId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        
-        // Fix: Get available colors and join order atomically within transaction
-        const existingPlayers = await tx.select({ joinOrder: players.joinOrder, color: players.color })
-          .from(players)
-          .where(eq(players.gameId, command.gameId))
-        
-        const usedColors = new Set(existingPlayers.map(p => p.color))
-        const allColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
-        const availableColors = allColors.filter(color => !usedColors.has(color))
-        
-        if (availableColors.length === 0) {
-          throw new Error('No available colors for new player')
-        }
+      // Generate AI player data
+      const playerId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      // Get existing players to determine available colors and join order
+      const { data: existingPlayers, error: playersError } = await supabaseAdmin
+        .from('players')
+        .select('join_order, color')
+        .eq('game_id', command.gameId)
+      
+      if (playersError) {
+        return { success: false, error: `Database error: ${playersError.message}` }
+      }
+      
+      const usedColors = new Set((existingPlayers || []).map(p => p.color))
+      const allColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
+      const availableColors = allColors.filter(color => !usedColors.has(color))
+      
+      if (availableColors.length === 0) {
+        return { success: false, error: 'No available colors for new player' }
+      }
 
-        const color = availableColors[0]
-        const joinOrder = existingPlayers.length === 0 ? 1 : Math.max(...existingPlayers.map(p => p.joinOrder)) + 1
+      const color = availableColors[0]
+      const joinOrder = existingPlayers.length === 0 ? 1 : Math.max(...existingPlayers.map(p => p.join_order)) + 1
 
-        // Create player record first (needed for foreign key constraint)
-        await tx.insert(players).values({
+      // Create player record using Supabase
+      const { error: insertError } = await supabaseAdmin
+        .from('players')
+        .insert({
           id: playerId,
-          gameId: command.gameId,
-          userId: null, // AI players don't have user IDs
-          playerType: 'ai',
+          game_id: command.gameId,
+          user_id: null, // AI players don't have user IDs
+          player_type: 'ai',
           name: command.name,
-          avatarEmoji: undefined,
+          avatar_emoji: '🤖',
           color,
-          joinOrder,
-          isHost: false
+          join_order: joinOrder,
+          is_host: false
         })
 
-        return { playerId, color, joinOrder }
-      })
+      if (insertError) {
+        return { success: false, error: `Failed to create AI player: ${insertError.message}` }
+      }
+
+      const result = { playerId, color, joinOrder }
 
       // Emit AI player added event after transaction
       await eventStore.appendEvent({
@@ -352,43 +358,48 @@ export class LobbyCommandService {
    */
   async removeAIPlayer(gameId: string, aiPlayerId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const result = await db.transaction(async (tx) => {
-        // Load current state from events
-        const events = await eventStore.getGameEvents(gameId)
-        const game = await eventStore.getGameById(gameId)
-        
-        if (!game) {
-          throw new Error('Game not found')
-        }
+      // Load current state from events
+      const events = await eventStore.getGameEvents(gameId)
+      const game = await eventStore.getGameById(gameId)
+      
+      if (!game) {
+        return { success: false, error: 'Game not found' }
+      }
 
-        // Rebuild lobby state
-        const lobbyState = LocalLobbyProjector.projectLobbyState(
-          game.id, 
-          game.gameCode, 
-          events,
-          game.createdAt ? new Date(game.createdAt) : new Date()
-        )
-        
-        // Validate player exists and is AI
-        const player = lobbyState.players.get(aiPlayerId)
-        if (!player) {
-          throw new Error('AI player not found in lobby')
-        }
-        
-        if (player.playerType !== 'ai') {
-          throw new Error('Player is not an AI bot')
-        }
+      // Validate player exists and is AI via Supabase
+      const { data: player, error: playerError } = await supabaseAdmin
+        .from('players')
+        .select('*')
+        .eq('id', aiPlayerId)
+        .eq('game_id', gameId)
+        .eq('player_type', 'ai')
+        .single()
+      
+      if (playerError || !player) {
+        return { success: false, error: 'AI player not found in lobby' }
+      }
 
-        // Emit AI player removed event
-        await eventStore.appendEvent({
-          gameId,
-          playerId: aiPlayerId,
-          eventType: 'ai_player_removed',
-          data: { playerId: aiPlayerId }
-        })
+      // Delete AI player from Supabase
+      const { error: deleteError } = await supabaseAdmin
+        .from('players')
+        .delete()
+        .eq('id', aiPlayerId)
+        .eq('game_id', gameId)
+        .eq('player_type', 'ai')
 
-        return { success: true }
+      if (deleteError) {
+        return { success: false, error: `Failed to remove AI player: ${deleteError.message}` }
+      }
+
+      // Emit AI player removed event
+      await eventStore.appendEvent({
+        gameId,
+        playerId: aiPlayerId,
+        eventType: 'ai_player_removed',
+        data: { playerId: aiPlayerId }
       })
+
+      const result = { success: true }
 
       return result
     } catch (error) {
@@ -402,81 +413,92 @@ export class LobbyCommandService {
    */
   async joinGame(command: JoinGameCommand): Promise<{ success: boolean; playerId?: string; error?: string }> {
     try {
-      // Use transaction to ensure atomicity  
-      const result = await db.transaction(async (tx) => {
-        // Load current state from events
-        const events = await eventStore.getGameEvents(command.gameId)
-        const game = await eventStore.getGameById(command.gameId)
-        
-        if (!game) {
-          throw new Error('Game not found')
+      // Load current state from events
+      const events = await eventStore.getGameEvents(command.gameId)
+      const game = await eventStore.getGameById(command.gameId)
+      
+      if (!game) {
+        return { success: false, error: 'Game not found' }
+      }
+
+      const lobbyState = LocalLobbyProjector.projectLobbyState(
+        game.id, 
+        game.gameCode, 
+        events,
+        game.createdAt ? new Date(game.createdAt) : new Date()
+      )
+
+      // Business rule validations
+      if (lobbyState.isStarted) {
+        return { success: false, error: 'Cannot join after game has started' }
+      }
+
+      if (LocalLobbyStateUtils.getPlayerCount(lobbyState) >= lobbyState.settings.maxPlayers) {
+        return { success: false, error: `Lobby is full (max ${lobbyState.settings.maxPlayers} players)` }
+      }
+
+      // Check if user already in game via Supabase
+      const { data: existingPlayer } = await supabaseAdmin
+        .from('players')
+        .select('*')
+        .eq('game_id', command.gameId)
+        .eq('user_id', command.userId)
+        .single()
+      
+      if (existingPlayer) {
+        // 🔄 RECONNECTION: User is already in game, just return their existing data
+        console.log('🔄 User reconnecting to game:', command.userId, 'existing player:', existingPlayer.id)
+        return {
+          success: true,
+          playerId: existingPlayer.id,
+          error: 'Reconnected to existing game session'
         }
+      }
 
-        const lobbyState = LocalLobbyProjector.projectLobbyState(
-          game.id, 
-          game.gameCode, 
-          events,
-          game.createdAt ? new Date(game.createdAt) : new Date()
-        )
+      // Generate player data
+      const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+      
+      // Get existing players to determine available colors and join order
+      const { data: existingPlayers, error: playersError } = await supabaseAdmin
+        .from('players')
+        .select('join_order, color')
+        .eq('game_id', command.gameId)
+      
+      if (playersError) {
+        return { success: false, error: `Database error: ${playersError.message}` }
+      }
+      
+      const usedColors = new Set((existingPlayers || []).map(p => p.color))
+      const allColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
+      const availableColors = allColors.filter(color => !usedColors.has(color))
+      
+      if (availableColors.length === 0) {
+        return { success: false, error: 'No available colors for new player' }
+      }
 
-        // Business rule validations
-        if (lobbyState.isStarted) {
-          throw new Error('Cannot join after game has started')
-        }
+      const color = availableColors[0]
+      const joinOrder = existingPlayers.length === 0 ? 1 : Math.max(...existingPlayers.map(p => p.join_order)) + 1
 
-        if (LocalLobbyStateUtils.getPlayerCount(lobbyState) >= lobbyState.settings.maxPlayers) {
-          throw new Error(`Lobby is full (max ${lobbyState.settings.maxPlayers} players)`)
-        }
-
-        // Check if user already in game
-        const existingPlayer = Array.from(lobbyState.players.values())
-          .find(p => p.userId === command.userId)
-        
-        if (existingPlayer) {
-          // 🔄 RECONNECTION: User is already in game, just return their existing data
-          console.log('🔄 User reconnecting to game:', command.userId, 'existing player:', existingPlayer.id)
-          return {
-            success: true,
-            playerId: existingPlayer.id,
-            isHost: existingPlayer.isHost,
-            message: 'Reconnected to existing game session'
-          }
-        }
-
-        // Generate player data
-        const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-        
-        // Fix: Get available colors and join order atomically within transaction
-        const existingPlayers = await tx.select({ joinOrder: players.joinOrder, color: players.color })
-          .from(players)
-          .where(eq(players.gameId, command.gameId))
-        
-        const usedColors = new Set(existingPlayers.map(p => p.color))
-        const allColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
-        const availableColors = allColors.filter(color => !usedColors.has(color))
-        
-        if (availableColors.length === 0) {
-          throw new Error('No available colors for new player')
-        }
-
-        const color = availableColors[0]
-        const joinOrder = existingPlayers.length === 0 ? 1 : Math.max(...existingPlayers.map(p => p.joinOrder)) + 1
-
-        // Create player record
-        await tx.insert(players).values({
+      // Create player record using Supabase
+      const { error: insertError } = await supabaseAdmin
+        .from('players')
+        .insert({
           id: playerId,
-          gameId: command.gameId,
-          userId: command.userId,
-          playerType: 'human',
+          game_id: command.gameId,
+          user_id: command.userId,
+          player_type: 'human',
           name: command.playerName,
-          avatarEmoji: command.avatarEmoji,
+          avatar_emoji: command.avatarEmoji,
           color,
-          joinOrder,
-          isHost: false
+          join_order: joinOrder,
+          is_host: false
         })
 
-        return { playerId, color, joinOrder }
-      })
+      if (insertError) {
+        return { success: false, error: `Failed to join game: ${insertError.message}` }
+      }
+
+      const result = { playerId, color, joinOrder }
 
       // Emit player joined event after transaction
       await eventStore.appendEvent({

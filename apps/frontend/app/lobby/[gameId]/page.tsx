@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { use, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/auth-context'
+import { useGameAuth } from '@/lib/unified-auth'
+import { useUnifiedWebSocket } from '@/lib/use-unified-websocket'
 import { GameLobby } from '@/components/lobby/GameLobby'
-import { useLobbyWebSocket } from '@/lib/use-lobby-websocket'
-import { supabase } from '@/lib/supabase'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { ds, componentStyles, designSystem } from '@/lib/design-system'
 import type { LobbyPlayer } from '@/lib/types/lobby-types'
 
 interface LobbyPageProps {
@@ -14,110 +15,139 @@ interface LobbyPageProps {
   }>
 }
 
-export default function LobbyPage({ params }: LobbyPageProps) {
+export default function UnifiedLobbyPage({ params }: LobbyPageProps) {
   const { gameId } = use(params)
   const router = useRouter()
-  const { user: _user, profile: _profile } = useAuth()
+  const auth = useGameAuth(gameId)
   
   // Lobby state
   const [gameCode, setGameCode] = useState<string>('')
   const [players, setPlayers] = useState<LobbyPlayer[]>([])
-  const [isHost, setIsHost] = useState(false)
   const [canStart, setCanStart] = useState(false)
+  const [isHost, setIsHost] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sessionToken, setSessionToken] = useState<string>('')
 
-  // Get session token from URL or fresh from Supabase
-  useEffect(() => {
-    const getSessionToken = async () => {
-      // First, check if there's a session token in the URL (from auth callback)
-      const urlParams = new URLSearchParams(window.location.search)
-      const urlSessionToken = urlParams.get('s')
-      
-      if (urlSessionToken) {
-        console.log('🔑 Using session token from URL:', urlSessionToken.substring(0, 50) + '...')
-        setSessionToken(urlSessionToken)
-        return
-      }
-      
-      // Fallback: get fresh access token from Supabase
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        console.log('🔑 Using fresh access token from Supabase')
-        setSessionToken(session.access_token)
-      }
-    }
-    getSessionToken()
-  }, [])
-
-  // 🔌 USE NEW EXTERNAL WEBSOCKET MANAGER
-  const { status, isConnected, startGame, addAIBot, removeAIBot } = useLobbyWebSocket({
-    sessionToken,
+  // WebSocket connection with unified auth
+  const {
+    isConnected,
+    connectionStatus,
+    error: wsError,
+    addAIBot,
+    removeAIBot,
+    startGame,
+    leaveGame
+  } = useUnifiedWebSocket({
     gameId,
     onLobbyJoined: (data) => {
-      console.log('🎮 Lobby joined successfully:', data)
+      console.log('🎮 Joined lobby:', data)
       setGameCode(data.gameCode)
-      setPlayers(data.players)
-      setIsHost(data.isHost)
-      setCanStart(data.canStart)
+      setPlayers(data.players || [])
+      setCanStart(data.canStart || false)
+      setIsHost(data.isHost || false)
       setError(null)
     },
     onLobbyUpdate: (updatedPlayers, updatedCanStart) => {
-      console.log('🎮 Lobby updated:', { players: updatedPlayers.length, canStart: updatedCanStart })
+      console.log('🔄 Lobby update:', updatedPlayers.length, 'players')
       setPlayers(updatedPlayers)
       setCanStart(updatedCanStart)
     },
     onGameStarted: () => {
-      console.log('🎮 Game started, redirecting...')
+      console.log('🚀 Game started, redirecting...')
       router.push(`/game/${gameId}`)
     },
-    onError: (errorMessage) => {
-      console.error('🎮 Lobby error:', errorMessage)
-      setError(errorMessage)
+    onError: (errorMsg) => {
+      console.error('❌ Lobby error:', errorMsg)
+      setError(errorMsg)
     }
   })
 
-  // Auto-join is now handled by the WebSocket hook automatically
-
-  // Allow guest users to access lobby
-  // useEffect(() => {
-  //   if (!user) {
-  //     router.push('/')
-  //   }
-  // }, [user, router])
-
-  // if (!user || !profile) {
-  //   return <div>Loading...</div>
-  // }
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Connection Status */}
-        <div className="mb-4 text-sm text-muted-foreground">
-          Connection: {status} {isConnected && '🟢'} | Session: {sessionToken ? 'Yes' : 'No'} | Game ID: {gameId}
+  // Show loading while auth is initializing
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
+        <div className={ds(componentStyles.glassCard, 'p-8 text-center')}>
+          <LoadingSpinner className="mb-4" />
+          <h2 className={ds(designSystem.text.heading, 'text-xl')}>Loading...</h2>
+          <p className={ds(designSystem.text.muted)}>Initializing game session</p>
         </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-destructive">{error}</p>
-          </div>
-        )}
-
-                 {/* Game Lobby */}
-         <GameLobby
-           gameCode={gameCode}
-           players={players}
-           isHost={isHost}
-           canStart={canStart}
-           maxPlayers={4}
-           onStartGame={startGame}
-           onLeave={() => router.push('/')}
-           onAddAIBot={addAIBot}
-           onRemoveAIBot={removeAIBot}
-         />
       </div>
+    )
+  }
+
+  // Require authentication
+  if (!auth.isAuthenticated()) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
+        <div className={ds(componentStyles.glassCard, 'p-8 text-center max-w-md')}>
+          <h2 className={ds(designSystem.text.heading, 'text-xl mb-4')}>Authentication Required</h2>
+          <p className={ds(designSystem.text.muted, 'mb-6')}>
+            You need to be signed in to join this game.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className={ds(componentStyles.primaryButton)}
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show connection status
+  if (connectionStatus === 'connecting') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
+        <div className={ds(componentStyles.glassCard, 'p-8 text-center')}>
+          <LoadingSpinner className="mb-4" />
+          <h2 className={ds(designSystem.text.heading, 'text-xl')}>Connecting...</h2>
+          <p className={ds(designSystem.text.muted)}>Joining game lobby</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error || wsError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a] flex items-center justify-center">
+        <div className={ds(componentStyles.glassCard, 'p-8 text-center max-w-md')}>
+          <h2 className={ds(designSystem.text.heading, 'text-xl mb-4 text-red-400')}>
+            Connection Error
+          </h2>
+          <p className={ds(designSystem.text.muted, 'mb-6')}>
+            {error || wsError || 'Failed to connect to game'}
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className={ds(componentStyles.primaryButton)}
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show lobby interface when connected
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#1a4b3a] via-[#2d5a47] to-[#1a4b3a]">
+      <GameLobby
+        gameId={gameId}
+        gameCode={gameCode}
+        players={players}
+        isHost={isHost}
+        canStart={canStart}
+        isConnected={isConnected}
+        currentUser={auth.user}
+        onAddAIBot={addAIBot}
+        onRemoveAIBot={removeAIBot}
+        onStartGame={startGame}
+        onLeave={() => {
+          leaveGame()
+          router.push('/')
+        }}
+      />
     </div>
   )
-} 
+}

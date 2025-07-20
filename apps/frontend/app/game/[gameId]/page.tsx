@@ -16,7 +16,7 @@ import type { GameAction } from '@settlers/game-engine'
 import { loadGameEngine } from '@/lib/game-engine-loader'
 import { DynamicLoading } from '@/components/ui/dynamic-loading'
 import { useGameStore } from '@/stores/gameStore'
-import { useTurnManager } from '@/lib/use-turn-manager'
+import { useUnifiedWebSocket } from '@/lib/use-unified-websocket'
 import { useRouter } from 'next/navigation'
 import { HoneycombBackground } from '@/components/ui/honeycomb-background'
 import { ConnectionStatus } from '@/components/ui/connection-status'
@@ -35,13 +35,21 @@ function GamePageContent({ gameId }: { gameId: string }) {
   // Game state from store (legacy for initial game state)
   const { gameState, localPlayerId, setLocalPlayerId } = useGameStore()
   
-  // Turn management integration
-  const turnManager = useTurnManager({
+  // WebSocket connection for game
+  const {
+    isConnected,
+    connectionStatus,
+    error: wsError,
+    sendMessage
+  } = useUnifiedWebSocket({
     gameId,
-    sessionToken: localStorage.getItem(`sessionToken_${gameId}`) || '', 
-    playerId: localPlayerId || '',
-    enableToasts: true,
-    enableNotifications: true
+    onGameStarted: () => {
+      console.log('Game started')
+    },
+    onError: (error) => {
+      console.error('Game WebSocket error:', error)
+      toast.error(error)
+    }
   })
 
   // Dialog management reference
@@ -99,7 +107,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
 
   // Action handlers
   const handleGameAction = async (action: GameAction) => {
-    if (!turnManager.isConnected) {
+    if (!isConnected) {
       toast.error('Not connected to game')
       return false
     }
@@ -107,7 +115,8 @@ function GamePageContent({ gameId }: { gameId: string }) {
     console.log('Processing action:', action)
 
     try {
-      const success = await turnManager.executeAction(action)
+      sendMessage({ type: 'gameAction', action })
+      const success = true
       return success
     } catch (error) {
       console.error('Action failed:', error)
@@ -153,7 +162,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
   }
 
   // Handle connection states
-  if (!turnManager.isConnected && localPlayerId) {
+  if (!isConnected && localPlayerId) {
     return (
       <HoneycombBackground>
         <div className="min-h-screen flex items-center justify-center">
@@ -166,14 +175,14 @@ function GamePageContent({ gameId }: { gameId: string }) {
     )
   }
 
-  if (turnManager.error) {
+  if (wsError) {
     return (
       <HoneycombBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className={ds(componentStyles.glassCard, 'text-center space-y-4 p-8')}>
             <div className={ds(designSystem.text.heading, 'text-xl')}>Failed to connect to game</div>
             <div className={ds(designSystem.text.body)}>
-              {String(turnManager.error)}
+              {String(wsError)}
             </div>
             <div className="flex gap-4">
               <Button 
@@ -193,7 +202,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
   }
 
   // Use game state from turn manager if available, otherwise fallback to store
-  const currentGameState = turnManager.gameState || gameState
+  const currentGameState = gameState
   
   if (!currentGameState || !localPlayerId) {
     return (
@@ -214,7 +223,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
     <HoneycombBackground className="h-screen">
       {/* Game Interface - Top status bar with turn management */}
       <GameInterface 
-        isConnected={turnManager.isConnected}
+        isConnected={isConnected}
         gameId={gameId}
         onGameAction={handleGameActionLegacy}
         onOpenDialog={dialogsRef.current}
@@ -244,7 +253,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
 
         {/* Connection Status - Top Left Corner */}
         <ConnectionStatus 
-          status={turnManager.isConnected ? 'connected' : 'disconnected'}
+          status={isConnected ? 'connected' : 'disconnected'}
           className="absolute top-20 left-4 z-40"
         />
 
@@ -255,7 +264,7 @@ function GamePageContent({ gameId }: { gameId: string }) {
             <PlayerSidebar
               gameState={currentGameState}
               localPlayer={localPlayer}
-              isMyTurn={turnManager.isMyTurn}
+              isMyTurn={false}
               onAction={handleGameActionLegacy}
               onOpenDialog={dialogsRef.current.developmentCard}
               onEnterPlacementMode={setPlacementMode}

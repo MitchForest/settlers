@@ -11,14 +11,17 @@ import { AddAIBotDialog } from './AddAIBotDialog'
 import { ds, componentStyles, designSystem } from '@/lib/design-system'
 
 interface GameLobbyProps {
+  gameId: string
   gameCode: string
   players: LobbyPlayer[]
   isHost: boolean
   canStart: boolean
-  maxPlayers: number
+  isConnected: boolean
+  currentUser: { id: string; email?: string } | null
+  maxPlayers?: number
   onStartGame: () => void
   onLeave: () => void
-  onAddAIBot?: (difficulty: 'easy' | 'medium' | 'hard', personality: 'aggressive' | 'balanced' | 'defensive' | 'economic') => void
+  onAddAIBot?: (personality?: string, name?: string) => void
   onRemoveAIBot?: (botPlayerId: string) => void
 }
 
@@ -27,7 +30,6 @@ export function GameLobby({
   players, 
   isHost, 
   canStart, 
-  maxPlayers: _maxPlayers,
   onStartGame, 
   onLeave,
   onAddAIBot,

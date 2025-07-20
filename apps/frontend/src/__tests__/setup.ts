@@ -4,7 +4,7 @@ import '@testing-library/jest-dom'
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test-project.supabase.co'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key-123'
 process.env.NEXT_PUBLIC_API_URL = 'http://localhost:4000'
-process.env.NEXT_PUBLIC_WS_URL = 'ws://localhost:8080/ws'
+process.env.NEXT_PUBLIC_WS_URL = 'ws://localhost:4000/ws'
 
 // Mock Next.js router
 import { vi } from 'vitest'

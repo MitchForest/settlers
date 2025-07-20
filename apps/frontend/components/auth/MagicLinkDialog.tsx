@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Mail, ArrowRight, RefreshCw, Edit } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 import { toast } from 'sonner'
 
 interface MagicLinkDialogProps {
@@ -30,7 +30,7 @@ export function MagicLinkDialog({
   const [isLoading, setIsLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [sentToEmail, setSentToEmail] = useState('')
-  const { signInWithMagicLink } = useAuth()
+  const { signInWithMagicLink } = useUnifiedAuth()
 
   const handleSendMagicLink = async () => {
     if (!email.trim()) {

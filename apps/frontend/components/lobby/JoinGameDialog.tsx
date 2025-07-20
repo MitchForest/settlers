@@ -13,7 +13,7 @@ import { Search, Users, Globe, Heart, Clock } from 'lucide-react'
 import { componentStyles, designSystem, ds } from '@/lib/design-system'
 import { toast } from 'sonner'
 import { getAvailableGames, getGameByCode, type GameInfo, type AvailableGamesFilters } from '@/lib/api'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 
 interface JoinGameDialogProps {
   open: boolean
@@ -155,7 +155,8 @@ function GamesList({
 }
 
 export function JoinGameDialog({ open, onOpenChange }: JoinGameDialogProps) {
-  const { isGuest } = useAuth()
+  const { user } = useUnifiedAuth()
+  const isGuest = !user
   const [gameCode, setGameCode] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState<GameFilters>({

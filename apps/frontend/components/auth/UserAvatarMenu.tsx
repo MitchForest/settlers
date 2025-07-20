@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { User, Settings, LogOut, Edit, Users, UserPlus, UserMinus, Check, X, Search } from 'lucide-react'
-import { useAuth } from '@/lib/auth-context'
+import { useUnifiedAuth } from '@/lib/unified-auth'
 import { EditProfileDialog } from './EditProfileDialog'
 import { GuestProfileDialog } from './GuestProfileDialog'
 import { supabase } from '@/lib/supabase'
@@ -53,7 +53,8 @@ interface SearchResult {
 }
 
 export function UserAvatarMenu() {
-const { user, profile, isGuest } = useAuth()
+const { user, profile } = useUnifiedAuth()
+const isGuest = !user
 const [showEditProfile, setShowEditProfile] = useState(false)
 const [showGuestProfile, setShowGuestProfile] = useState(false)
   

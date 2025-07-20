@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { AuthProvider } from "@/lib/auth-context";
+import { UnifiedAuthProvider } from "@/lib/unified-auth";
 
 export const metadata: Metadata = {
   title: "Settlers - Strategic Game",
@@ -18,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <AuthProvider>
+        <UnifiedAuthProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
@@ -30,7 +30,7 @@ export default function RootLayout({
               <Toaster />
             </ErrorBoundary>
           </ThemeProvider>
-        </AuthProvider>
+        </UnifiedAuthProvider>
       </body>
     </html>
   );

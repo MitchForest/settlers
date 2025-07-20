@@ -1,7 +1,8 @@
 import { GameStateManager } from './game-state-manager'
 import { TurnManager } from './turn-manager'
 import { AITurnOrchestrator } from './ai-turn-orchestrator'
-import { UnifiedWebSocketServer } from '../websocket/unified-server'
+// WebSocket server type (avoid circular dependency)
+import type { UnifiedWebSocketServer } from '../websocket/server'
 import { GameState, PlayerId } from '@settlers/game-engine'
 import { gameConfig } from '../config/game-config'
 

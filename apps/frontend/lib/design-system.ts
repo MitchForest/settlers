@@ -137,6 +137,17 @@ export const componentStyles = {
     designSystem.animation.bounce
   ),
 
+  // Primary button alias for consistency
+  primaryButton: ds(
+    designSystem.interactive.primary.base,
+    designSystem.interactive.primary.hover,
+    designSystem.interactive.primary.active,
+    designSystem.interactive.primary.focus,
+    designSystem.interactive.primary.disabled,
+    'px-4 py-2 rounded-md font-medium',
+    designSystem.animation.bounce
+  ),
+
   // Button secondary
   buttonSecondary: ds(
     designSystem.interactive.secondary.base,

@@ -1,29 +1,26 @@
 // Unified Bun-native WebSocket server with complete feature set
 import type { ServerWebSocket } from 'bun'
-import { supabaseAdmin } from '../auth/supabase'
+import { db, games, players } from '../db/index'
+import { eq, and } from 'drizzle-orm'
 
 interface GameSessionPayload {
   gameId: string
-  playerId: string
-  userId: string
-  playerName: string
-  avatarEmoji: string
-  authToken: string
+  playerId?: string
+  user: ValidatedUser
+  playerName?: string
+  avatarEmoji?: string
   role: 'host' | 'player' | 'observer'
   permissions: string[]
-  expiresAt: number
-  issuedAt: number
-  gameCode?: string
 }
 
 interface ClientConnection {
   ws: ServerWebSocket<any>
   gameId: string
   playerId?: string | null
-  userId?: string
+  user: ValidatedUser
   lastSequence: number
   isAlive: boolean
-  session?: GameSessionPayload
+  session: GameSessionPayload
   heartbeatInterval?: NodeJS.Timeout
   isSpectator?: boolean
 }
@@ -41,41 +38,14 @@ interface WebSocketResponse {
   data?: any
 }
 
-// Simple JWT implementation
-class SimpleJWT {
-  private static readonly SECRET = process.env.JWT_SECRET || 'settlers-dev-secret-key'
-  
-  static verify(token: string): { valid: boolean; payload?: GameSessionPayload; error?: string } {
-    try {
-      const [headerB64, payloadB64, signature] = token.split('.')
-      if (!headerB64 || !payloadB64 || !signature) {
-        return { valid: false, error: 'Invalid token format' }
-      }
-      
-      // Verify signature
-      const expectedSignature = Buffer.from(`${headerB64}.${payloadB64}.${this.SECRET}`).toString('base64')
-      if (signature !== expectedSignature) {
-        return { valid: false, error: 'Invalid signature' }
-      }
-      
-      const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString())
-      
-      // Check expiration
-      if (payload.expiresAt && Date.now() > payload.expiresAt) {
-        return { valid: false, error: 'Token expired' }
-      }
-      
-      return { valid: true, payload }
-    } catch {
-      return { valid: false, error: 'Malformed token' }
-    }
-  }
-}
+// Import Supabase JWT validator
+import { SupabaseJWTValidator, ValidatedUser } from '../auth/jwt-validator'
 
-class UnifiedWebSocketServer {
+export class UnifiedWebSocketServer {
   private gameConnections = new Map<string, Set<ClientConnection>>()
   private connectionToGame = new Map<ServerWebSocket<any>, ClientConnection>()
   private sessionConnections = new Map<string, ClientConnection>()
+  private userConnections = new Map<string, Set<ClientConnection>>() // userId -> connections
   private cleanupInterval?: NodeJS.Timeout
 
   constructor() {
@@ -87,44 +57,14 @@ class UnifiedWebSocketServer {
     }, 30000) // Clean up every 30 seconds
   }
 
-  async handleUpgrade(request: Request): Promise<Response> {
-    const url = new URL(request.url)
-    
-    // Only handle WebSocket upgrades on /ws path
-    if (url.pathname !== '/ws') {
-      return new Response('Not found', { status: 404 })
-    }
-
-    const sessionToken = url.searchParams.get('s')
-    if (!sessionToken) {
-      return new Response('Authentication required', { status: 401 })
-    }
-
-    // Validate session token
-    const decodedToken = decodeURIComponent(sessionToken)
-    const { valid, payload, error } = SimpleJWT.verify(decodedToken)
-    
-    if (!valid || !payload) {
-      return new Response(`Authentication failed: ${error}`, { status: 401 })
-    }
-
-    // Upgrade to WebSocket with session data
-    const success = Bun.upgrade(request, {
-      data: { session: payload, sessionToken },
-    })
-
-    return success
-      ? new Response('Upgrade successful', { status: 101 })
-      : new Response('Upgrade failed', { status: 400 })
-  }
 
   async handleOpen(ws: ServerWebSocket<any>): Promise<void> {
-    const { session, sessionToken } = ws.data
+    const { session, token } = ws.data
     
-    console.log('🔌 New WebSocket connection for game:', session.gameId, 'user:', session.userId)
+    console.log('🔌 New WebSocket connection for game:', session.gameId, 'user:', session.user.email)
 
     try {
-      await this.performAutoJoin(ws, session, sessionToken)
+      await this.performAutoJoin(ws, session, token)
     } catch (error) {
       console.error('❌ WebSocket connection error:', error)
       this.sendError(ws, 'Connection failed', { 
@@ -134,13 +74,13 @@ class UnifiedWebSocketServer {
     }
   }
 
-  private async performAutoJoin(ws: ServerWebSocket<any>, session: GameSessionPayload, sessionToken: string): Promise<void> {
+  private async performAutoJoin(ws: ServerWebSocket<any>, session: GameSessionPayload, token: string): Promise<void> {
     // Auto-join using Supabase for data operations
-    const result = await this.joinGameViaSupabase({
+    const result = await this.joinGameViaDrizzle({
       gameId: session.gameId,
-      userId: session.userId,
-      playerName: session.playerName,
-      avatarEmoji: session.avatarEmoji
+      userId: session.user.id,
+      playerName: session.playerName || session.user.email.split('@')[0],
+      avatarEmoji: session.avatarEmoji || '🎮'
     })
 
     const playerId = result.success ? result.playerId : session.playerId
@@ -150,20 +90,30 @@ class UnifiedWebSocketServer {
       ws,
       gameId: session.gameId,
       playerId,
-      userId: session.userId,
+      user: session.user,
       lastSequence: 0,
       isAlive: true,
-      session
+      session: {
+        ...session,
+        playerId
+      }
     }
 
     this.setupHeartbeat(connection)
     this.connectionToGame.set(ws, connection)
-    this.sessionConnections.set(sessionToken, connection)
+    // Use user ID + game ID as session key instead of token
+    this.sessionConnections.set(`${session.user.id}-${session.gameId}`, connection)
 
     if (!this.gameConnections.has(session.gameId)) {
       this.gameConnections.set(session.gameId, new Set())
     }
     this.gameConnections.get(session.gameId)!.add(connection)
+
+    // Track user connections for social notifications
+    if (!this.userConnections.has(session.user.id)) {
+      this.userConnections.set(session.user.id, new Set())
+    }
+    this.userConnections.get(session.user.id)!.add(connection)
 
     // Send join confirmation
     this.sendResponse(ws, {
@@ -177,35 +127,34 @@ class UnifiedWebSocketServer {
     })
 
     // Send lobby state
-    await this.sendLobbyState(connection)
-    console.log('✅ User auto-joined game:', session.gameId)
+    try {
+      await this.sendLobbyState(connection)
+      console.log('✅ User auto-joined game:', session.gameId)
+    } catch (error) {
+      console.error('❌ Failed to send lobby state:', error)
+    }
   }
 
-  private async joinGameViaSupabase(command: {
+  private async joinGameViaDrizzle(command: {
     gameId: string
     userId: string
     playerName: string
     avatarEmoji?: string
   }): Promise<{ success: boolean; playerId?: string; error?: string }> {
     try {
-      // Check if game exists
-      const { data: game, error: gameError } = await supabaseAdmin
-        .from('games')
-        .select('*')
-        .eq('id', command.gameId)
-        .single()
+      // Check if game exists using Drizzle ORM
+      const [game] = await db.select().from(games).where(eq(games.id, command.gameId)).limit(1)
 
-      if (gameError || !game) {
+      if (!game) {
         return { success: false, error: 'Game not found' }
       }
 
-      // Check if user already in game
-      const { data: existingPlayer, error: playerError } = await supabaseAdmin
-        .from('players')
-        .select('*')
-        .eq('game_id', command.gameId)
-        .eq('user_id', command.userId)
-        .single()
+      // Check if user already in game using Drizzle ORM
+      const [existingPlayer] = await db.select().from(players)
+        .where(and(
+          eq(players.gameId, command.gameId),
+          eq(players.userId, command.userId)
+        )).limit(1)
 
       if (existingPlayer) {
         return { 
@@ -215,28 +164,30 @@ class UnifiedWebSocketServer {
         }
       }
 
-      // Create new player
+      // Create new player using Drizzle ORM
       const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
       
-      const { data: newPlayer, error: createError } = await supabaseAdmin
-        .from('players')
-        .insert({
-          id: playerId,
-          game_id: command.gameId,
-          user_id: command.userId,
-          player_type: 'human',
-          name: command.playerName,
-          avatar_emoji: command.avatarEmoji,
-          color: 'red', // Default color
-          join_order: 1,
-          is_host: false
-        })
-        .select()
-        .single()
-
-      if (createError) {
-        return { success: false, error: `Failed to join game: ${createError.message}` }
-      }
+      // Get next available join order and color for new human player
+      const gamePlayersCount = await db.select().from(players).where(eq(players.gameId, command.gameId))
+      const maxJoinOrder = Math.max(...gamePlayersCount.map(p => p.joinOrder), 0)
+      const nextJoinOrder = maxJoinOrder + 1
+      
+      // Assign an available color for human player
+      const availableColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
+      const usedColors = gamePlayersCount.map(p => p.color)
+      const availableColor = availableColors.find(color => !usedColors.includes(color)) || 'red'
+      
+      const [newPlayer] = await db.insert(players).values({
+        id: playerId,
+        gameId: command.gameId,
+        userId: command.userId,
+        playerType: 'human',
+        name: command.playerName,
+        avatarEmoji: command.avatarEmoji,
+        color: availableColor,
+        joinOrder: nextJoinOrder,
+        isHost: false
+      }).returning()
 
       return { success: true, playerId }
 
@@ -314,20 +265,29 @@ class UnifiedWebSocketServer {
     try {
       const botPlayerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
       
-      const { data: aiBot, error } = await supabaseAdmin
-        .from('players')
-        .insert({
-          id: botPlayerId,
-          game_id: connection.gameId,
-          player_type: 'ai',
-          name: data.name || `${data.personality || 'Balanced'} Bot`,
-          avatar_emoji: '🤖',
-          color: 'blue', // Assign available color
-          join_order: 99, // AI bots get higher join order
-          is_host: false
-        })
-        .select()
-        .single()
+      // Get the next available join order and color for this game
+      const existingPlayers = await db.select().from(players).where(eq(players.gameId, connection.gameId))
+      const maxJoinOrder = Math.max(...existingPlayers.map(p => p.joinOrder), 0)
+      const nextJoinOrder = maxJoinOrder + 1
+      
+      // Assign an available color
+      const availableColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple']
+      const usedColors = existingPlayers.map(p => p.color)
+      const availableColor = availableColors.find(color => !usedColors.includes(color)) || 'gray'
+      
+      // Use Drizzle ORM for consistent schema and permissions
+      const [aiBot] = await db.insert(players).values({
+        id: botPlayerId,
+        gameId: connection.gameId,
+        playerType: 'ai',
+        name: data.name || `${data.personality || 'Balanced'} Bot`,
+        avatarEmoji: '🤖',
+        color: availableColor,
+        joinOrder: nextJoinOrder,
+        isHost: false
+      }).returning()
+
+      const error = null // Drizzle throws on error instead of returning it
 
       if (error) {
         this.sendError(ws, `Failed to add AI bot: ${error.message}`)
@@ -353,12 +313,15 @@ class UnifiedWebSocketServer {
     if (!connection) return
 
     try {
-      const { error } = await supabaseAdmin
-        .from('players')
-        .delete()
-        .eq('id', data.botPlayerId)
-        .eq('game_id', connection.gameId)
-        .eq('player_type', 'ai')
+      // Use Drizzle ORM for consistent schema and permissions
+      await db.delete(players)
+        .where(and(
+          eq(players.id, data.botPlayerId),
+          eq(players.gameId, connection.gameId),
+          eq(players.playerType, 'ai')
+        ))
+
+      const error = null // Drizzle throws on error instead of returning it
 
       if (error) {
         this.sendError(ws, `Failed to remove AI bot: ${error.message}`)
@@ -383,16 +346,10 @@ class UnifiedWebSocketServer {
     if (!connection) return
 
     try {
-      // Update game status to started
-      const { error } = await supabaseAdmin
-        .from('games')
-        .update({ current_phase: 'initial_placement' })
-        .eq('id', connection.gameId)
-
-      if (error) {
-        this.sendError(ws, `Failed to start game: ${error.message}`)
-        return
-      }
+      // Update game status to started using Drizzle ORM
+      await db.update(games)
+        .set({ currentPhase: 'initial_placement' })
+        .where(eq(games.id, connection.gameId))
 
       // Broadcast game started to all players
       await this.broadcastToGame(connection.gameId, {
@@ -411,15 +368,13 @@ class UnifiedWebSocketServer {
     if (!connection) return
 
     try {
-      // Remove player from game
-      const { error } = await supabaseAdmin
-        .from('players')
-        .delete()
-        .eq('id', connection.playerId)
-        .eq('game_id', connection.gameId)
-
-      if (error) {
-        console.error('Error removing player:', error)
+      // Remove player from game using Drizzle ORM
+      if (connection.playerId) {
+        await db.delete(players)
+          .where(and(
+            eq(players.id, connection.playerId),
+            eq(players.gameId, connection.gameId)
+          ))
       }
 
       this.sendResponse(ws, {
@@ -437,8 +392,32 @@ class UnifiedWebSocketServer {
   }
 
   private async handleGameAction(ws: ServerWebSocket<any>, data: any): Promise<void> {
-    // Placeholder for game action handling
-    this.sendError(ws, 'Game actions not yet implemented')
+    const connection = this.connectionToGame.get(ws)
+    if (!connection) return
+
+    try {
+      // Import game state manager dynamically to avoid circular dependency
+      const { gameStateManager } = await import('../services/game-state-manager')
+      
+      const result = await gameStateManager.processPlayerAction(
+        connection.gameId,
+        connection.playerId!,
+        data.action
+      )
+
+      if (result.success) {
+        this.sendResponse(ws, {
+          success: true,
+          data: { type: 'actionProcessed', result }
+        })
+      } else {
+        this.sendError(ws, result.error || 'Action failed')
+      }
+
+    } catch (error) {
+      console.error('Error processing game action:', error)
+      this.sendError(ws, 'Failed to process game action')
+    }
   }
 
   private async handleEndTurn(ws: ServerWebSocket<any>, data: any): Promise<void> {
@@ -447,8 +426,28 @@ class UnifiedWebSocketServer {
   }
 
   private async handleRequestGameSync(ws: ServerWebSocket<any>, data: any): Promise<void> {
-    // Placeholder for game sync
-    this.sendError(ws, 'Game sync not yet implemented')
+    const connection = this.connectionToGame.get(ws)
+    if (!connection) return
+
+    try {
+      // Import game state manager dynamically to avoid circular dependency
+      const { gameStateManager } = await import('../services/game-state-manager')
+      
+      const gameState = await gameStateManager.loadGameState(connection.gameId)
+      
+      this.sendResponse(ws, {
+        success: true,
+        data: {
+          type: 'gameSync',
+          gameState,
+          lastSequence: connection.lastSequence
+        }
+      })
+
+    } catch (error) {
+      console.error('Error syncing game state:', error)
+      this.sendError(ws, 'Failed to sync game state')
+    }
   }
 
   private async handleConnectSocial(ws: ServerWebSocket<any>, data: any): Promise<void> {
@@ -463,43 +462,53 @@ class UnifiedWebSocketServer {
 
   private async sendLobbyState(connection: ClientConnection): Promise<void> {
     try {
-      // Get game and players from Supabase
-      const { data: game, error: gameError } = await supabaseAdmin
-        .from('games')
-        .select('*')
-        .eq('id', connection.gameId)
-        .single()
+      console.log('🔍 Loading lobby state for game:', connection.gameId)
+      
+      // Get game using Drizzle ORM (has proper permissions)
+      const [game] = await db.select().from(games).where(eq(games.id, connection.gameId)).limit(1)
 
-      if (gameError || !game) {
+      console.log('🔍 Database query result:', { 
+        gameId: connection.gameId, 
+        found: !!game, 
+        gameObject: game
+      })
+
+      if (!game) {
+        console.error('❌ Game not found in database:', { gameId: connection.gameId })
         this.sendError(connection.ws, 'Failed to load game')
         return
       }
 
-      const { data: players, error: playersError } = await supabaseAdmin
-        .from('players')
-        .select('*')
-        .eq('game_id', connection.gameId)
-        .order('join_order', { ascending: true })
+      // Get players using Drizzle ORM (has proper permissions)
+      const playersResult = await db.select().from(players).where(eq(players.gameId, connection.gameId))
 
-      if (playersError) {
-        this.sendError(connection.ws, 'Failed to load players')
-        return
-      }
+      console.log('🔍 Players query result:', { 
+        gameId: connection.gameId, 
+        playersCount: playersResult.length 
+      })
 
+      // Determine if current user is host (first player or game host)
+      const isHost = game.hostUserId === connection.user.id || 
+                     (playersResult && playersResult.length > 0 && playersResult[0].userId === connection.user.id)
+      
       const lobbyState = {
         gameId: game.id,
-        gameCode: game.game_code,
-        phase: game.current_phase,
-        players: players || [],
+        gameCode: game.gameCode,
+        phase: game.currentPhase,
+        players: playersResult || [],
+        isHost,
+        canStart: (playersResult?.length || 0) >= 2,
         settings: {
           maxPlayers: 4,
           allowObservers: true,
           aiEnabled: true
         },
-        isStarted: game.current_phase !== 'lobby',
-        createdAt: game.created_at,
-        updatedAt: game.updated_at
+        isStarted: game.currentPhase !== 'lobby',
+        createdAt: game.createdAt,
+        updatedAt: game.updatedAt
       }
+
+      console.log('🔍 Actual lobbyState being sent:', lobbyState)
 
       this.sendResponse(connection.ws, {
         success: true,
@@ -509,11 +518,7 @@ class UnifiedWebSocketServer {
         }
       })
 
-      console.log('✅ Lobby state sent:', {
-        gameId: connection.gameId,
-        gameCode: game.game_code,
-        playersCount: players?.length || 0
-      })
+      console.log('✅ Lobby state sent successfully')
 
     } catch (error) {
       console.error('❌ Error sending lobby state:', error)
@@ -530,7 +535,7 @@ class UnifiedWebSocketServer {
     }
   }
 
-  private async broadcastToGame(gameId: string, message: WebSocketResponse): Promise<void> {
+  async broadcastToGame(gameId: string, message: WebSocketResponse): Promise<void> {
     const connections = this.gameConnections.get(gameId)
     if (!connections) return
 
@@ -594,6 +599,17 @@ class UnifiedWebSocketServer {
         }
       }
 
+      // Clean up user connections
+      if (connection.user) {
+        const userConnections = this.userConnections.get(connection.user.id)
+        if (userConnections) {
+          userConnections.delete(connection)
+          if (userConnections.size === 0) {
+            this.userConnections.delete(connection.user.id)
+          }
+        }
+      }
+
       // Remove session connection
       for (const [token, conn] of this.sessionConnections.entries()) {
         if (conn === connection) {
@@ -616,6 +632,66 @@ class UnifiedWebSocketServer {
 
   private sendError(ws: ServerWebSocket<any>, error: string, details?: any): void {
     this.sendResponse(ws, { error, details })
+  }
+
+  // **SOCIAL NOTIFICATION METHODS**
+  
+  /**
+   * Send notification to a specific user across all their connections
+   */
+  sendSocialNotification(userId: string, notification: {
+    type: string
+    data: any
+    timestamp?: string
+  }): void {
+    const userConnections = this.userConnections.get(userId)
+    if (!userConnections || userConnections.size === 0) {
+      console.log(`📭 No active connections for user ${userId}`)
+      return
+    }
+
+    const message = {
+      success: true,
+      data: {
+        type: 'socialNotification',
+        notification: {
+          ...notification,
+          timestamp: notification.timestamp || new Date().toISOString()
+        }
+      }
+    }
+
+    console.log(`📬 Sending social notification to user ${userId} (${userConnections.size} connections)`)
+    
+    for (const connection of userConnections) {
+      if (connection.ws.readyState === 1) { // OPEN
+        this.sendResponse(connection.ws, message)
+      }
+    }
+  }
+
+  /**
+   * Broadcast social notification to multiple users
+   */
+  broadcastSocialNotification(notification: {
+    type: string
+    data: any
+    timestamp?: string
+    targetUserIds?: string[]
+  }): void {
+    const { targetUserIds, ...notificationData } = notification
+    
+    if (targetUserIds && targetUserIds.length > 0) {
+      // Send to specific users
+      for (const userId of targetUserIds) {
+        this.sendSocialNotification(userId, notificationData)
+      }
+    } else {
+      // Broadcast to all connected users
+      for (const userId of this.userConnections.keys()) {
+        this.sendSocialNotification(userId, notificationData)
+      }
+    }
   }
 
   close(): void {
